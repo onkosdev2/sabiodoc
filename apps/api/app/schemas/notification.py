@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models.notification import NotificationStatus
 
@@ -18,8 +18,7 @@ class NotificationResponse(BaseModel):
     read_at: Optional[datetime] = None
     metadata: dict | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationListResponse(BaseModel):

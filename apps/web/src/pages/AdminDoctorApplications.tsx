@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, RefreshCcw } from 'lucide-react'
 
 import {
@@ -33,7 +33,7 @@ export default function AdminDoctorApplications() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadApplications = async (nextFilter: FilterStatus = filter) => {
+  const loadApplications = useCallback(async (nextFilter: FilterStatus) => {
     setLoading(true)
     setError(null)
     try {
@@ -48,10 +48,12 @@ export default function AdminDoctorApplications() {
       setIncidents(incidentsResponse.incidents)
       setApplications(response.applications)
       if (response.applications.length > 0) {
-        const current = response.applications.find((item) => item.doctor_id === selectedId)
-        const target = current || response.applications[0]
-        setSelectedId(target.doctor_id)
-        setReviewNotes(target.review_notes || '')
+        setSelectedId((currentSelectedId) => {
+          const current = response.applications.find((item) => item.doctor_id === currentSelectedId)
+          const target = current || response.applications[0]
+          setReviewNotes(target.review_notes || '')
+          return target.doctor_id
+        })
       } else {
         setSelectedId(null)
         setReviewNotes('')
@@ -62,11 +64,11 @@ export default function AdminDoctorApplications() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadApplications(filter)
-  }, [filter])
+  }, [filter, loadApplications])
 
   const selectedApplication = useMemo(
     () => applications.find((item) => item.doctor_id === selectedId) || null,
@@ -77,7 +79,7 @@ export default function AdminDoctorApplications() {
     if (selectedApplication) {
       setReviewNotes(selectedApplication.review_notes || '')
     }
-  }, [selectedApplication?.doctor_id])
+  }, [selectedApplication])
 
   const handleReview = async (status: 'approved' | 'rejected' | 'suspended') => {
     if (!selectedApplication) {

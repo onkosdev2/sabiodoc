@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { 
   Send, 
@@ -45,21 +45,10 @@ export default function ConsultationChat() {
   }
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login')
-      return
-    }
-    
-    if (id) {
-      loadConsultation()
-    }
-  }, [id, user])
-
-  useEffect(() => {
     scrollToBottom()
   }, [messages])
 
-  const loadConsultation = async () => {
+  const loadConsultation = useCallback(async () => {
     if (!id) return
     
     setLoading(true)
@@ -89,7 +78,18 @@ export default function ConsultationChat() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/login')
+      return
+    }
+
+    if (id) {
+      loadConsultation()
+    }
+  }, [id, user, navigate, loadConsultation])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()

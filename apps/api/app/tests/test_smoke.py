@@ -58,6 +58,7 @@ def test_register_doctor_application():
         "license_country": "Colombia",
         "country": "Colombia",
         "city": "Bogota",
+        "timezone": "America/Bogota",
         "government_id": "CC-12345678",
         "years_experience": 5,
         "specialty_ids": [specialties[0]["id"]],

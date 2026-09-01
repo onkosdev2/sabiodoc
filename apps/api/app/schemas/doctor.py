@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from app.models.doctor_presence import DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus
 from app.models.appointment import AppointmentStatus
@@ -34,8 +34,7 @@ class DoctorPresenceResponse(BaseModel):
     status_message: Optional[str] = None
     last_seen_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DoctorCardResponse(BaseModel):
@@ -51,8 +50,7 @@ class DoctorCardResponse(BaseModel):
     status: DoctorApprovalStatus
     presence: DoctorPresenceResponse
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DoctorListResponse(BaseModel):

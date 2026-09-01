@@ -1,7 +1,7 @@
 from datetime import datetime, time
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.appointment import AppointmentStatus
 from app.schemas.consultation import ConsultationStructuredIntake
@@ -21,8 +21,7 @@ class DoctorAvailabilitySlotResponse(BaseModel):
     end_time: time
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DoctorAvailabilityUpsertRequest(BaseModel):
