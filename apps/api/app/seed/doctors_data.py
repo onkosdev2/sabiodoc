@@ -76,3 +76,89 @@ DOCTORS_DATA = [
         "status": "approved",
     },
 ]
+
+
+# Dos perfiles deterministas por especialidad para probar búsquedas, filtros,
+# disponibilidad y agendamiento sin depender de médicos reales.
+from app.seed.specialties_data import SPECIALTIES_DATA
+
+_DUMMY_DOCTOR_NAMES = [
+    ("Dra.", "Ana Torres"),
+    ("Dr.", "Bruno Castillo"),
+    ("Dra.", "Carla Mendoza"),
+    ("Dr.", "Diego Vargas"),
+    ("Dra.", "Elena Navarro"),
+    ("Dr.", "Fabian Rojas"),
+    ("Dra.", "Gabriela Salas"),
+    ("Dr.", "Hector Paredes"),
+    ("Dra.", "Irene Campos"),
+    ("Dr.", "Javier Molina"),
+    ("Dra.", "Karina Fuentes"),
+    ("Dr.", "Luis Herrera"),
+    ("Dra.", "Mariana Vega"),
+    ("Dr.", "Nicolas Soto"),
+    ("Dra.", "Olivia Reyes"),
+    ("Dr.", "Pablo Leon"),
+    ("Dra.", "Renata Silva"),
+    ("Dr.", "Sergio Acosta"),
+    ("Dra.", "Teresa Flores"),
+    ("Dr.", "Uriel Cabrera"),
+    ("Dra.", "Valentina Cruz"),
+    ("Dr.", "Walter Espinoza"),
+    ("Dra.", "Ximena Ponce"),
+    ("Dr.", "Yago Miranda"),
+    ("Dra.", "Zoe Guzman"),
+    ("Dr.", "Alonso Prieto"),
+    ("Dra.", "Beatriz Lozano"),
+    ("Dr.", "Cesar Quintana"),
+    ("Dra.", "Daniela Mendez"),
+    ("Dr.", "Esteban Arias"),
+]
+
+
+def _build_dummy_doctors():
+    dummy_doctors = []
+    for specialty_index, specialty in enumerate(SPECIALTIES_DATA):
+        for variant in range(2):
+            serial = specialty_index * 2 + variant + 1
+            title, name = _DUMMY_DOCTOR_NAMES[serial - 1]
+            slug = specialty["slug"]
+            specialty_name = specialty["name"]
+            dummy_doctors.append(
+                {
+                    "email": f"dummy.{slug}.{variant + 1}@sabiodoc.app",
+                    "password": "DummyDoctor123!",
+                    "display_name": f"{title} {name} (Demo {specialty_name})",
+                    "professional_title": f"Especialista en {specialty_name}",
+                    "bio_short": f"Perfil dummy para pruebas de {specialty_name.lower()}, búsqueda y agendamiento.",
+                    "price_per_min_cents": 1500 + (specialty_index * 100) + (variant * 200),
+                    "license_number": f"DUMMY-{slug.upper()}-{variant + 1:02d}",
+                    "license_country": "Peru",
+                    "country": "Peru",
+                    "city": "Lima",
+                    "timezone": "America/Lima",
+                    "government_id": f"DUMMY-{serial:04d}",
+                    "years_experience": 5 + variant,
+                    "specialty_slugs": [slug],
+                    "availability_slots": (
+                        [
+                            {"weekday": 0, "start": "09:00", "end": "13:00"},
+                            {"weekday": 3, "start": "14:00", "end": "18:00"},
+                        ]
+                        if variant == 0
+                        else [
+                            {"weekday": 1, "start": "10:00", "end": "14:00"},
+                            {"weekday": 4, "start": "15:00", "end": "19:00"},
+                        ]
+                    ),
+                    "presence_status": "online" if variant == 0 else "offline",
+                    "presence_message": "Disponible para pruebas" if variant == 0 else "Demo - No disponible",
+                    "rating_avg": 4.5 + (variant * 0.2),
+                    "rating_count": 20 + (specialty_index * 3) + (variant * 10),
+                    "status": "approved",
+                }
+            )
+    return dummy_doctors
+
+
+DOCTORS_DATA.extend(_build_dummy_doctors())
