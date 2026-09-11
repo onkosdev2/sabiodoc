@@ -1,9 +1,13 @@
-import { Link } from 'react-router-dom'
-import { Search, MessageSquare, HelpCircle, Star, FileText, AlertTriangle, Briefcase } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Search, MessageSquare, HelpCircle, Star, FileText, AlertTriangle, Briefcase, X } from 'lucide-react'
 
 export default function Home() {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const navigate = useNavigate()
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto relative">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-gray-800 mb-4">
           Bienvenido a SabioDoc
@@ -17,6 +21,7 @@ export default function Home() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-8">
+        {/* 1. Buscar Especialidad */}
         <Link 
           to="/specialties"
           className="card hover:shadow-lg transition-shadow group"
@@ -36,28 +41,10 @@ export default function Home() {
           </div>
         </Link>
 
-        <Link 
-          to="/triage"
-          className="card hover:shadow-lg transition-shadow group"
-        >
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-              <MessageSquare className="w-8 h-8 text-green-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                🗣️ Describir Mi Caso
-              </h2>
-              <p className="text-gray-600">
-                Describe tus síntomas y nuestra IA te orientará hacia la especialidad más adecuada.
-              </p>
-            </div>
-          </div>
-        </Link>
-
-        <Link 
-          to="/guide"
-          className="card hover:shadow-lg transition-shadow group"
+        {/* 2. No Sé Qué Especialidad Escoger (Abre el Popup) */}
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="card hover:shadow-lg transition-shadow group text-left w-full cursor-pointer"
         >
           <div className="flex items-start gap-4">
             <div className="p-3 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
@@ -68,12 +55,13 @@ export default function Home() {
                 💡 No Sé Qué Especialidad Escoger
               </h2>
               <p className="text-gray-600">
-                Responde unas preguntas sencillas y te guiaremos hacia la especialidad correcta.
+                Te ayudamos a descubrir la especialidad correcta según tus síntomas o respondiendo preguntas.
               </p>
             </div>
           </div>
-        </Link>
+        </button>
 
+        {/* 4. Emergencias */}
         <Link 
           to="/emergency"
           className="card hover:shadow-lg transition-shadow group border-red-200"
@@ -149,6 +137,67 @@ export default function Home() {
           Si tienes una emergencia médica, llama a servicios de emergencia o acude a urgencias.
         </p>
       </div>
+
+      {/* POPUP / MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative border border-gray-100">
+            {/* Botón de cerrar */}
+            <button 
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="inline-block p-3 bg-purple-100 rounded-full mb-3 text-purple-600">
+                <HelpCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800">¿Cómo prefieres que te ayudemos?</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Selecciona una de las opciones para encontrar tu especialidad ideal.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Opción 1: Describir mi caso */}
+              <button
+                onClick={() => {
+                  setIsModalOpen(false)
+                  navigate('/triage')
+                }}
+                className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50/50 transition-all group flex items-start gap-4 cursor-pointer"
+              >
+                <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors text-green-600 mt-0.5">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800 group-hover:text-green-700">🗣️ Describir Mi Caso</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Cuéntanos tus síntomas libremente a nuestra IA.</p>
+                </div>
+              </button>
+
+              {/* Opción 2: Guía de preguntas (Original /guide) */}
+              <button
+                onClick={() => {
+                  setIsModalOpen(false)
+                  navigate('/guide')
+                }}
+                className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-purple-500 hover:bg-purple-50/50 transition-all group flex items-start gap-4 cursor-pointer"
+              >
+                <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors text-purple-600 mt-0.5">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800 group-hover:text-purple-700">💡 Responder Preguntas Guía</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Te guiaremos paso a paso con preguntas sencillas.</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

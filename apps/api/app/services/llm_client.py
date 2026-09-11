@@ -47,9 +47,9 @@ Responde SIEMPRE en formato JSON válido con esta estructura exacta:
 
 class LLMClient:
     def __init__(self):
-        self.api_key = settings.DEEPSEEK_API_KEY
-        self.base_url = settings.DEEPSEEK_BASE_URL
-        self.model = settings.DEEPSEEK_MODEL
+        self.api_key = settings.GROQ_API_KEY
+        self.base_url = settings.GROQ_BASE_URL
+        self.model = settings.GROQ_MODEL
         self.is_mock = not self.api_key
         
         if not self.is_mock:

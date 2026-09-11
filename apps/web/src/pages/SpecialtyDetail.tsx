@@ -82,7 +82,6 @@ export default function SpecialtyDetail() {
     setActionLoading(true)
     try {
       const consultation = await createConsultation(specialty.id)
-      // Redirigir al chat con el asistente IA
       navigate(`/consultation/${consultation.id}/chat`)
     } catch (error) {
       console.error('Error creating consultation:', error)
@@ -98,7 +97,7 @@ export default function SpecialtyDetail() {
     }
 
     if (!specialty || !selectedDoctorId) {
-      setVideoError('Selecciona un medico antes de preparar la videoconsulta.')
+      setVideoError('Selecciona un médico antes de preparar la videoconsulta.')
       return
     }
 
@@ -137,21 +136,12 @@ export default function SpecialtyDetail() {
 
   const getPresenceBadge = (doctor: DoctorCard) => {
     if (doctor.presence.status === 'online') {
-      return {
-        dot: 'bg-green-500',
-        pill: 'bg-green-50 text-green-700 border-green-200',
-      }
+      return { dot: 'bg-green-500', pill: 'bg-green-50 text-green-700 border-green-200' }
     }
     if (doctor.presence.status === 'busy') {
-      return {
-        dot: 'bg-amber-500',
-        pill: 'bg-amber-50 text-amber-700 border-amber-200',
-      }
+      return { dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-700 border-amber-200' }
     }
-    return {
-      dot: 'bg-red-500',
-      pill: 'bg-red-50 text-red-700 border-red-200',
-    }
+    return { dot: 'bg-red-500', pill: 'bg-red-50 text-red-700 border-red-200' }
   }
 
   if (loading) {
@@ -186,7 +176,6 @@ export default function SpecialtyDetail() {
                 </span>
               )}
             </div>
-            <p className="text-gray-500 mt-1">/{specialty.slug}</p>
           </div>
           
           <button
@@ -246,20 +235,40 @@ export default function SpecialtyDetail() {
       </div>
 
       <div className="card mt-6">
-        <div className="flex items-center justify-between gap-4 mb-6">
+        {/* CABECERA CON EL INPUT GLOBAL DE MINUTOS */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-800">Médicos disponibles</h2>
-            <p className="text-gray-600 mt-1">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-semibold text-gray-800">Médicos disponibles</h2>
+              <span className="text-sm font-medium bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                {doctors.length}
+              </span>
+            </div>
+            <p className="text-gray-600 mt-2">
               Elige un médico para preparar la videoconsulta con prepago estimado.
             </p>
           </div>
-          <div className="text-sm text-gray-500">
-            {doctors.length} médico{doctors.length === 1 ? '' : 's'}
-          </div>
+          
+          {/* Mostramos el input solo si hay médicos */}
+          {doctors.length > 0 && (
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Minutos estimados de consulta
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="180"
+                value={estimatedMinutes}
+                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                className="input-field w-full"
+              />
+            </div>
+          )}
         </div>
 
         {doctors.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 p-6 text-gray-500">
+          <div className="rounded-xl border border-dashed border-gray-300 p-6 text-gray-500 text-center">
             Aún no hay médicos cargados para esta especialidad.
           </div>
         ) : (
@@ -276,51 +285,33 @@ export default function SpecialtyDetail() {
                     isSelected ? 'border-primary-500 bg-primary-50 shadow-sm' : 'border-gray-200 hover:border-primary-300'
                   }`}
                 >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-xl font-semibold text-gray-800">{doctor.display_name}</h3>
-                        <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${badge.pill}`}>
-                          <span className={`h-2.5 w-2.5 rounded-full ${badge.dot}`} />
-                          {doctor.presence.status_message || doctor.presence.status}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-gray-600">
-                        {doctor.bio_short || 'Sin descripcion corta disponible.'}
-                      </p>
-                      <div className="mt-4 flex flex-wrap items-center gap-5 text-sm text-gray-600">
-                        <span className="inline-flex items-center gap-2">
-                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                          {Number(doctor.rating_avg).toFixed(1)} ({doctor.rating_count} reseñas)
-                        </span>
-                        <span className="inline-flex items-center gap-2">
-                          <CircleDollarSign className="w-4 h-4 text-emerald-600" />
-                          {formatPrice(doctor.price_per_min_cents)}/min
-                        </span>
-                        <span className="inline-flex items-center gap-2">
-                          <Clock3 className="w-4 h-4 text-sky-600" />
-                          Prepago estimado: {formatPrice((Number(estimatedMinutes) || 20) * doctor.price_per_min_cents)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="md:w-56">
-                      <div className="rounded-xl bg-white/80 p-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Minutos estimados
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="180"
-                          value={estimatedMinutes}
-                          onChange={(e) => setEstimatedMinutes(e.target.value)}
-                          className="input-field"
-                        />
-                        <p className="mt-2 text-xs text-gray-500">
-                          El sistema puede aplicar un mínimo de prepago interno.
-                        </p>
-                      </div>
-                    </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-800">{doctor.display_name}</h3>
+                    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${badge.pill}`}>
+                      <span className={`h-2.5 w-2.5 rounded-full ${badge.dot}`} />
+                      {doctor.presence.status_message || doctor.presence.status}
+                    </span>
+                  </div>
+                  
+                  <p className="text-gray-600">
+                    {doctor.bio_short || 'Sin descripción corta disponible.'}
+                  </p>
+                  
+                  <div className="mt-4 flex flex-wrap items-center gap-5 text-sm text-gray-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                      {Number(doctor.rating_avg).toFixed(1)} <span className="text-gray-500">({doctor.rating_count} reseñas)</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <CircleDollarSign className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium">{formatPrice(doctor.price_per_min_cents)}</span>/min
+                    </span>
+                    
+                    {/* El total se calcula dinámicamente según el input global */}
+                    <span className="inline-flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                      <Clock3 className="w-4 h-4 text-sky-600" />
+                      Prepago estimado: <span className="font-semibold text-sky-700">{formatPrice((Number(estimatedMinutes) || 20) * doctor.price_per_min_cents)}</span>
+                    </span>
                   </div>
                 </button>
               )

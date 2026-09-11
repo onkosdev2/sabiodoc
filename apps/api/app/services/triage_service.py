@@ -41,6 +41,22 @@ class TriageService:
             "result": result,
             "created_at": triage_record.created_at
         }
-
+        
+    def get_user_history(
+        self, 
+        db: Session, 
+        user_id: int, 
+        limit: int = 3
+    ) -> list[TriageRequest]:
+        logger.info(f"Fetching triage history for user_id={user_id}")
+        
+        # Obtenemos las consultas del usuario, ordenadas por la más reciente
+        records = db.query(TriageRequest)\
+            .filter(TriageRequest.user_id == user_id)\
+            .order_by(TriageRequest.created_at.desc())\
+            .limit(limit)\
+            .all()
+            
+        return records
 
 triage_service = TriageService()

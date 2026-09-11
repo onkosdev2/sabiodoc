@@ -19,9 +19,9 @@ type PreparedVideoSession = {
   appointment_id?: number | null
   specialty_name: string
   doctor_name: string
-  provider: 'daily' | 'mock_daily'
+  provider: 'daily' | 'mock_daily' | 'jitsi' // <-- Añadir 'jitsi'
   room_url: string | null
-  participant_token: string
+  participant_token: string | null // <-- Añadir '| null'
   participant_role: 'patient' | 'doctor'
   prepaid_amount_cents?: number
   estimated_minutes?: number
@@ -166,8 +166,9 @@ export default function VideoConsultationRoom() {
     if (!session) {
       return
     }
+    // Cambiamos el mensaje de error para que sea genérico
     if (session.provider !== 'mock_daily' && !session.room_url) {
-      setError('La sala de Daily no incluye una URL valida.')
+      setError('La sala no incluye una URL válida.')
       return
     }
 
@@ -178,9 +179,8 @@ export default function VideoConsultationRoom() {
       setStatusData(joinedStatus)
 
       if (session.room_url) {
-        const encodedToken = encodeURIComponent(session.participant_token)
-        const separator = session.room_url.includes('?') ? '&' : '?'
-        setIframeUrl(`${session.room_url}${separator}t=${encodedToken}`)
+        // Jitsi no necesita tokens en la URL, pasamos la dirección limpia
+        setIframeUrl(session.room_url)
       }
       setJoined(true)
     } catch (joinError: any) {
@@ -535,12 +535,12 @@ export default function VideoConsultationRoom() {
 
                 {session.room_url && (
                   <a
-                    href={`${session.room_url}${session.room_url.includes('?') ? '&' : '?'}t=${encodeURIComponent(session.participant_token)}`}
+                    href={session.room_url} // <-- URL limpia
                     target="_blank"
                     rel="noreferrer"
                     className="block text-center text-sm text-primary-600 hover:text-primary-700"
                   >
-                    Abrir sala autenticada en una pestaña nueva
+                    Abrir sala en una pestaña nueva
                   </a>
                 )}
               </div>

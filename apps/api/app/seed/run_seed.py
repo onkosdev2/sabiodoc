@@ -41,6 +41,29 @@ def seed_demo_admin():
     finally:
         db.close()
 
+def seed_demo_patient():
+    db = SessionLocal()
+    try:
+        patient_email = "paciente.demo@sabiodoc.app"
+        patient = db.query(User).filter(User.email == patient_email).first()
+        if not patient:
+            patient = User(
+                email=patient_email,
+                password_hash=get_password_hash("PatientDemo123!"),
+                role=UserRole.patient,  # O el rol que corresponda a usuario normal
+            )
+            db.add(patient)
+            db.commit()
+            print(f"✅ Paciente demo listo: {patient_email} / PatientDemo123!")
+        else:
+            print("Paciente demo ya existe. Saltando seed.")
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error al insertar paciente demo: {e}")
+        raise
+    finally:
+        db.close()
+
 
 def seed_specialties():
     db = SessionLocal()
@@ -175,3 +198,4 @@ if __name__ == "__main__":
     seed_specialties()
     seed_demo_admin()
     seed_demo_doctors()
+    seed_demo_patient()

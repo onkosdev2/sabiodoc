@@ -21,11 +21,6 @@ export default function SpecialtyCard({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold text-gray-800">{specialty.name}</h3>
-            {specialty.is_top && (
-              <span className="bg-primary-100 text-primary-700 text-xs px-2 py-0.5 rounded-full">
-                Top
-              </span>
-            )}
           </div>
           {specialty.description && (
             <p className="text-gray-600 mt-2 text-sm line-clamp-2">

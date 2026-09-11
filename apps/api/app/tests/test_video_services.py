@@ -79,7 +79,7 @@ def test_appointment_room_expiration_extends_past_scheduled_end():
 
 
 def test_specialist_assistant_mock_generates_structured_intake(monkeypatch):
-    monkeypatch.setattr(settings, "DEEPSEEK_API_KEY", None)
+    monkeypatch.setattr(settings, "GROQ_API_KEY", None)
     service = SpecialistAssistant()
     messages = [
         {"role": "assistant", "content": "¿Qué te ocurre?"},

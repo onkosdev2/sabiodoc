@@ -20,9 +20,10 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: sabiodoc-pgadmin
+    user: root
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@sabiodoc.local
+      PGADMIN_DEFAULT_EMAIL: admin@sabiodoc.com
       PGADMIN_DEFAULT_PASSWORD: admin123
     ports:
       - "5050:80"
