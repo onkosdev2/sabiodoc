@@ -53,7 +53,7 @@ cd apps/api
 
 # Crear entorno virtual
 python -m venv venv
-.\venv\Scripts\Activate.ps1
+.\venv\Scripts\Activate.ps1 (linux: source venv/bin/activate)
 
 # Instalar dependencias
 pip install -r requirements.txt

@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from typing import Optional
 from app.core.deps import get_db, get_current_user_optional
 from app.models.user import User
-from app.schemas.triage import TriageRequest, TriageResponse, TriageResult
+from app.schemas.triage import TriageRequest, TriageResponse, TriageResult, ConsultationHistoryItem
 from app.services.triage_service import triage_service
 from app.core.logging import get_logger
 
@@ -46,7 +45,8 @@ def get_triage_history(
     records = triage_service.get_user_history(
         db=db,
         user_id=current_user.id,
-        limit=limit
+        limit=limit,
+        source="triage",
     )
     
     responses = []
@@ -60,3 +60,36 @@ def get_triage_history(
         )
         
     return responses
+
+
+@router.get("/history", response_model=List[ConsultationHistoryItem])
+def get_consultation_history(
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Historial conjunto de orientaciones de IA (Describir Mi Caso + Guía)."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+
+    records = triage_service.get_user_history(
+        db=db,
+        user_id=current_user.id,
+        limit=limit,
+    )
+
+    items = []
+    for record in records:
+        if not record.result_json:
+            continue
+        items.append(
+            ConsultationHistoryItem(
+                id=record.id,
+                source=record.source or "triage",
+                result=TriageResult(**record.result_json),
+                created_at=record.created_at,
+                summary=record.symptoms_text,
+            )
+        )
+
+    return items

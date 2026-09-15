@@ -9,7 +9,7 @@ from app.models.appointment import AppointmentStatus
 from app.models.consultation import ConsultationStatus
 from app.models.doctor_presence import DoctorPresenceStatus
 from app.models.doctor_profile import DoctorProfile
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.models.video_session import VideoSession, VideoSessionStatus
 from app.models.video_session_event import VideoSessionEvent
 from app.schemas.video_session import (
@@ -136,8 +136,6 @@ def join_video_session(
 
     _expire_if_needed(db, video_session)
     participant_role = _resolve_participant_role(video_session, current_user)
-    if current_user.role == UserRole.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El admin no puede entrar a la sala")
     if video_session.status in {VideoSessionStatus.completed, VideoSessionStatus.cancelled, VideoSessionStatus.expired, VideoSessionStatus.failed}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
 

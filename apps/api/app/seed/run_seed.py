@@ -65,6 +65,30 @@ def seed_demo_patient():
         db.close()
 
 
+def seed_demo_reviewer():
+    db = SessionLocal()
+    try:
+        reviewer_email = "revisor.demo@sabiodoc.app"
+        reviewer = db.query(User).filter(User.email == reviewer_email).first()
+        if not reviewer:
+            reviewer = User(
+                email=reviewer_email,
+                password_hash=get_password_hash("ReviewerDemo123!"),
+                role=UserRole.reviewer,
+            )
+            db.add(reviewer)
+            db.commit()
+            print("✅ Revisor demo listo: revisor.demo@sabiodoc.app / ReviewerDemo123!")
+        else:
+            print("Revisor demo ya existe. Saltando seed.")
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error al insertar revisor demo: {e}")
+        raise
+    finally:
+        db.close()
+
+
 def seed_specialties():
     db = SessionLocal()
     try:
@@ -197,5 +221,6 @@ def seed_demo_doctors():
 if __name__ == "__main__":
     seed_specialties()
     seed_demo_admin()
+    seed_demo_reviewer()
     seed_demo_doctors()
     seed_demo_patient()

@@ -4,7 +4,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.core.security import decode_access_token
-from app.models.user import User
+from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
+from app.models.user import User, UserRole
 
 security = HTTPBearer(auto_error=False)
 
@@ -51,6 +52,53 @@ def get_current_user(
         )
     
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Permite el acceso unicamente a administradores."""
+    if current_user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores",
+        )
+    return current_user
+
+
+def require_application_reviewer(current_user: User = Depends(get_current_user)) -> User:
+    """Permite revisar postulaciones medicas a administradores y revisores."""
+    if current_user.role not in {UserRole.admin, UserRole.reviewer}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores o revisores pueden gestionar postulaciones medicas",
+        )
+    return current_user
+
+
+def get_doctor_profile_or_403(
+    db: Session,
+    user: User,
+    *,
+    require_approved: bool = False,
+) -> DoctorProfile:
+    """
+    Devuelve el perfil medico del usuario sin depender de su rol principal.
+
+    La capacidad de ejercer como medico depende de tener un DoctorProfile, no de
+    que el rol sea exactamente "doctor". Asi un admin o revisor que ademas sea
+    medico puede seguir usando el panel medico.
+    """
+    profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == user.id).first()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes un perfil medico",
+        )
+    if require_approved and profile.status != DoctorApprovalStatus.approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu perfil medico aun no esta aprobado",
+        )
+    return profile
 
 
 def get_current_user_optional(

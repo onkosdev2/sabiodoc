@@ -1,35 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCheck, Loader2 } from 'lucide-react'
 
-import { getMyNotifications, markAllNotificationsAsRead, markNotificationAsRead, NotificationItem } from '../api/notifications'
+import { NotificationItem } from '../api/notifications'
+import { useNotifications } from '../context/NotificationsContext'
 
 export default function NotificationsPage() {
   const navigate = useNavigate()
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadNotifications = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await getMyNotifications()
-      setNotifications(response.notifications)
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'No se pudieron cargar las notificaciones')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { notifications, loading, error, refresh, markRead, markAllRead } = useNotifications()
 
   useEffect(() => {
-    loadNotifications()
-  }, [])
+    refresh()
+  }, [refresh])
 
   const handleMarkRead = async (notificationId: number) => {
-    const updated = await markNotificationAsRead(notificationId)
-    setNotifications((current) => current.map((item) => (item.id === notificationId ? updated : item)))
+    await markRead(notificationId)
   }
 
   const handleOpenNotification = async (notification: NotificationItem) => {
@@ -42,8 +27,7 @@ export default function NotificationsPage() {
   }
 
   const handleMarkAllRead = async () => {
-    const updated = await markAllNotificationsAsRead()
-    setNotifications(updated.notifications)
+    await markAllRead()
   }
 
   return (

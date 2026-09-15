@@ -27,6 +27,7 @@ class TriageService:
         
         triage_record = TriageRequest(
             user_id=user.id if user else None,
+            source="triage",
             symptoms_text=symptoms_text,
             result_json=result
         )
@@ -46,17 +47,20 @@ class TriageService:
         self, 
         db: Session, 
         user_id: int, 
-        limit: int = 3
+        limit: int = 3,
+        source: Optional[str] = None,
     ) -> list[TriageRequest]:
-        logger.info(f"Fetching triage history for user_id={user_id}")
-        
-        # Obtenemos las consultas del usuario, ordenadas por la más reciente
-        records = db.query(TriageRequest)\
-            .filter(TriageRequest.user_id == user_id)\
+        logger.info(f"Fetching triage history for user_id={user_id} (source={source or 'all'})")
+
+        query = db.query(TriageRequest).filter(TriageRequest.user_id == user_id)
+        if source:
+            query = query.filter(TriageRequest.source == source)
+
+        records = query\
             .order_by(TriageRequest.created_at.desc())\
             .limit(limit)\
             .all()
-            
+
         return records
 
 triage_service = TriageService()

@@ -41,7 +41,7 @@ export default function DoctorPending() {
       }
     }
 
-    if (!authLoading && isAuthenticated && user?.role === 'doctor') {
+    if (!authLoading && isAuthenticated && user?.doctor_status) {
       loadApplication()
       const intervalId = window.setInterval(loadApplication, 10000)
       return () => {
@@ -55,9 +55,9 @@ export default function DoctorPending() {
     return () => {
       mounted = false
     }
-  }, [authLoading, isAuthenticated, user?.role, refreshUser])
+  }, [authLoading, isAuthenticated, user?.doctor_status, refreshUser])
 
-  if (!authLoading && (!isAuthenticated || user?.role !== 'doctor')) {
+  if (!authLoading && (!isAuthenticated || !user?.doctor_status)) {
     return <Navigate to="/login" replace />
   }
 

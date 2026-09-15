@@ -313,12 +313,15 @@ class VideoSessionService:
         )
 
     def _resolve_appointment_participant_role(self, appointment: Appointment, current_user: User) -> str:
-        if current_user.role == UserRole.admin:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El admin no puede entrar a esta sala")
+        # Primero resolvemos si el usuario es participante real de la cita, sin
+        # importar su rol principal. Asi un medico/admin que tambien agenda como
+        # paciente puede entrar a su propia consulta.
         if appointment.patient_id == current_user.id:
             return "patient"
         if appointment.doctor and appointment.doctor.user_id == current_user.id:
             return "doctor"
+        if current_user.role == UserRole.admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El admin no puede entrar a esta sala")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes entrar a esta sala")
 
     def _validate_appointment_room_window(self, appointment: Appointment) -> None:

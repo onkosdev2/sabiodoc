@@ -1,8 +1,15 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
+/**
+ * Rutas de paciente.
+ *
+ * Cualquier usuario autenticado puede actuar como paciente: un médico, un
+ * revisor o un administrador conservan sus capacidades profesionales pero
+ * también pueden agendar citas, guardar favoritos o ver su historial.
+ */
 export default function PatientRoute() {
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
 
   if (isLoading) {
     return null
@@ -10,14 +17,6 @@ export default function PatientRoute() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
-  }
-
-  if (user?.role === 'doctor') {
-    return <Navigate to="/doctor" replace />
-  }
-
-  if (user?.role === 'admin') {
-    return <Navigate to="/admin" replace />
   }
 
   return <Outlet />

@@ -144,3 +144,36 @@ def test_guide_recommend():
     result = response.json()
     assert "recommended_specialty_slug" in result
     assert "disclaimer" in result
+
+
+def test_guide_step_returns_question_with_options():
+    response = client.post("/guide/step", json={"history": []})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "question"
+    assert data["question"]
+    assert len(data["options"]) >= 2
+    assert all("value" in option and "label" in option for option in data["options"])
+
+
+def test_guide_step_reaches_recommendation():
+    history = []
+    data = None
+    for _ in range(6):
+        response = client.post("/guide/step", json={"history": history})
+        assert response.status_code == 200
+        data = response.json()
+        if data["status"] == "recommendation":
+            break
+        option = data["options"][0]
+        history.append({
+            "question_id": data["question_id"],
+            "question": data["question"],
+            "answer": option["value"],
+            "answer_label": option["label"],
+        })
+
+    assert data is not None
+    assert data["status"] == "recommendation"
+    assert data["recommended_specialty_slug"]
+    assert data["disclaimer"]

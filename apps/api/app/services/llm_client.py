@@ -47,9 +47,9 @@ Responde SIEMPRE en formato JSON válido con esta estructura exacta:
 
 class LLMClient:
     def __init__(self):
-        self.api_key = settings.GROQ_API_KEY
-        self.base_url = settings.GROQ_BASE_URL
-        self.model = settings.GROQ_MODEL
+        self.api_key = settings.DEEPSEEK_API_KEY
+        self.base_url = settings.DEEPSEEK_BASE_URL
+        self.model = settings.DEEPSEEK_MODEL
         self.is_mock = not self.api_key
         
         if not self.is_mock:
@@ -89,17 +89,8 @@ class LLMClient:
             )
             
             content = response.choices[0].message.content
-            
-            content = content.strip()
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-            
-            result = json.loads(content)
+
+            result = self._parse_json_content(content or "")
             logger.info(f"Triage completed: urgency={result.get('urgency')}")
             return result
             
@@ -109,6 +100,52 @@ class LLMClient:
         except Exception as e:
             logger.error(f"LLM API error: {e}")
             return self._get_fallback_response()
+
+    def chat_json(
+        self,
+        system_prompt: str,
+        user_message: str,
+        temperature: float = 0.3,
+        max_tokens: int = 1200,
+    ) -> Optional[dict]:
+        """Ejecuta una consulta al LLM forzando una respuesta JSON.
+
+        Devuelve el dict parseado o ``None`` si el cliente está en modo mock
+        o si la respuesta no es un JSON válido.
+        """
+        if self.is_mock:
+            return None
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content or ""
+            return self._parse_json_content(content)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM JSON response: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"LLM JSON chat error: {e}")
+            return None
+
+    def _parse_json_content(self, content: str) -> dict:
+        """Limpia los bloques de código Markdown y parsea el JSON."""
+        cleaned = content.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        return json.loads(cleaned.strip())
     
     def _get_mock_response(self, symptoms_text: str) -> dict:
         symptoms_lower = symptoms_text.lower()

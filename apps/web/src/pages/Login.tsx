@@ -21,8 +21,12 @@ export default function Login() {
     try {
       const response = await login(email, password)
       authLogin(response.access_token, response.user)
-      if (response.user.role === 'doctor') {
-        navigate(response.user.doctor_status === 'approved' ? '/doctor' : '/doctor/pending')
+      if (response.user.doctor_status === 'approved') {
+        navigate('/doctor')
+      } else if (response.user.role === 'doctor') {
+        navigate('/doctor/pending')
+      } else if (response.user.role === 'reviewer') {
+        navigate('/reviewer/doctor-applications')
       } else if (response.user.role === 'admin') {
         navigate('/admin')
       } else {

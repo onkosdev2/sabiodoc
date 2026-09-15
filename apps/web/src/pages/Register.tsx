@@ -124,13 +124,12 @@ export default function Register() {
           </Link>
         </p>
 
-        <div className="mt-6 rounded-2xl border border-primary-100 bg-primary-50 px-4 py-4 text-sm text-primary-800">
-          ¿Eres médico? Usa el onboarding profesional en{' '}
-          <Link to="/doctor/apply" className="font-semibold hover:underline">
-            /doctor/apply
+        <p className="text-center text-sm text-gray-500 mt-4">
+          ¿Eres un profesional de la salud?{' '}
+          <Link to="/doctor/apply" className="text-primary-600 hover:underline font-medium">
+            Postula como médico aquí
           </Link>
-          .
-        </div>
+        </p>
       </div>
     </div>
   )

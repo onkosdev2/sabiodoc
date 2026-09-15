@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from app.core.config import settings
-from app.services.daily_service import DailyService
+from app.services.daily_service import JitsiService
 from app.services.payment_service import PaymentService
 from app.services.pricing_service import pricing_service
 from app.services.specialist_assistant import SpecialistAssistant
@@ -22,9 +22,8 @@ def test_pricing_service_rejects_prices_outside_business_range():
         pricing_service.validate_price_per_minute(settings.VIDEO_PRICE_MIN_CENTS - 1)
 
 
-def test_daily_service_mock_prepare_room(monkeypatch):
-    monkeypatch.setattr(settings, "DAILY_API_KEY", None)
-    service = DailyService()
+def test_jitsi_service_prepare_room():
+    service = JitsiService()
     response = service.prepare_room(
         room_name="sabiodoc-room-test",
         consultation_id=10,
@@ -33,10 +32,11 @@ def test_daily_service_mock_prepare_room(monkeypatch):
         expires_at=datetime.now(timezone.utc),
     )
 
-    assert response["provider"] == "mock_daily"
-    assert response["room_name"] == "sabiodoc-room-test"
-    assert response["patient_token"].startswith("mock-patient-")
-    assert response["doctor_token"].startswith("mock-doctor-")
+    assert response["provider"] == "daily"
+    assert response["room_name"].startswith("SabioDoc-sabiodoc-room-test-")
+    assert response["room_url"].startswith("https://meet.jit.si/")
+    assert response["patient_token"].startswith("jitsi-patient-3-")
+    assert response["doctor_token"].startswith("jitsi-doctor-5-")
     assert response["metadata"]["appointment_id"] is None
 
 
@@ -79,7 +79,7 @@ def test_appointment_room_expiration_extends_past_scheduled_end():
 
 
 def test_specialist_assistant_mock_generates_structured_intake(monkeypatch):
-    monkeypatch.setattr(settings, "GROQ_API_KEY", None)
+    monkeypatch.setattr(settings, "DEEPSEEK_API_KEY", None)
     service = SpecialistAssistant()
     messages = [
         {"role": "assistant", "content": "¿Qué te ocurre?"},

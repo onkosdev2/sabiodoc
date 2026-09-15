@@ -9,10 +9,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
-    # NVIDIA AI Integration (Reemplaza a DeepSeek)
-    GROQ_API_KEY: Optional[str] = None
-    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
-    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    # DeepSeek AI Integration
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
 
     FRONTEND_ORIGIN: str = "http://localhost:5173"
     DAILY_API_KEY: Optional[str] = None

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, MessageSquare, HelpCircle, Star, FileText, AlertTriangle, Briefcase, X } from 'lucide-react'
+import { Search, MessageSquare, HelpCircle, Star, FileText, AlertTriangle, Briefcase, X, BookOpenText, History } from 'lucide-react'
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -104,7 +104,7 @@ export default function Home() {
             <FileText className="w-6 h-6 text-blue-500" />
             <div>
               <h3 className="font-semibold text-gray-800">Mis Consultas</h3>
-              <p className="text-sm text-gray-600">Historial de consultas</p>
+              <p className="text-sm text-gray-600">Historial de Consultas</p>
             </div>
           </div>
         </Link>
@@ -128,14 +128,6 @@ export default function Home() {
             Postular como médico
           </Link>
         </div>
-      </div>
-
-      <div className="bg-gray-100 rounded-xl p-6 text-center">
-        <p className="text-gray-600 text-sm">
-          ⚠️ <strong>Importante:</strong> SabioDoc es una herramienta de orientación. 
-          No reemplaza la consulta con un profesional de la salud. 
-          Si tienes una emergencia médica, llama a servicios de emergencia o acude a urgencias.
-        </p>
       </div>
 
       {/* POPUP / MODAL */}
@@ -187,13 +179,37 @@ export default function Home() {
                 className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-purple-500 hover:bg-purple-50/50 transition-all group flex items-start gap-4 cursor-pointer"
               >
                 <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors text-purple-600 mt-0.5">
-                  <HelpCircle className="w-6 h-6" />
+                  <BookOpenText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-800 group-hover:text-purple-700">💡 Responder Preguntas Guía</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Te guiaremos paso a paso con preguntas sencillas.</p>
+                  <h4 className="font-semibold text-gray-800 group-hover:text-purple-700">💡 Guía de Especialidades</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Te guiaremos paso a paso con preguntas sencillas generadas por IA.</p>
                 </div>
               </button>
+
+              {/* Opción 3: Historial conjunto de consultas IA */}
+              <button
+                onClick={() => {
+                  setIsModalOpen(false)
+                  navigate('/me/history')
+                }}
+                className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-blue-500 hover:bg-blue-50/50 transition-all group flex items-start gap-4 cursor-pointer"
+              >
+                <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors text-blue-600 mt-0.5">
+                  <History className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-800 group-hover:text-blue-700">📋 Historial de Orientaciones</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Revisa tus consultas anteriores de ambas herramientas.</p>
+                </div>
+              </button>
+
+              <div className="bg-gray-100 rounded-xl p-6 text-center">
+                <p className="text-gray-600 text-sm">
+                  ⚠️ <strong>Importante:</strong> Las herramientas IA de SabioDoc son para orientación. 
+                  No reemplaza la consulta con un profesional de la salud.
+                </p>
+              </div>
             </div>
           </div>
         </div>

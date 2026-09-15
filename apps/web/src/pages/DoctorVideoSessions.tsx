@@ -18,7 +18,7 @@ export default function DoctorVideoSessions() {
       return
     }
 
-    if (!authLoading && user?.role !== 'doctor') {
+    if (!authLoading && !user?.doctor_status) {
       navigate('/')
       return
     }
@@ -36,7 +36,7 @@ export default function DoctorVideoSessions() {
       }
     }
 
-    if (isAuthenticated && user?.role === 'doctor') {
+    if (isAuthenticated && user?.doctor_status) {
       loadSessions()
     }
   }, [authLoading, isAuthenticated, navigate, user])

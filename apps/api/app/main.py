@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
-from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, specialties, triage, video_sessions, webhooks
+from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, specialties, triage, video_sessions, webhooks, emergency
 
 setup_logging()
 logger = get_logger(__name__)
@@ -42,6 +42,7 @@ app.include_router(notifications.router)
 app.include_router(admin.router)
 app.include_router(video_sessions.router)
 app.include_router(webhooks.router)
+app.include_router(emergency.router)
 
 
 @app.exception_handler(Exception)

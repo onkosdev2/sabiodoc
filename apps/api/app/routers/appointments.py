@@ -3,12 +3,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, get_db
+from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation import Consultation, ConsultationStatus
 from app.models.consultation_review import ConsultationReview
-from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
+from app.models.doctor_profile import DoctorProfile
 from app.models.user import User, UserRole
 from app.schemas.appointment import (
     AppointmentCancelRequest,
@@ -150,11 +150,7 @@ def get_my_doctor_appointments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden ver esta agenda")
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile or doctor_profile.status != DoctorApprovalStatus.approved:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tu perfil medico aun no esta aprobado")
+    doctor_profile = get_doctor_profile_or_403(db, current_user, require_approved=True)
     reminder_service.process_due_reminders(db)
 
     query = db.query(Appointment).filter(Appointment.doctor_id == doctor_profile.id)
@@ -324,10 +320,10 @@ def mark_appointment_no_show(
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
-    if current_user.role not in {UserRole.admin, UserRole.doctor}:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo medico o admin pueden marcar no-show")
-    if current_user.role == UserRole.doctor and appointment.doctor.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes gestionar esta cita")
+    is_admin = current_user.role == UserRole.admin
+    is_doctor_of_appointment = appointment.doctor is not None and appointment.doctor.user_id == current_user.id
+    if not is_admin and not is_doctor_of_appointment:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el medico de la cita o un admin pueden marcar no-show")
     if appointment.status != AppointmentStatus.scheduled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se puede marcar no-show sobre citas programadas")
 
@@ -367,11 +363,9 @@ def complete_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden cerrar citas")
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
+    doctor_profile = get_doctor_profile_or_403(db, current_user, require_approved=True)
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-    if not doctor_profile or not appointment or appointment.doctor_id != doctor_profile.id:
+    if not appointment or appointment.doctor_id != doctor_profile.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
     if appointment.status != AppointmentStatus.scheduled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se pueden cerrar citas programadas")

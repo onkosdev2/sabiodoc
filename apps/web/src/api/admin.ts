@@ -57,3 +57,90 @@ export const getAdminIncidents = async (): Promise<AdminIncidentListResponse> =>
   const response = await client.get<AdminIncidentListResponse>('/admin/incidents')
   return response.data
 }
+
+export interface Reviewer {
+  id: number
+  email: string
+  role: 'reviewer'
+  created_at: string
+}
+
+export interface ReviewerListResponse {
+  reviewers: Reviewer[]
+  total: number
+}
+
+export const getReviewers = async (): Promise<ReviewerListResponse> => {
+  const response = await client.get<ReviewerListResponse>('/admin/reviewers')
+  return response.data
+}
+
+export const createReviewer = async (email: string, password?: string): Promise<Reviewer> => {
+  const response = await client.post<Reviewer>('/admin/reviewers', { email, password })
+  return response.data
+}
+
+export const revokeReviewer = async (userId: number): Promise<void> => {
+  await client.delete(`/admin/reviewers/${userId}`)
+}
+
+export type AdminUserRole = 'patient' | 'doctor' | 'reviewer' | 'admin'
+
+export interface AdminUser {
+  id: number
+  email: string
+  role: AdminUserRole
+  doctor_status: 'pending' | 'approved' | 'rejected' | 'suspended' | null
+  created_at: string
+}
+
+export interface AdminUserListResponse {
+  users: AdminUser[]
+  total: number
+}
+
+export interface AdminUserCreatePayload {
+  email: string
+  password: string
+  role: AdminUserRole
+}
+
+export interface AdminUserUpdatePayload {
+  email?: string
+  password?: string
+  role?: AdminUserRole
+}
+
+export interface AdminUserQuery {
+  role?: AdminUserRole
+  search?: string
+  limit?: number
+  offset?: number
+}
+
+export const getAdminUsers = async (params: AdminUserQuery = {}): Promise<AdminUserListResponse> => {
+  const response = await client.get<AdminUserListResponse>('/admin/users', { params })
+  return response.data
+}
+
+export const getAdminUser = async (userId: number): Promise<AdminUser> => {
+  const response = await client.get<AdminUser>(`/admin/users/${userId}`)
+  return response.data
+}
+
+export const createAdminUser = async (payload: AdminUserCreatePayload): Promise<AdminUser> => {
+  const response = await client.post<AdminUser>('/admin/users', payload)
+  return response.data
+}
+
+export const updateAdminUser = async (
+  userId: number,
+  payload: AdminUserUpdatePayload
+): Promise<AdminUser> => {
+  const response = await client.patch<AdminUser>(`/admin/users/${userId}`, payload)
+  return response.data
+}
+
+export const deleteAdminUser = async (userId: number): Promise<void> => {
+  await client.delete(`/admin/users/${userId}`)
+}

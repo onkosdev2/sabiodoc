@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
@@ -38,6 +38,54 @@ class UserResponse(BaseModel):
     role: UserRole
     doctor_status: Optional[DoctorApprovalStatus] = None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewerCreate(BaseModel):
+    email: EmailStr
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
+class ReviewerResponse(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewerListResponse(BaseModel):
+    reviewers: list[ReviewerResponse]
+    total: int
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    role: UserRole = UserRole.patient
+
+
+class AdminUserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    role: Optional[UserRole] = None
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    doctor_status: Optional[DoctorApprovalStatus] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminUserListResponse(BaseModel):
+    users: list[AdminUserResponse]
+    total: int
 
 
 class TokenResponse(BaseModel):

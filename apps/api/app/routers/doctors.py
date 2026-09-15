@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from app.core.deps import get_current_user, get_db
+from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403, require_application_reviewer
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation import Consultation
@@ -48,13 +48,8 @@ logger = get_logger(__name__)
 
 
 def _get_approved_doctor_profile_or_403(db: Session, current_user: User) -> DoctorProfile:
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden acceder a este recurso")
-
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile or doctor_profile.status != DoctorApprovalStatus.approved:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tu perfil medico aun no esta aprobado")
-    return doctor_profile
+    # La capacidad medica depende del perfil, no del rol principal del usuario.
+    return get_doctor_profile_or_403(db, current_user, require_approved=True)
 
 
 def _doctor_can_view_patient_history(db: Session, doctor_profile_id: int, patient_id: int) -> bool:
@@ -128,14 +123,7 @@ def update_my_presence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden actualizar presencia")
-
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil medico no encontrado")
-    if doctor_profile.status != DoctorApprovalStatus.approved:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tu perfil medico aun no esta aprobado")
+    doctor_profile = get_doctor_profile_or_403(db, current_user, require_approved=True)
 
     presence = doctor_profile.presence
     if not presence:
@@ -158,12 +146,12 @@ def upsert_my_doctor_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden editar perfil medico")
+    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
+    if not doctor_profile and current_user.role != UserRole.doctor:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes un perfil medico")
 
     doctor_onboarding_service.validate_price_or_raise(payload.price_per_min_cents)
 
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
     if not doctor_profile:
         doctor_profile = DoctorProfile(
             user_id=current_user.id,
@@ -230,12 +218,7 @@ def get_my_doctor_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden ver su postulacion")
-
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Postulacion medica no encontrada")
+    doctor_profile = get_doctor_profile_or_403(db, current_user)
 
     return doctor_onboarding_service.build_application_response_from_relations(doctor_profile)
 
@@ -244,11 +227,8 @@ def get_my_doctor_application(
 def list_doctor_applications(
     review_status: DoctorApprovalStatus | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_application_reviewer),
 ):
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los administradores pueden revisar postulaciones")
-
     query = db.query(DoctorProfile).order_by(DoctorProfile.created_at.desc())
     if review_status:
         query = query.filter(DoctorProfile.status == review_status)
@@ -268,11 +248,8 @@ def update_doctor_application_status(
     doctor_id: int,
     payload: DoctorApplicationStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_application_reviewer),
 ):
-    if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los administradores pueden actualizar postulaciones")
-
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
     if not doctor_profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Postulacion medica no encontrada")
@@ -308,11 +285,7 @@ def get_my_availability(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden ver disponibilidad")
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil medico no encontrado")
+    doctor_profile = get_doctor_profile_or_403(db, current_user)
     slots = sorted(doctor_profile.availability_slots, key=lambda item: (item.weekday, item.start_time))
     return DoctorAvailabilityResponse(
         timezone=doctor_profile.timezone or "UTC",
@@ -326,11 +299,7 @@ def upsert_my_availability(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los medicos pueden editar disponibilidad")
-    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil medico no encontrado")
+    doctor_profile = get_doctor_profile_or_403(db, current_user)
 
     timezone_info = appointment_service.get_timezone(payload.timezone)
     del timezone_info
@@ -459,7 +428,8 @@ def get_patient_timeline_for_doctor(
     current_user: User = Depends(get_current_user),
 ):
     doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
-    patient = db.query(User).filter(User.id == patient_id, User.role == UserRole.patient).first()
+    # Cualquier usuario registrado puede ser paciente, no solo el rol "patient".
+    patient = db.query(User).filter(User.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado")
 

@@ -3,7 +3,7 @@ import client from './client'
 export interface User {
   id: number
   email: string
-  role: 'patient' | 'doctor' | 'admin'
+  role: 'patient' | 'doctor' | 'reviewer' | 'admin'
   doctor_status?: 'pending' | 'approved' | 'rejected' | 'suspended' | null
   created_at: string
 }
@@ -48,5 +48,12 @@ export const login = async (email: string, password: string): Promise<AuthRespon
 
 export const getMe = async (): Promise<User> => {
   const response = await client.get<User>('/auth/me')
+  return response.data
+}
+
+export const checkEmailExists = async (email: string): Promise<{ exists: boolean; role: string | null }> => {
+  const response = await client.get<{ exists: boolean; role: string | null }>('/auth/check-email', {
+    params: { email }
+  })
   return response.data
 }
