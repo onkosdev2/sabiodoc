@@ -122,7 +122,11 @@ export default function MyConsultations() {
                 
                 {consultation.summary && (
                   <Link
-                    to={`/consultation/${consultation.id}/book`}
+                    to={
+                      consultation.specialty
+                        ? `/specialties/${consultation.specialty.slug}?consultation=${consultation.id}`
+                        : '/specialties'
+                    }
                     className="inline-flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100 transition-colors"
                   >
                     <Video className="w-4 h-4" />

@@ -91,6 +91,7 @@ export interface AdminUser {
   email: string
   role: AdminUserRole
   doctor_status: 'pending' | 'approved' | 'rejected' | 'suspended' | null
+  is_reviewer: boolean
   created_at: string
 }
 
@@ -103,16 +104,19 @@ export interface AdminUserCreatePayload {
   email: string
   password: string
   role: AdminUserRole
+  is_reviewer?: boolean
 }
 
 export interface AdminUserUpdatePayload {
   email?: string
   password?: string
   role?: AdminUserRole
+  is_reviewer?: boolean
 }
 
 export interface AdminUserQuery {
   role?: AdminUserRole
+  is_reviewer?: boolean
   search?: string
   limit?: number
   offset?: number
@@ -143,4 +147,23 @@ export const updateAdminUser = async (
 
 export const deleteAdminUser = async (userId: number): Promise<void> => {
   await client.delete(`/admin/users/${userId}`)
+}
+
+export interface LlmProviderHealth {
+  name: string
+  model: string
+  status: 'ok' | 'error'
+  latency_ms?: number
+  detail?: string
+}
+
+export interface LlmHealthResponse {
+  healthy: boolean
+  mode: 'live' | 'mock'
+  providers: LlmProviderHealth[]
+}
+
+export const getLlmHealth = async (): Promise<LlmHealthResponse> => {
+  const response = await client.get<LlmHealthResponse>('/health/llm')
+  return response.data
 }

@@ -59,7 +59,7 @@ export interface GenerateSummaryResponse {
 export interface VideoSessionPrepareResponse {
   video_session_id: number
   status: 'prepared' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed'
-  provider: 'daily' | 'mock_daily'
+  provider: 'jitsi' | 'jitsi_mock'
   payment_status: 'pending' | 'authorized' | 'captured' | 'failed' | 'waived'
   room_name: string
   room_url: string | null
@@ -104,6 +104,11 @@ export const getChatHistory = async (consultationId: number): Promise<ChatHistor
 
 export const generateSummary = async (consultationId: number): Promise<GenerateSummaryResponse> => {
   const response = await client.post<GenerateSummaryResponse>(`/consultations/${consultationId}/generate-summary`)
+  return response.data
+}
+
+export const closeConsultation = async (consultationId: number): Promise<Consultation> => {
+  const response = await client.post<Consultation>(`/consultations/${consultationId}/close`)
   return response.data
 }
 

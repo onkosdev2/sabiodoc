@@ -64,6 +64,33 @@ class DoctorSpecialtySummary(BaseModel):
     name: str
 
 
+class DoctorReviewResponse(BaseModel):
+    id: int
+    rating: int
+    comment: Optional[str] = None
+    patient_label: str = "Paciente verificado"
+    created_at: datetime
+
+
+class DoctorDetailResponse(BaseModel):
+    id: int
+    user_id: int
+    display_name: str
+    professional_title: Optional[str] = None
+    bio_short: Optional[str] = None
+    price_per_min_cents: int
+    rating_avg: Decimal
+    rating_count: int
+    is_accepting_consultations: bool
+    status: DoctorApprovalStatus
+    presence: DoctorPresenceResponse
+    years_experience: Optional[int] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    specialties: list[DoctorSpecialtySummary]
+    reviews: list[DoctorReviewResponse]
+
+
 class DoctorApplicationResponse(BaseModel):
     doctor_id: int
     user_id: int

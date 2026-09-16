@@ -39,7 +39,7 @@ export default function Register() {
 
   return (
     <div className="max-w-md mx-auto">
-      <BackButton />
+      <BackButton useHistoryBack />
       
       <div className="card">
         <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
@@ -119,14 +119,14 @@ export default function Register() {
 
         <p className="text-center text-gray-600 mt-6">
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="text-primary-600 hover:underline font-medium">
+          <Link to="/login" replace className="text-primary-600 hover:underline font-medium">
             Inicia sesión
           </Link>
         </p>
 
         <p className="text-center text-sm text-gray-500 mt-4">
           ¿Eres un profesional de la salud?{' '}
-          <Link to="/doctor/apply" className="text-primary-600 hover:underline font-medium">
+          <Link to="/doctor/apply" replace className="text-primary-600 hover:underline font-medium">
             Postula como médico aquí
           </Link>
         </p>

@@ -23,12 +23,12 @@ export default function Login() {
       authLogin(response.access_token, response.user)
       if (response.user.doctor_status === 'approved') {
         navigate('/doctor')
-      } else if (response.user.role === 'doctor') {
-        navigate('/doctor/pending')
-      } else if (response.user.role === 'reviewer') {
-        navigate('/reviewer/doctor-applications')
       } else if (response.user.role === 'admin') {
         navigate('/admin')
+      } else if (response.user.is_reviewer || response.user.role === 'reviewer') {
+        navigate('/reviewer/doctor-applications')
+      } else if (response.user.role === 'doctor') {
+        navigate('/doctor/pending')
       } else {
         navigate('/')
       }
@@ -42,7 +42,7 @@ export default function Login() {
 
   return (
     <div className="max-w-md mx-auto">
-      <BackButton />
+      <BackButton useHistoryBack />
       
       <div className="card">
         <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
@@ -106,7 +106,7 @@ export default function Login() {
 
         <p className="text-center text-gray-600 mt-6">
           ¿No tienes cuenta?{' '}
-          <Link to="/register" className="text-primary-600 hover:underline font-medium">
+          <Link to="/register" replace className="text-primary-600 hover:underline font-medium">
             Regístrate
           </Link>
         </p>

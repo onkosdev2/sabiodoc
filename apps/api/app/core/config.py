@@ -14,11 +14,22 @@ class Settings(BaseSettings):
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL: str = "deepseek-chat"
 
+    # Groq AI (fallback si DeepSeek falla, no responde o tarda demasiado)
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Resiliencia del LLM
+    LLM_TIMEOUT_SECONDS: float = 8.0
+
     FRONTEND_ORIGIN: str = "http://localhost:5173"
-    DAILY_API_KEY: Optional[str] = None
-    DAILY_BASE_URL: str = "https://api.daily.co/v1"
-    DAILY_DOMAIN: str = "https://sabiodoc.daily.co"
-    DAILY_WEBHOOK_SECRET: Optional[str] = None
+    # Jitsi self-hosted (videoconsultas)
+    JITSI_DOMAIN: str = "192.168.1.123:7443"
+    JITSI_BASE_URL: str = "https://192.168.1.123:7443"
+    JITSI_ROOM_PREFIX: str = "SabioDoc"
+    JITSI_JWT_APP_ID: str = "sabiodoc"
+    JITSI_JWT_AUDIENCE: str = "jitsi"
+    JITSI_JWT_SECRET: Optional[str] = None
     
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_CURRENCY: str = "usd"

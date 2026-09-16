@@ -5,6 +5,7 @@ export interface User {
   email: string
   role: 'patient' | 'doctor' | 'reviewer' | 'admin'
   doctor_status?: 'pending' | 'approved' | 'rejected' | 'suspended' | null
+  is_reviewer?: boolean
   created_at: string
 }
 

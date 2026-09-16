@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
-from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, specialties, triage, video_sessions, webhooks, emergency
+from app.services.llm_client import llm_client
+from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, specialties, triage, video_sessions, emergency
 
 setup_logging()
 logger = get_logger(__name__)
@@ -41,7 +42,6 @@ app.include_router(appointments.router)
 app.include_router(notifications.router)
 app.include_router(admin.router)
 app.include_router(video_sessions.router)
-app.include_router(webhooks.router)
 app.include_router(emergency.router)
 
 
@@ -57,6 +57,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "sabiodoc-api"}
+
+
+@app.get("/health/llm")
+def llm_health_check():
+    """Estado de los proveedores de IA (DeepSeek y su fallback Groq)."""
+    return llm_client.health_check()
 
 
 @app.get("/")

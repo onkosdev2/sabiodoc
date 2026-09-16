@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from app.core.config import settings
-from app.services.daily_service import JitsiService
+from app.services.jitsi_service import JitsiService
 from app.services.payment_service import PaymentService
 from app.services.pricing_service import pricing_service
 from app.services.specialist_assistant import SpecialistAssistant
@@ -32,11 +32,11 @@ def test_jitsi_service_prepare_room():
         expires_at=datetime.now(timezone.utc),
     )
 
-    assert response["provider"] == "daily"
+    assert response["provider"] == "jitsi"
     assert response["room_name"].startswith("SabioDoc-sabiodoc-room-test-")
-    assert response["room_url"].startswith("https://meet.jit.si/")
-    assert response["patient_token"].startswith("jitsi-patient-3-")
-    assert response["doctor_token"].startswith("jitsi-doctor-5-")
+    assert response["room_url"].startswith(settings.JITSI_BASE_URL)
+    assert isinstance(response["patient_token"], str)
+    assert isinstance(response["doctor_token"], str)
     assert response["metadata"]["appointment_id"] is None
 
 
@@ -79,8 +79,9 @@ def test_appointment_room_expiration_extends_past_scheduled_end():
 
 
 def test_specialist_assistant_mock_generates_structured_intake(monkeypatch):
-    monkeypatch.setattr(settings, "DEEPSEEK_API_KEY", None)
     service = SpecialistAssistant()
+    # El asistente hereda el modo del llm_client; forzamos mock para este test.
+    monkeypatch.setattr(service, "is_mock", True)
     messages = [
         {"role": "assistant", "content": "¿Qué te ocurre?"},
         {"role": "user", "content": "Tengo dolor en el pecho y palpitaciones desde hace 2 días. Tomo losartan y me preocupa que haya empeorado."},
@@ -139,7 +140,7 @@ def test_video_session_status_includes_patient_identity():
         patient_id=11,
         patient=SimpleNamespace(email="patient@example.com"),
         status="active",
-        provider="daily",
+        provider="jitsi",
         provider_room_name="room-21",
         started_at=datetime.now(timezone.utc) - timedelta(minutes=3),
         ended_at=None,

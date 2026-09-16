@@ -37,6 +37,7 @@ class UserResponse(BaseModel):
     email: str
     role: UserRole
     doctor_status: Optional[DoctorApprovalStatus] = None
+    is_reviewer: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -51,6 +52,7 @@ class ReviewerResponse(BaseModel):
     id: int
     email: str
     role: UserRole
+    is_reviewer: bool = True
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -65,12 +67,14 @@ class AdminUserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     role: UserRole = UserRole.patient
+    is_reviewer: bool = False
 
 
 class AdminUserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = Field(default=None, min_length=8, max_length=128)
     role: Optional[UserRole] = None
+    is_reviewer: Optional[bool] = None
 
 
 class AdminUserResponse(BaseModel):
@@ -78,6 +82,7 @@ class AdminUserResponse(BaseModel):
     email: str
     role: UserRole
     doctor_status: Optional[DoctorApprovalStatus] = None
+    is_reviewer: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

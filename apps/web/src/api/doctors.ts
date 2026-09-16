@@ -28,13 +28,40 @@ export interface DoctorListResponse {
   total: number
 }
 
+export interface DoctorReview {
+  id: number
+  rating: number
+  comment: string | null
+  patient_label: string
+  created_at: string
+}
+
+export interface DoctorDetail {
+  id: number
+  user_id: number
+  display_name: string
+  professional_title: string | null
+  bio_short: string | null
+  price_per_min_cents: number
+  rating_avg: string
+  rating_count: number
+  is_accepting_consultations: boolean
+  status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  presence: DoctorPresence
+  years_experience: number | null
+  city: string | null
+  country: string | null
+  specialties: DoctorApplicationSpecialty[]
+  reviews: DoctorReview[]
+}
+
 export interface DoctorVideoSession {
   video_session_id: number
   consultation_id: number | null
   appointment_id?: number | null
   patient_id: number
   status: 'prepared' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed'
-  provider: 'daily' | 'mock_daily'
+  provider: 'jitsi' | 'jitsi_mock'
   room_name: string
   room_url: string | null
   doctor_token: string
@@ -138,6 +165,11 @@ export interface DoctorPatientTimeline {
 
 export const getDoctorsBySpecialty = async (slug: string): Promise<DoctorListResponse> => {
   const response = await client.get<DoctorListResponse>(`/doctors/specialty/${slug}`)
+  return response.data
+}
+
+export const getDoctorDetail = async (doctorId: number): Promise<DoctorDetail> => {
+  const response = await client.get<DoctorDetail>(`/doctors/${doctorId}`)
   return response.data
 }
 

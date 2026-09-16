@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Loader2, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
+import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react'
 import { submitGuideStep, GuideHistoryItem, GuideStepResponse } from '../api/guide'
 import type { TriageResult } from '../api/triage'
 import TriageResultCard from '../components/TriageResultCard'
@@ -39,7 +39,6 @@ export default function Guide() {
 
   useEffect(() => {
     fetchStep([])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSelect = (value: string) => {
@@ -71,10 +70,13 @@ export default function Guide() {
     setCurrent(null)
     setHistory([])
     setSelected(null)
+    setLoading(true)
     fetchStep([])
   }
 
-  if (loading) {
+  // Mostramos el indicador también mientras se pide una pregunta sin tener
+  // ninguna en pantalla (p. ej. al "Empezar de nuevo").
+  if (loading || (submitting && !current && !result)) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
         <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
@@ -114,32 +116,12 @@ export default function Guide() {
       <BackButton />
 
       <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="w-6 h-6 text-primary-500" />
-        <h1 className="text-3xl font-bold text-gray-800">Guía de Especialidades</h1>
+        <h1 className="text-3xl font-bold text-gray-800">💡 Guía de Especialidades</h1>
       </div>
       <p className="text-gray-600 mb-6">
         La IA te hará algunas preguntas. Elige siempre una opción y te orientará hacia
         la especialidad médica más adecuada.
       </p>
-
-      {history.length > 0 && (
-        <div className="space-y-4 mb-6">
-          {history.map((item, index) => (
-            <div key={index} className="space-y-1">
-              <div className="flex justify-start">
-                <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2 text-gray-800 max-w-[85%]">
-                  {item.question}
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <div className="bg-primary-600 text-white rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%]">
-                  {item.answer_label}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {current && (
         <>

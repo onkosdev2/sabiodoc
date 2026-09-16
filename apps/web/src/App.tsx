@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { NotificationsProvider } from './context/NotificationsContext'
+import { ConsultationChatProvider } from './context/ConsultationChatContext'
+import ConsultationChatPanel from './components/ConsultationChatPanel'
 import GeneralLayout from './components/GeneralLayout'
 import DoctorLayout from './components/DoctorLayout'
 import AdminLayout from './components/AdminLayout'
@@ -13,6 +15,7 @@ import ReviewerRoute from './components/guards/ReviewerRoute'
 import Home from './pages/Home'
 import Specialties from './pages/Specialties'
 import SpecialtyDetail from './pages/SpecialtyDetail'
+import DoctorDetailPage from './pages/DoctorDetail'
 import Triage from './pages/Triage'
 import Guide from './pages/Guide'
 import MyConsultations from './pages/MyConsultations'
@@ -22,7 +25,9 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import DoctorOnboarding from './pages/DoctorOnboarding'
 import AdminDoctorApplications from './pages/AdminDoctorApplications'
+import AdminOverview from './pages/AdminOverview'
 import AdminUsers from './pages/AdminUsers'
+import AdminSystemHealth from './pages/AdminSystemHealth'
 import ReviewerDoctorApplications from './pages/ReviewerDoctorApplications'
 import ConsultationChat from './pages/ConsultationChat'
 import VideoConsultationRoom from './pages/VideoConsultationRoom'
@@ -33,7 +38,6 @@ import DoctorAvailability from './pages/DoctorAvailability'
 import DoctorPatientTimeline from './pages/DoctorPatientTimeline'
 import NotificationsPage from './pages/NotificationsPage'
 import MyAppointments from './pages/MyAppointments'
-import BookAppointment from './pages/BookAppointment'
 import RescheduleAppointment from './pages/RescheduleAppointment'
 import ConsultationHistory from './pages/ConsultationHistory'
 
@@ -41,10 +45,12 @@ function App() {
   return (
     <AuthProvider>
       <NotificationsProvider>
-        <Routes>
+        <ConsultationChatProvider>
+          <Routes>
         <Route element={<GeneralLayout><Home /></GeneralLayout>} path="/" />
         <Route element={<GeneralLayout><Specialties /></GeneralLayout>} path="/specialties" />
         <Route element={<GeneralLayout><SpecialtyDetail /></GeneralLayout>} path="/specialties/:slug" />
+        <Route element={<GeneralLayout><DoctorDetailPage /></GeneralLayout>} path="/doctors/:doctorId" />
         <Route element={<GeneralLayout><Triage /></GeneralLayout>} path="/triage" />
         <Route element={<GeneralLayout><Guide /></GeneralLayout>} path="/guide" />
         <Route element={<GeneralLayout><Emergency /></GeneralLayout>} path="/emergency" />
@@ -58,7 +64,6 @@ function App() {
           <Route element={<GeneralLayout><MyAppointments /></GeneralLayout>} path="/me/appointments" />
           <Route element={<GeneralLayout><RescheduleAppointment /></GeneralLayout>} path="/me/appointments/:appointmentId/reschedule" />
           <Route element={<GeneralLayout><ConsultationChat /></GeneralLayout>} path="/consultation/:id/chat" />
-          <Route element={<GeneralLayout><BookAppointment /></GeneralLayout>} path="/consultation/:consultationId/book" />
         </Route>
 
         <Route element={<AuthenticatedRoute />}>
@@ -74,20 +79,25 @@ function App() {
           <Route path="/doctor/video-sessions" element={<DoctorLayout><DoctorVideoSessions /></DoctorLayout>} />
           <Route path="/doctor/patients/:patientId" element={<DoctorLayout><DoctorPatientTimeline /></DoctorLayout>} />
           <Route path="/doctor/profile" element={<DoctorLayout><DoctorOnboarding /></DoctorLayout>} />
+          <Route path="/doctor/notifications" element={<DoctorLayout><NotificationsPage /></DoctorLayout>} />
         </Route>
 
         <Route element={<AdminRoute />}>
-          <Route path="/admin" element={<AdminLayout><Navigate to="/admin/doctor-applications" replace /></AdminLayout>} />
+          <Route path="/admin" element={<AdminLayout><Navigate to="/admin/overview" replace /></AdminLayout>} />
+          <Route path="/admin/overview" element={<AdminLayout><AdminOverview /></AdminLayout>} />
           <Route path="/admin/doctor-applications" element={<AdminLayout><AdminDoctorApplications /></AdminLayout>} />
           <Route path="/admin/reviewers" element={<AdminLayout><AdminUsers /></AdminLayout>} />
           <Route path="/admin/users" element={<AdminLayout><AdminUsers /></AdminLayout>} />
+          <Route path="/admin/system" element={<AdminLayout><AdminSystemHealth /></AdminLayout>} />
         </Route>
 
         <Route element={<ReviewerRoute />}>
           <Route path="/reviewer" element={<Navigate to="/reviewer/doctor-applications" replace />} />
           <Route path="/reviewer/doctor-applications" element={<ReviewerLayout><ReviewerDoctorApplications /></ReviewerLayout>} />
         </Route>
-        </Routes>
+          </Routes>
+          <ConsultationChatPanel />
+        </ConsultationChatProvider>
       </NotificationsProvider>
     </AuthProvider>
   )

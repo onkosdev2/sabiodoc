@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
@@ -47,6 +48,26 @@ def create_consultation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Especialidad no encontrada"
+        )
+
+    # Solo puede existir una consulta en curso por usuario; debe finalizarse
+    # (resumen generado o cierre manual) antes de crear otra.
+    open_consultation = (
+        db.query(Consultation)
+        .filter(
+            Consultation.user_id == current_user.id,
+            Consultation.status.in_([ConsultationStatus.created, ConsultationStatus.active]),
+        )
+        .order_by(Consultation.created_at.desc())
+        .first()
+    )
+    if open_consultation:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Ya tienes una consulta en curso. Finalízala antes de crear una nueva.",
+                "consultation_id": open_consultation.id,
+            },
         )
     
     room_id = f"sabiodoc-{uuid.uuid4()}"
@@ -184,7 +205,23 @@ def chat_with_assistant(
     db.add(user_message)
     db.commit()
     db.refresh(user_message)
-    
+
+    # Guardarraíl: el asistente solo atiende temas de la pre-consulta médica.
+    guard = specialist_assistant.guard_response(data.message)
+    if guard is not None:
+        assistant_message = ChatMessage(
+            consultation_id=consultation_id,
+            role=MessageRole.assistant,
+            content=guard,
+        )
+        db.add(assistant_message)
+        db.commit()
+        db.refresh(assistant_message)
+        return ChatResponse(
+            user_message=ChatMessageResponse.model_validate(user_message),
+            assistant_message=ChatMessageResponse.model_validate(assistant_message),
+        )
+
     # Obtener historial de mensajes para contexto
     messages = (
         db.query(ChatMessage)
@@ -238,6 +275,7 @@ def start_chat(
     consultation = (
         db.query(Consultation)
         .filter(Consultation.id == consultation_id, Consultation.user_id == current_user.id)
+        .with_for_update()
         .first()
     )
     
@@ -247,7 +285,8 @@ def start_chat(
             detail="Consulta no encontrada"
         )
     
-    # Verificar si ya hay mensajes
+    # Verificar si ya hay mensajes (el lock evita duplicar la bienvenida si
+    # el frontend llama a este endpoint dos veces de forma concurrente).
     existing_messages = (
         db.query(ChatMessage)
         .filter(ChatMessage.consultation_id == consultation_id)
@@ -345,10 +384,13 @@ def generate_consultation_summary(
         messages=message_history,
     )
     
-    # Guardar resultados en la consulta
+    # Guardar resultados en la consulta y finalizarla (la pre-consulta terminó).
     consultation.summary = summary
     consultation.intake_json = intake
+    consultation.status = ConsultationStatus.closed
+    consultation.closed_at = datetime.now(UTC)
     db.commit()
+    db.refresh(consultation)
     
     logger.info(f"Summary generated for consultation {consultation_id}")
     
@@ -357,6 +399,34 @@ def generate_consultation_summary(
         consultation_id=consultation_id,
         intake=ConsultationStructuredIntake.model_validate(intake),
     )
+
+
+@router.post("/{consultation_id}/close", response_model=ConsultationResponse)
+def close_consultation(
+    consultation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Finaliza manualmente la pre-consulta para poder iniciar otra."""
+    consultation = (
+        db.query(Consultation)
+        .filter(Consultation.id == consultation_id, Consultation.user_id == current_user.id)
+        .first()
+    )
+    if not consultation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Consulta no encontrada",
+        )
+
+    if consultation.status != ConsultationStatus.closed:
+        consultation.status = ConsultationStatus.closed
+        consultation.closed_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(consultation)
+        logger.info(f"Consultation closed: id={consultation_id}")
+
+    return serialize_consultation(consultation)
 
 
 @router.post("/{consultation_id}/video-session/prepare", response_model=VideoSessionPrepareResponse)

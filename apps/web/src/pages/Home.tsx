@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search, MessageSquare, HelpCircle, Star, FileText, AlertTriangle, Briefcase, X, BookOpenText, History } from 'lucide-react'
 
+import { useAuth } from '../context/AuthContext'
+
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const navigate = useNavigate()
+  const { isAuthenticated, isLoading } = useAuth()
 
   return (
     <div className="max-w-4xl mx-auto relative">
@@ -52,10 +55,10 @@ export default function Home() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                💡 No Sé Qué Especialidad Escoger
+                🤖 No Sé Qué Especialidad Escoger
               </h2>
               <p className="text-gray-600">
-                Te ayudamos a descubrir la especialidad correcta según tus síntomas o respondiendo preguntas.
+                Te ayudamos a descubrir la especialidad correcta usando IA.
               </p>
             </div>
           </div>
@@ -110,25 +113,27 @@ export default function Home() {
         </Link>
       </div>
 
-      <div className="mb-8 rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-emerald-100 p-3">
-              <Briefcase className="h-7 w-7 text-emerald-700" />
+      {!isLoading && !isAuthenticated && (
+        <div className="mb-8 rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl bg-emerald-100 p-3">
+                <Briefcase className="h-7 w-7 text-emerald-700" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">Onboarding médico</p>
+                <h2 className="mt-1 text-2xl font-semibold text-gray-900">¿Quieres atender videoconsultas en SabioDoc?</h2>
+                <p className="mt-2 text-gray-700">
+                  Postúlate con tus especialidades, descripción profesional y costo por minuto. Revisamos tu perfil antes de habilitar el panel médico.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">Onboarding médico</p>
-              <h2 className="mt-1 text-2xl font-semibold text-gray-900">¿Quieres atender videoconsultas en SabioDoc?</h2>
-              <p className="mt-2 text-gray-700">
-                Postúlate con tus especialidades, descripción profesional y costo por minuto. Revisamos tu perfil antes de habilitar el panel médico.
-              </p>
-            </div>
+            <Link to="/doctor/apply" className="btn-primary whitespace-nowrap">
+              Postular como médico
+            </Link>
           </div>
-          <Link to="/doctor/apply" className="btn-primary whitespace-nowrap">
-            Postular como médico
-          </Link>
         </div>
-      </div>
+      )}
 
       {/* POPUP / MODAL */}
       {isModalOpen && (

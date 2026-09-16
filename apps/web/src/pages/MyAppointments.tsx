@@ -9,6 +9,7 @@ import {
   prepareAppointmentVideoSession,
   reviewAppointment,
 } from '../api/appointments'
+import { APPOINTMENT_STATUS_LABELS } from '../utils/statusLabels'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 
 export default function MyAppointments() {
@@ -130,8 +131,8 @@ export default function MyAppointments() {
                     {new Date(appointment.scheduled_at).toLocaleString('es-ES')} · {appointment.duration_minutes} min
                   </p>
                 </div>
-                <span className="rounded-full bg-gray-900 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white">
-                  {appointment.status}
+                <span className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
+                  {APPOINTMENT_STATUS_LABELS[appointment.status]}
                 </span>
               </div>
 

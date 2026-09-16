@@ -329,7 +329,7 @@ export default function DoctorOnboarding() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <BackButton />
+      <BackButton useHistoryBack />
 
       <div className="card shadow-sm border border-gray-100 rounded-2xl bg-white p-6 sm:p-8">
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 border-b border-gray-100 pb-6">
@@ -612,8 +612,15 @@ export default function DoctorOnboarding() {
 
                 {step < totalSteps ? (
                   <button 
+                    key="wizard-next"
                     type="button" 
-                    onClick={handleNextStep}
+                    onClick={(event) => {
+                      // Evita que el navegador aplique la accion por defecto del click
+                      // si React reutiliza este nodo y lo convierte en type="submit"
+                      // al cambiar de paso (dispararia el guardado sin querer).
+                      event.preventDefault()
+                      void handleNextStep()
+                    }}
                     disabled={isValidating}
                     className="btn-primary inline-flex items-center gap-2"
                   >
@@ -625,6 +632,7 @@ export default function DoctorOnboarding() {
                   </button>
                 ) : (
                   <button 
+                    key="wizard-submit"
                     type="submit" 
                     disabled={isSubmitting}
                     className="btn-primary inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500"
@@ -643,7 +651,7 @@ export default function DoctorOnboarding() {
 
         {!isDoctorEditing && !isBootstrapping && (
           <p className="mt-8 text-center text-sm text-gray-500">
-            ¿Ya tienes cuenta médica? <Link to="/login" className="font-medium text-primary-600 hover:underline">Inicia sesión</Link>
+            ¿Ya tienes cuenta médica? <Link to="/login" replace className="font-medium text-primary-600 hover:underline">Inicia sesión</Link>
           </p>
         )}
       </div>

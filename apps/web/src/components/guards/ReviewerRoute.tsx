@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 /**
@@ -7,16 +7,17 @@ import { useAuth } from '../../context/AuthContext'
  */
 export default function ReviewerRoute() {
   const { user, isAuthenticated, isLoading } = useAuth()
+  const location = useLocation()
 
   if (isLoading) {
     return null
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (user?.role !== 'reviewer' && user?.role !== 'admin') {
+  if (user?.role !== 'reviewer' && user?.role !== 'admin' && !user?.is_reviewer) {
     if (user?.role === 'doctor') {
       return <Navigate to={user.doctor_status === 'approved' ? '/doctor' : '/doctor/pending'} replace />
     }

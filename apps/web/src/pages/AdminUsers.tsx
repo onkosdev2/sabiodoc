@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Pencil, RefreshCcw, Save, Trash2, UserPlus, X } from 'lucide-react'
+import { Loader2, MoreVertical, Pencil, RefreshCcw, Save, Trash2, UserPlus, X } from 'lucide-react'
 
 import {
   AdminUser,
@@ -11,7 +11,9 @@ import {
 } from '../api/admin'
 import { useAuth } from '../context/AuthContext'
 
-const ROLE_OPTIONS: AdminUserRole[] = ['patient', 'doctor', 'reviewer', 'admin']
+const ROLE_OPTIONS: AdminUserRole[] = ['patient', 'doctor', 'admin']
+// Opciones del filtro: los roles y, además, la capacidad de revisor.
+const FILTER_OPTIONS: Array<'all' | AdminUserRole> = ['all', 'patient', 'doctor', 'reviewer', 'admin']
 
 const ROLE_LABELS: Record<AdminUserRole, string> = {
   patient: 'Paciente',
@@ -48,11 +50,14 @@ export default function AdminUsers() {
   const [createEmail, setCreateEmail] = useState('')
   const [createPassword, setCreatePassword] = useState('')
   const [createRole, setCreateRole] = useState<AdminUserRole>('patient')
+  const [createIsReviewer, setCreateIsReviewer] = useState(false)
   const [creating, setCreating] = useState(false)
 
   const [selected, setSelected] = useState<AdminUser | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [editEmail, setEditEmail] = useState('')
   const [editRole, setEditRole] = useState<AdminUserRole>('patient')
+  const [editIsReviewer, setEditIsReviewer] = useState(false)
   const [editPassword, setEditPassword] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -61,7 +66,8 @@ export default function AdminUsers() {
     setError(null)
     try {
       const response = await getAdminUsers({
-        role: roleFilter === 'all' ? undefined : roleFilter,
+        role: roleFilter === 'all' || roleFilter === 'reviewer' ? undefined : roleFilter,
+        is_reviewer: roleFilter === 'reviewer' ? true : undefined,
         search: search.trim() || undefined,
         limit: 100,
       })
@@ -83,6 +89,17 @@ export default function AdminUsers() {
     loadUsers()
   }, [loadUsers])
 
+  // Cierra el menú de acciones al hacer clic fuera de él.
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest('[data-user-menu]')) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault()
     setCreating(true)
@@ -93,12 +110,14 @@ export default function AdminUsers() {
         email: createEmail.trim(),
         password: createPassword,
         role: createRole,
+        is_reviewer: createIsReviewer,
       })
       setUsers((current) => [created, ...current])
       setTotal((current) => current + 1)
       setCreateEmail('')
       setCreatePassword('')
       setCreateRole('patient')
+      setCreateIsReviewer(false)
       setSuccess(`Usuario creado: ${created.email} (${ROLE_LABELS[created.role]})`)
     } catch (err: unknown) {
       const requestError = err as { response?: { data?: { detail?: string } } }
@@ -112,6 +131,7 @@ export default function AdminUsers() {
     setSelected(item)
     setEditEmail(item.email)
     setEditRole(item.role)
+    setEditIsReviewer(item.is_reviewer)
     setEditPassword('')
     setError(null)
     setSuccess(null)
@@ -127,6 +147,7 @@ export default function AdminUsers() {
       const updated = await updateAdminUser(selected.id, {
         email: editEmail.trim() !== selected.email ? editEmail.trim() : undefined,
         role: editRole !== selected.role ? editRole : undefined,
+        is_reviewer: editIsReviewer !== selected.is_reviewer ? editIsReviewer : undefined,
         password: editPassword || undefined,
       })
       setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)))
@@ -200,9 +221,11 @@ export default function AdminUsers() {
               onChange={(event) => setCreateRole(event.target.value as AdminUserRole)}
               className="input-field mt-2"
             >
-              <option value="patient">Paciente</option>
-              <option value="reviewer">Revisor</option>
-              <option value="admin">Administrador</option>
+              {ROLE_OPTIONS.filter((role) => role !== 'doctor').map((role) => (
+                <option key={role} value={role}>
+                  {ROLE_LABELS[role]}
+                </option>
+              ))}
             </select>
           </div>
           <button
@@ -214,8 +237,18 @@ export default function AdminUsers() {
             Crear
           </button>
         </form>
+        <label className="mt-3 flex items-center gap-3 text-sm text-stone-700">
+          <input
+            type="checkbox"
+            checked={createIsReviewer}
+            onChange={(event) => setCreateIsReviewer(event.target.checked)}
+            className="h-4 w-4"
+          />
+          Dar acceso de revisión (revisor)
+        </label>
         <p className="mt-2 text-xs text-stone-500">
-          Para médicos: la cuenta se crea al completar la postulación; luego puedes cambiar su rol aquí.
+          Para médicos: la cuenta se crea al completar la postulación; luego puedes cambiar su rol y marcar
+          "Acceso de revisión" aquí.
         </p>
       </section>
 
@@ -247,10 +280,9 @@ export default function AdminUsers() {
                   onChange={(event) => setRoleFilter(event.target.value as 'all' | AdminUserRole)}
                   className="input-field mt-2"
                 >
-                  <option value="all">Todos</option>
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role} value={role}>
-                      {ROLE_LABELS[role]}
+                  {FILTER_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'all' ? 'Todos' : ROLE_LABELS[option]}
                     </option>
                   ))}
                 </select>
@@ -291,6 +323,11 @@ export default function AdminUsers() {
                       <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${ROLE_BADGES[item.role]}`}>
                         {ROLE_LABELS[item.role]}
                       </span>
+                      {item.is_reviewer && (
+                        <span className="rounded-full bg-violet-100 px-3 py-1 text-[11px] font-medium text-violet-800">
+                          Revisor
+                        </span>
+                      )}
                       {item.doctor_status && (
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-medium text-amber-800">
                           {DOCTOR_STATUS_LABELS[item.doctor_status] || item.doctor_status}
@@ -301,22 +338,45 @@ export default function AdminUsers() {
                       Alta: {new Date(item.created_at).toLocaleDateString('es-ES')}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="relative flex-none" data-user-menu>
                     <button
-                      onClick={() => handleSelect(item)}
-                      className="inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-stone-900"
+                      onClick={() => setOpenMenuId((current) => (current === item.id ? null : item.id))}
+                      className="rounded-full border border-stone-300 p-2 text-stone-600 transition-colors hover:border-stone-900 hover:text-stone-900"
+                      aria-label={`Acciones para ${item.email}`}
+                      aria-haspopup="true"
+                      aria-expanded={openMenuId === item.id}
                     >
-                      <Pencil className="h-4 w-4" />
-                      Editar
+                      <MoreVertical className="h-4 w-4" />
                     </button>
-                    <button
-                      onClick={() => handleDelete(item)}
-                      disabled={currentUser?.id === item.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Eliminar
-                    </button>
+
+                    {openMenuId === item.id && (
+                      <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-stone-200 bg-white py-1 shadow-xl">
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null)
+                            handleSelect(item)
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-stone-700 transition-colors hover:bg-stone-50"
+                        >
+                          <Pencil className="h-4 w-4 text-stone-400" />
+                          Editar
+                        </button>
+
+                        <div className="my-1 border-t border-stone-100" />
+
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null)
+                            handleDelete(item)
+                          }}
+                          disabled={currentUser?.id === item.id}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -376,6 +436,22 @@ export default function AdminUsers() {
                   </p>
                 )}
               </div>
+
+              <label className="flex items-start gap-3 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-900">
+                <input
+                  type="checkbox"
+                  checked={editIsReviewer}
+                  onChange={(event) => setEditIsReviewer(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">Acceso de revisión</span>
+                  <span className="mt-0.5 block text-xs text-violet-700">
+                    Permite revisar y aprobar/rechazar postulaciones médicas, sin cambiar su rol principal
+                    (puede ser médico y revisor a la vez).
+                  </span>
+                </span>
+              </label>
 
               <div>
                 <label className="text-xs uppercase tracking-[0.22em] text-stone-500">Nueva contraseña</label>

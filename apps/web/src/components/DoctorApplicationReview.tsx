@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, RefreshCcw } from 'lucide-react'
+import { Loader2, RefreshCcw, Search } from 'lucide-react'
 
 import {
   DoctorApplication,
@@ -10,6 +10,21 @@ import {
 const STATUS_OPTIONS = ['all', 'pending', 'approved', 'rejected', 'suspended'] as const
 
 type FilterStatus = typeof STATUS_OPTIONS[number]
+
+const STATUS_LABELS: Record<FilterStatus, string> = {
+  all: 'Todos',
+  pending: 'Pendiente',
+  approved: 'Aprobado',
+  rejected: 'Rechazado',
+  suspended: 'Suspendido',
+}
+
+const STATUS_BADGES: Record<Exclude<FilterStatus, 'all'>, string> = {
+  pending: 'bg-amber-100 text-amber-800',
+  approved: 'bg-emerald-100 text-emerald-800',
+  rejected: 'bg-red-100 text-red-700',
+  suspended: 'bg-stone-200 text-stone-700',
+}
 
 const currency = (cents: number) => `US$ ${(cents / 100).toFixed(2)} / min`
 
@@ -28,6 +43,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
   const [applications, setApplications] = useState<DoctorApplication[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +81,16 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
     () => applications.find((item) => item.doctor_id === selectedId) || null,
     [applications, selectedId]
   )
+
+  const filteredApplications = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return applications
+    return applications.filter(
+      (application) =>
+        application.display_name.toLowerCase().includes(term) ||
+        (application.email || '').toLowerCase().includes(term),
+    )
+  }, [applications, search])
 
   useEffect(() => {
     if (selectedApplication) {
@@ -125,7 +151,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                   : 'border border-stone-300 bg-white text-stone-700 hover:border-stone-900'
               }`}
             >
-              {status === 'all' ? 'Todos' : status}
+              {STATUS_LABELS[status]}
             </button>
           ))}
         </div>
@@ -138,19 +164,39 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
       )}
 
       <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <section className="rounded-[32px] border border-stone-200 bg-white p-4 shadow-sm">
+        <section className="flex flex-col rounded-[32px] border border-stone-200 bg-white p-4 shadow-sm xl:sticky xl:top-24 xl:h-[calc(100vh-8rem)] xl:self-start">
+          <div className="mb-3 flex-none">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre o email..."
+                className="input-field"
+                style={{ paddingLeft: '2.5rem' }}
+              />
+            </div>
+            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-stone-400">
+              {filteredApplications.length} postulación(es)
+            </p>
+          </div>
+
+          <div className="min-h-0 flex-1 xl:overflow-y-auto xl:pr-1">
           {loading ? (
             <div className="flex min-h-[240px] items-center justify-center text-stone-500">
               <Loader2 className="mr-3 h-5 w-5 animate-spin" />
               Cargando postulaciones...
             </div>
-          ) : applications.length === 0 ? (
+          ) : filteredApplications.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-stone-200 px-6 py-12 text-center text-stone-500">
-              No hay postulaciones para este filtro.
+              {applications.length === 0
+                ? 'No hay postulaciones para este filtro.'
+                : 'No hay coincidencias con la búsqueda.'}
             </div>
           ) : (
             <div className="space-y-3">
-              {applications.map((application) => (
+              {filteredApplications.map((application) => (
                 <button
                   key={application.doctor_id}
                   onClick={() => setSelectedId(application.doctor_id)}
@@ -160,14 +206,16 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                       : 'border-stone-200 bg-white hover:border-stone-400'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-lg font-semibold text-stone-950">{application.display_name}</p>
-                      <p className="mt-1 text-sm text-stone-600">{application.professional_title || 'Profesional médico'}</p>
-                      <p className="mt-1 text-sm text-stone-500">{application.email}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-lg font-semibold text-stone-950">{application.display_name}</p>
+                      <p className="mt-1 truncate text-sm text-stone-600">{application.professional_title || 'Profesional médico'}</p>
+                      <p className="mt-1 truncate text-sm text-stone-500">{application.email}</p>
                     </div>
-                    <span className="rounded-full bg-stone-950 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-white">
-                      {application.status}
+                    <span
+                      className={`flex-none whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGES[application.status]}`}
+                    >
+                      {STATUS_LABELS[application.status]}
                     </span>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -182,6 +230,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
               ))}
             </div>
           )}
+          </div>
         </section>
 
         <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
@@ -192,13 +241,13 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
           ) : (
             <div className="space-y-8">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Solicitud</p>
-                  <h2 className="mt-2 text-3xl font-bold text-stone-950">{selectedApplication.display_name}</h2>
-                  <p className="mt-2 text-stone-600">{selectedApplication.professional_title}</p>
+                  <h2 className="mt-2 break-words text-3xl font-bold text-stone-950">{selectedApplication.display_name}</h2>
+                  <p className="mt-2 break-words text-stone-600">{selectedApplication.professional_title}</p>
                 </div>
-                <div className="rounded-3xl bg-stone-950 px-4 py-3 text-sm text-stone-100">
-                  Estado actual: <strong>{selectedApplication.status}</strong>
+                <div className="flex-none rounded-3xl bg-stone-950 px-4 py-3 text-sm text-stone-100">
+                  Estado actual: <strong>{STATUS_LABELS[selectedApplication.status]}</strong>
                 </div>
               </div>
 
@@ -241,25 +290,25 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                 />
               </div>
 
-              <div className="flex flex-col gap-3 md:flex-row">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => handleReview('approved')}
                   disabled={saving || selectedApplication.status === 'approved'}
-                  className="btn-primary inline-flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-60"
+                  className="btn-primary inline-flex min-w-[140px] flex-1 items-center justify-center disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? 'Guardando...' : 'Aprobar'}
                 </button>
                 <button
                   onClick={() => handleReview('rejected')}
                   disabled={saving || selectedApplication.status === 'rejected'}
-                  className="inline-flex items-center justify-center rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 transition-colors hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-w-[140px] flex-1 items-center justify-center rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 transition-colors hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Rechazar
                 </button>
                 <button
                   onClick={() => handleReview('suspended')}
                   disabled={saving || selectedApplication.status === 'suspended'}
-                  className="inline-flex items-center justify-center rounded-full border border-amber-300 px-5 py-3 text-sm font-medium text-amber-700 transition-colors hover:border-amber-500 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-w-[140px] flex-1 items-center justify-center rounded-full border border-amber-300 px-5 py-3 text-sm font-medium text-amber-700 transition-colors hover:border-amber-500 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Suspender
                 </button>

@@ -1,11 +1,15 @@
 import sys
 import os
-from datetime import time
+from datetime import datetime, timedelta, time, timezone
+
+from sqlalchemy import func
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.db.session import SessionLocal
 from app.core.security import get_password_hash
+from app.models.appointment import Appointment, AppointmentStatus
+from app.models.consultation_review import ConsultationReview
 from app.models.user import User, UserRole
 from app.models.specialty import Specialty
 from app.models.doctor_profile import DoctorProfile
@@ -169,8 +173,6 @@ def seed_demo_doctors():
             profile.timezone = doctor_data["timezone"]
             profile.government_id = doctor_data["government_id"]
             profile.years_experience = doctor_data["years_experience"]
-            profile.rating_avg = doctor_data["rating_avg"]
-            profile.rating_count = doctor_data["rating_count"]
             profile.is_accepting_consultations = True
             profile.status = DoctorApprovalStatus(doctor_data["status"])
             profile.review_notes = None
@@ -218,9 +220,113 @@ def seed_demo_doctors():
         db.close()
 
 
+REVIEW_TEMPLATES = [
+    (5, "Excelente atención, explicó todo con mucha claridad y paciencia."),
+    (5, "Muy puntual y amable. La videoconsulta fue fluida y resolvió mis dudas."),
+    (4, "Buen diagnóstico y seguimiento. Dio recomendaciones útiles para mi tratamiento."),
+]
+
+
+def seed_demo_reviews():
+    """Crea resenas de ejemplo para los medicos demo (con citas completadas)."""
+    db = SessionLocal()
+    try:
+        if db.query(ConsultationReview).count() > 0:
+            print("Ya existen resenas. Saltando seed de resenas.")
+            return
+
+        patients = db.query(User).filter(User.role == UserRole.patient).order_by(User.id).all()
+        if not patients:
+            print("No hay pacientes para sembrar resenas.")
+            return
+
+        doctors = (
+            db.query(DoctorProfile)
+            .filter(DoctorProfile.status == DoctorApprovalStatus.approved)
+            .order_by(DoctorProfile.id)
+            .limit(8)
+            .all()
+        )
+
+        now = datetime.now(timezone.utc)
+        created = 0
+        patient_index = 0
+
+        for doctor in doctors:
+            specialties = sorted(
+                (link.specialty for link in doctor.doctor_specialties if link.specialty),
+                key=lambda specialty: specialty.name.lower(),
+            )
+            if not specialties:
+                continue
+            specialty = specialties[0]
+
+            for offset, (rating, comment) in enumerate(REVIEW_TEMPLATES):
+                patient = patients[patient_index % len(patients)]
+                patient_index += 1
+
+                completed_at = now - timedelta(days=12 + offset * 4, hours=doctor.id % 6)
+                appointment = Appointment(
+                    specialty_id=specialty.id,
+                    patient_id=patient.id,
+                    doctor_id=doctor.id,
+                    status=AppointmentStatus.completed,
+                    scheduled_at=completed_at - timedelta(minutes=30),
+                    duration_minutes=30,
+                    completed_at=completed_at,
+                    consent_accepted_at=completed_at - timedelta(minutes=30),
+                    consent_text_version="v1",
+                )
+                db.add(appointment)
+                db.flush()
+
+                db.add(
+                    ConsultationReview(
+                        appointment_id=appointment.id,
+                        patient_id=patient.id,
+                        doctor_id=doctor.id,
+                        rating=rating,
+                        comment=comment,
+                        created_at=completed_at + timedelta(hours=2),
+                    )
+                )
+                created += 1
+
+        # Recalculamos el promedio y la cantidad reales desde consultation_reviews
+        # para todos los medicos (no se usan valores en duro).
+        db.flush()
+        rows = (
+            db.query(
+                ConsultationReview.doctor_id,
+                func.avg(ConsultationReview.rating),
+                func.count(ConsultationReview.id),
+            )
+            .group_by(ConsultationReview.doctor_id)
+            .all()
+        )
+        aggregates = {
+            doctor_id: (round(float(average or 0), 2), int(total or 0))
+            for doctor_id, average, total in rows
+        }
+        for doctor in db.query(DoctorProfile).all():
+            average, total = aggregates.get(doctor.id, (0.0, 0))
+            doctor.rating_avg = average
+            doctor.rating_count = total
+
+        db.commit()
+        print(f"✅ Se crearon {created} resenas demo para {len(doctors)} medicos.")
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error al sembrar resenas demo: {e}")
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     seed_specialties()
     seed_demo_admin()
     seed_demo_reviewer()
     seed_demo_doctors()
     seed_demo_patient()
+    seed_demo_reviews()

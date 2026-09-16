@@ -44,7 +44,7 @@ docker compose up -d
 
 Esto levanta:
 - **PostgreSQL** en `localhost:5432`
-- **pgAdmin** en `http://localhost:5050` (usuario: admin@sabiodoc.local / admin123)
+- **pgAdmin** en `http://localhost:5050` (usuario: admin@sabiodoc.com / admin123)
 
 ### Paso 3: Configurar y ejecutar Backend
 

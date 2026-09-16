@@ -15,8 +15,8 @@ class VideoSessionStatus(str, enum.Enum):
 
 
 class VideoProvider(str, enum.Enum):
-    daily = "daily"
-    mock_daily = "mock_daily"
+    jitsi = "jitsi"
+    jitsi_mock = "jitsi_mock"
 
 
 class PaymentStatus(str, enum.Enum):

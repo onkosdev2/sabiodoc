@@ -79,7 +79,7 @@ export default function DoctorVideoSessions() {
       <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-bold text-gray-900">Videoconsultas</h1>
         <p className="mt-2 text-gray-600">
-          Revisa las videoconsultas preparadas, activas o finalizadas y entra a la sala de Daily cuando corresponda.
+          Revisa las videoconsultas preparadas, activas o finalizadas y entra a la sala cuando corresponda.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <div className="rounded-full bg-stone-100 px-4 py-2 text-sm text-stone-700">

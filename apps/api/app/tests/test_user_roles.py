@@ -74,10 +74,10 @@ def _doctor_payload(email: str, password: str, specialty_id: int) -> dict:
     }
 
 
-def _create_user(admin: dict, email: str, password: str, role: str) -> int:
+def _create_user(admin: dict, email: str, password: str, role: str, is_reviewer: bool = False) -> int:
     response = client.post(
         "/admin/users",
-        json={"email": email, "password": password, "role": role},
+        json={"email": email, "password": password, "role": role, "is_reviewer": is_reviewer},
         headers=admin,
     )
     assert response.status_code == 201, response.text
@@ -108,33 +108,35 @@ def test_admin_user_crud():
     email = _unique("crud")
     user_id = None
     try:
-        user_id = _create_user(admin, email, "CrudPass123!", "reviewer")
+        user_id = _create_user(admin, email, "CrudPass123!", "patient", is_reviewer=True)
 
         # Read
         response = client.get(f"/admin/users/{user_id}", headers=admin)
         assert response.status_code == 200
         assert response.json()["email"] == email
-        assert response.json()["role"] == "reviewer"
+        assert response.json()["role"] == "patient"
+        assert response.json()["is_reviewer"] is True
 
         # List + filtro por rol y busqueda
         response = client.get(
             "/admin/users",
-            params={"role": "reviewer", "search": email},
+            params={"role": "patient", "search": email},
             headers=admin,
         )
         assert response.status_code == 200
         assert any(item["id"] == user_id for item in response.json()["users"])
 
-        # Update email + rol
+        # Update email + quitar acceso de revision
         new_email = _unique("crud2")
         response = client.patch(
             f"/admin/users/{user_id}",
-            json={"email": new_email, "role": "patient"},
+            json={"email": new_email, "is_reviewer": False},
             headers=admin,
         )
         assert response.status_code == 200, response.text
         assert response.json()["email"] == new_email
         assert response.json()["role"] == "patient"
+        assert response.json()["is_reviewer"] is False
 
         # La cuenta actualizada puede iniciar sesion
         assert client.post(
@@ -156,7 +158,7 @@ def test_reviewer_permissions_and_patient_capability():
     email = _unique("revperm")
     user_id = None
     try:
-        user_id = _create_user(admin, email, "RevPass123!", "reviewer")
+        user_id = _create_user(admin, email, "RevPass123!", "patient", is_reviewer=True)
         headers = _auth(_login(email, "RevPass123!"))
 
         # Revisor: puede revisar postulaciones, no administrar el resto
@@ -176,27 +178,29 @@ def test_reviewer_can_also_be_doctor_and_patient():
     email = _unique("revdoc")
     user_id = None
     try:
-        # Cuenta paciente -> promovida a revisor
+        # Cuenta paciente -> se le da acceso de revision (flag independiente del rol)
         response = client.post(
             "/auth/register", json={"email": email, "password": "RevDoc123!"}
         )
         assert response.status_code == 201
         user_id = response.json()["user"]["id"]
         response = client.patch(
-            f"/admin/users/{user_id}", json={"role": "reviewer"}, headers=admin
+            f"/admin/users/{user_id}", json={"is_reviewer": True}, headers=admin
         )
         assert response.status_code == 200
-        assert response.json()["role"] == "reviewer"
+        assert response.json()["role"] == "patient"
+        assert response.json()["is_reviewer"] is True
 
-        # Se postula como medico conservando el rol revisor
+        # Se postula como medico (el flag de revisor se mantiene)
         specialty_id = _first_specialty_id()
         response = client.post(
             "/auth/register/doctor",
             json=_doctor_payload(email, "RevDoc123!", specialty_id),
         )
         assert response.status_code == 201, response.text
-        assert response.json()["user"]["role"] == "reviewer"
+        assert response.json()["user"]["role"] == "doctor"
         assert response.json()["user"]["doctor_status"] == "pending"
+        assert response.json()["user"]["is_reviewer"] is True
 
         _approve_doctor(admin, response.json()["access_token"])
 
@@ -211,16 +215,18 @@ def test_reviewer_can_also_be_doctor_and_patient():
         login_payload = client.post(
             "/auth/login", json={"email": email, "password": "RevDoc123!"}
         ).json()
-        assert login_payload["user"]["role"] == "reviewer"
+        assert login_payload["user"]["role"] == "doctor"
         assert login_payload["user"]["doctor_status"] == "approved"
+        assert login_payload["user"]["is_reviewer"] is True
 
-        # Revocar el acceso de revision lo devuelve a medico, no a paciente
+        # Revocar el acceso de revision mantiene el rol medico
         assert client.delete(f"/admin/reviewers/{user_id}", headers=admin).status_code == 204
         login_payload = client.post(
             "/auth/login", json={"email": email, "password": "RevDoc123!"}
         ).json()
         assert login_payload["user"]["role"] == "doctor"
         assert login_payload["user"]["doctor_status"] == "approved"
+        assert login_payload["user"]["is_reviewer"] is False
     finally:
         _delete_user(admin, user_id)
 

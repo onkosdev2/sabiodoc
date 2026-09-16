@@ -1,10 +1,12 @@
 from datetime import UTC, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403, require_application_reviewer
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation import Consultation
+from app.models.consultation_review import ConsultationReview
 from app.models.doctor_availability_slot import DoctorAvailabilitySlot
 from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
@@ -28,17 +30,20 @@ from app.schemas.doctor import (
     DoctorApplicationResponse,
     DoctorApplicationStatusUpdate,
     DoctorCardResponse,
+    DoctorDetailResponse,
     DoctorListResponse,
     DoctorPatientTimelineItemResponse,
     DoctorPatientTimelineResponse,
     DoctorPresenceResponse,
     DoctorProfileUpsertRequest,
     DoctorPresenceUpdate,
+    DoctorReviewResponse,
+    DoctorSpecialtySummary,
 )
 from app.schemas.video_session import DoctorVideoSessionListResponse, DoctorVideoSessionResponse
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
-from app.services.daily_service import daily_service
+from app.services.jitsi_service import jitsi_service
 from app.services.doctor_onboarding_service import doctor_onboarding_service
 from app.services.notification_service import notification_service
 from app.services.reminder_service import reminder_service
@@ -50,6 +55,30 @@ logger = get_logger(__name__)
 def _get_approved_doctor_profile_or_403(db: Session, current_user: User) -> DoctorProfile:
     # La capacidad medica depende del perfil, no del rol principal del usuario.
     return get_doctor_profile_or_403(db, current_user, require_approved=True)
+
+
+def _rating_aggregates(db: Session, doctor_ids: list[int]) -> dict[int, tuple[float, int]]:
+    """Calcula el promedio y la cantidad real de resenas desde consultation_reviews."""
+    if not doctor_ids:
+        return {}
+    rows = (
+        db.query(
+            ConsultationReview.doctor_id,
+            func.avg(ConsultationReview.rating),
+            func.count(ConsultationReview.id),
+        )
+        .filter(ConsultationReview.doctor_id.in_(doctor_ids))
+        .group_by(ConsultationReview.doctor_id)
+        .all()
+    )
+    return {
+        doctor_id: (round(float(average or 0), 2), int(total or 0))
+        for doctor_id, average, total in rows
+    }
+
+
+def _rating_for(db: Session, doctor_id: int) -> tuple[float, int]:
+    return _rating_aggregates(db, [doctor_id]).get(doctor_id, (0.0, 0))
 
 
 def _doctor_can_view_patient_history(db: Session, doctor_profile_id: int, patient_id: int) -> bool:
@@ -85,12 +114,21 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
             DoctorProfile.status == DoctorApprovalStatus.approved,
             DoctorProfile.is_accepting_consultations == True,
         )
-        .order_by(DoctorProfile.rating_avg.desc(), DoctorProfile.rating_count.desc(), DoctorProfile.display_name.asc())
         .all()
+    )
+
+    aggregates = _rating_aggregates(db, [profile.id for profile in doctor_profiles])
+    doctor_profiles.sort(
+        key=lambda profile: (
+            -aggregates.get(profile.id, (0.0, 0))[0],
+            -aggregates.get(profile.id, (0.0, 0))[1],
+            profile.display_name.lower(),
+        )
     )
 
     doctors = []
     for profile in doctor_profiles:
+        rating_avg, rating_count = aggregates.get(profile.id, (0.0, 0))
         presence = profile.presence
         if not presence:
             presence = DoctorPresence(
@@ -106,8 +144,8 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
                 professional_title=profile.professional_title,
                 bio_short=profile.bio_short,
                 price_per_min_cents=profile.price_per_min_cents,
-                rating_avg=profile.rating_avg,
-                rating_count=profile.rating_count,
+                rating_avg=rating_avg,
+                rating_count=rating_count,
                 is_accepting_consultations=profile.is_accepting_consultations,
                 status=profile.status,
                 presence=DoctorPresenceResponse.model_validate(presence),
@@ -198,6 +236,7 @@ def upsert_my_doctor_profile(
     db.refresh(presence)
 
     logger.info(f"Doctor profile upserted: doctor_profile_id={doctor_profile.id}, specialties={len(set(payload.specialty_ids))}")
+    rating_avg, rating_count = _rating_for(db, doctor_profile.id)
     return DoctorCardResponse(
         id=doctor_profile.id,
         user_id=doctor_profile.user_id,
@@ -205,8 +244,8 @@ def upsert_my_doctor_profile(
         professional_title=doctor_profile.professional_title,
         bio_short=doctor_profile.bio_short,
         price_per_min_cents=doctor_profile.price_per_min_cents,
-        rating_avg=doctor_profile.rating_avg,
-        rating_count=doctor_profile.rating_count,
+        rating_avg=rating_avg,
+        rating_count=rating_count,
         is_accepting_consultations=doctor_profile.is_accepting_consultations,
         status=doctor_profile.status,
         presence=DoctorPresenceResponse.model_validate(presence),
@@ -380,7 +419,7 @@ def get_doctor_dashboard(
         .filter(Appointment.doctor_id == doctor_profile.id, Appointment.status == AppointmentStatus.completed)
         .count()
     )
-    average_rating = float(doctor_profile.rating_avg or 0)
+    average_rating = _rating_for(db, doctor_profile.id)[0]
     active_video_sessions = (
         db.query(VideoSession)
         .filter(
@@ -556,7 +595,7 @@ def get_my_video_sessions(
             continue
 
         try:
-            doctor_token = daily_service.create_meeting_token(
+            doctor_token = jitsi_service.create_meeting_token(
                 room_name=session.provider_room_name,
                 owner_id=doctor_profile.id,
                 role="doctor",
@@ -597,3 +636,68 @@ def get_my_video_sessions(
 
     db.commit()
     return DoctorVideoSessionListResponse(sessions=result, total=len(result))
+
+
+@router.get("/{doctor_id}", response_model=DoctorDetailResponse)
+def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
+    """Perfil publico de un medico aprobado con sus especialidades y resenas."""
+    doctor_profile = (
+        db.query(DoctorProfile)
+        .filter(DoctorProfile.id == doctor_id, DoctorProfile.status == DoctorApprovalStatus.approved)
+        .first()
+    )
+    if not doctor_profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
+
+    presence = doctor_profile.presence
+    if not presence:
+        presence = DoctorPresence(
+            status=DoctorPresenceStatus.offline,
+            status_message="Desconectado",
+            last_seen_at=datetime.now(timezone.utc),
+        )
+
+    specialties = sorted(
+        (link.specialty for link in doctor_profile.doctor_specialties if link.specialty),
+        key=lambda specialty: specialty.name.lower(),
+    )
+
+    reviews = (
+        db.query(ConsultationReview)
+        .filter(ConsultationReview.doctor_id == doctor_id)
+        .order_by(ConsultationReview.created_at.desc())
+        .limit(30)
+        .all()
+    )
+
+    rating_avg, rating_count = _rating_for(db, doctor_id)
+    return DoctorDetailResponse(
+        id=doctor_profile.id,
+        user_id=doctor_profile.user_id,
+        display_name=doctor_profile.display_name,
+        professional_title=doctor_profile.professional_title,
+        bio_short=doctor_profile.bio_short,
+        price_per_min_cents=doctor_profile.price_per_min_cents,
+        rating_avg=rating_avg,
+        rating_count=rating_count,
+        is_accepting_consultations=doctor_profile.is_accepting_consultations,
+        status=doctor_profile.status,
+        presence=DoctorPresenceResponse.model_validate(presence),
+        years_experience=doctor_profile.years_experience,
+        city=doctor_profile.city,
+        country=doctor_profile.country,
+        specialties=[
+            DoctorSpecialtySummary(id=specialty.id, slug=specialty.slug, name=specialty.name)
+            for specialty in specialties
+        ],
+        reviews=[
+            DoctorReviewResponse(
+                id=review.id,
+                rating=review.rating,
+                comment=review.comment,
+                patient_label="Paciente verificado",
+                created_at=review.created_at,
+            )
+            for review in reviews
+        ],
+    )

@@ -9,6 +9,7 @@ import {
   markAppointmentNoShow,
   prepareAppointmentVideoSession,
 } from '../api/appointments'
+import { APPOINTMENT_STATUS_LABELS } from '../utils/statusLabels'
 import { getMyNotifications, NotificationItem } from '../api/notifications'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 
@@ -175,8 +176,8 @@ export default function DoctorDashboard() {
                       <p className="mt-1 text-sm text-stone-600">{appointment.patient_email}</p>
                       <p className="mt-2 text-sm text-stone-500">{new Date(appointment.scheduled_at).toLocaleString('es-ES')}</p>
                     </div>
-                    <span className="rounded-full bg-stone-950 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white">
-                      {appointment.status}
+                    <span className="rounded-full bg-stone-950 px-3 py-1 text-xs font-semibold text-white">
+                      {APPOINTMENT_STATUS_LABELS[appointment.status]}
                     </span>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">

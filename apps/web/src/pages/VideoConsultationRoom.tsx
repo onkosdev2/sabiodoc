@@ -19,7 +19,7 @@ type PreparedVideoSession = {
   appointment_id?: number | null
   specialty_name: string
   doctor_name: string
-  provider: 'daily' | 'mock_daily' | 'jitsi' // <-- Añadir 'jitsi'
+  provider: 'jitsi' | 'jitsi_mock'
   room_url: string | null
   participant_token: string | null // <-- Añadir '| null'
   participant_role: 'patient' | 'doctor'
@@ -167,7 +167,7 @@ export default function VideoConsultationRoom() {
       return
     }
     // Cambiamos el mensaje de error para que sea genérico
-    if (session.provider !== 'mock_daily' && !session.room_url) {
+    if (session.provider !== 'jitsi_mock' && !session.room_url) {
       setError('La sala no incluye una URL válida.')
       return
     }
@@ -179,7 +179,7 @@ export default function VideoConsultationRoom() {
       setStatusData(joinedStatus)
 
       if (session.room_url) {
-        // Jitsi no necesita tokens en la URL, pasamos la dirección limpia
+        // La URL de Jitsi ya incluye el JWT del participante cuando aplica.
         setIframeUrl(session.room_url)
       }
       setJoined(true)
@@ -548,10 +548,10 @@ export default function VideoConsultationRoom() {
           </aside>
 
           <section className="rounded-[28px] border border-slate-900/10 bg-slate-950 p-3 shadow-xl">
-            {session.provider === 'mock_daily' ? (
+            {session.provider === 'jitsi_mock' ? (
               <div className="flex min-h-[560px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/20 bg-slate-900 p-8 text-center text-white">
                 <Video className="h-14 w-14 text-emerald-400" />
-                <h2 className="mt-4 text-2xl font-semibold">Sala mock de Daily</h2>
+                <h2 className="mt-4 text-2xl font-semibold">Sala mock</h2>
                 <p className="mt-3 max-w-xl text-sm text-slate-300">
                   Esta sesión usa el proveedor simulado. El cronómetro y las alertas siguen funcionando con el reloj compartido del backend.
                 </p>
@@ -562,7 +562,7 @@ export default function VideoConsultationRoom() {
                 {iframeUrl ? (
                   <iframe
                     src={iframeUrl}
-                    title="Daily video room"
+                    title="Sala de videoconsulta"
                     allow="camera; microphone; fullscreen; display-capture; autoplay"
                     className="h-[560px] w-full border-0"
                   />
@@ -572,7 +572,7 @@ export default function VideoConsultationRoom() {
                       <Video className="mx-auto h-14 w-14 text-emerald-400" />
                       <p className="mt-4 text-lg font-medium">La sala está lista.</p>
                       <p className="mt-2 max-w-md text-sm text-slate-300">
-                        Pulsa &quot;Entrar a la sala&quot; para fijar el inicio compartido y abrir Daily dentro de SabioDoc.
+                        Pulsa &quot;Entrar a la sala&quot; para fijar el inicio compartido y abrir la sala dentro de SabioDoc.
                       </p>
                     </div>
                   </div>

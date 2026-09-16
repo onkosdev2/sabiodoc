@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db, require_admin
@@ -44,6 +45,7 @@ def _serialize_admin_user(user: User) -> AdminUserResponse:
         email=user.email,
         role=user.role,
         doctor_status=profile.status if profile else None,
+        is_reviewer=bool(user.is_reviewer),
         created_at=user.created_at,
     )
 
@@ -188,7 +190,7 @@ def list_reviewers(
 ):
     reviewers = (
         db.query(User)
-        .filter(User.role == UserRole.reviewer)
+        .filter(or_(User.is_reviewer == True, User.role == UserRole.reviewer))
         .order_by(User.created_at.desc())
         .all()
     )
@@ -206,16 +208,15 @@ def create_reviewer(
 ):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
-        if existing.role == UserRole.reviewer:
+        if existing.is_reviewer or existing.role == UserRole.reviewer:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Este usuario ya es revisor",
             )
-        # Promovemos una cuenta existente (paciente o medico) a revisor sin
-        # perder sus capacidades previas: un medico conserva su DoctorProfile.
-        existing.role = UserRole.reviewer
+        # Damos la capacidad de revisión sin cambiar su rol (puede seguir siendo médico).
+        existing.is_reviewer = True
         reviewer = existing
-        action = "reviewer.promoted"
+        action = "reviewer.granted"
     else:
         if not payload.password:
             raise HTTPException(
@@ -225,7 +226,8 @@ def create_reviewer(
         reviewer = User(
             email=payload.email,
             password_hash=get_password_hash(payload.password),
-            role=UserRole.reviewer,
+            role=UserRole.patient,
+            is_reviewer=True,
         )
         db.add(reviewer)
         action = "reviewer.created"
@@ -252,7 +254,10 @@ def revoke_reviewer(
 ):
     reviewer = (
         db.query(User)
-        .filter(User.id == user_id, User.role == UserRole.reviewer)
+        .filter(
+            User.id == user_id,
+            or_(User.is_reviewer == True, User.role == UserRole.reviewer),
+        )
         .first()
     )
     if not reviewer:
@@ -261,18 +266,21 @@ def revoke_reviewer(
             detail="Revisor no encontrado",
         )
 
-    reviewer.role = UserRole.patient
-    doctor_profile = (
-        db.query(DoctorProfile)
-        .filter(DoctorProfile.user_id == reviewer.id)
-        .first()
-    )
-    restored_role = "patient"
-    if doctor_profile and doctor_profile.status == DoctorApprovalStatus.approved:
-        # Si tambien era medico, le devolvemos su rol medico para que conserve
-        # el acceso al panel medico despues de revocar el acceso de revision.
-        reviewer.role = UserRole.doctor
-        restored_role = "doctor"
+    reviewer.is_reviewer = False
+    restored_role = reviewer.role.value
+    if reviewer.role == UserRole.reviewer:
+        # Compatibilidad con el rol antiguo: devolvemos a medico o paciente.
+        doctor_profile = (
+            db.query(DoctorProfile)
+            .filter(DoctorProfile.user_id == reviewer.id)
+            .first()
+        )
+        if doctor_profile and doctor_profile.status == DoctorApprovalStatus.approved:
+            reviewer.role = UserRole.doctor
+            restored_role = "doctor"
+        else:
+            reviewer.role = UserRole.patient
+            restored_role = "patient"
     audit_service.log(
         db,
         action="reviewer.revoked",
@@ -288,6 +296,7 @@ def revoke_reviewer(
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     role: UserRole | None = None,
+    is_reviewer: bool | None = None,
     search: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -297,6 +306,8 @@ def list_users(
     query = db.query(User)
     if role:
         query = query.filter(User.role == role)
+    if is_reviewer is not None:
+        query = query.filter(User.is_reviewer == is_reviewer)
     if search:
         query = query.filter(User.email.ilike(f"%{search}%"))
 
@@ -333,10 +344,15 @@ def create_user(
             detail="Para crear un médico usa el flujo de postulación; luego podrás asignarle el rol",
         )
 
+    # El rol "reviewer" se mantiene por compatibilidad: se traduce a paciente + flag.
+    role = UserRole.patient if payload.role == UserRole.reviewer else payload.role
+    is_reviewer = payload.is_reviewer or payload.role == UserRole.reviewer
+
     user = User(
         email=payload.email,
         password_hash=get_password_hash(payload.password),
-        role=payload.role,
+        role=role,
+        is_reviewer=is_reviewer,
     )
     db.add(user)
     db.flush()
@@ -346,7 +362,7 @@ def create_user(
         entity_type="user",
         entity_id=user.id,
         actor_user_id=current_user.id,
-        metadata={"email": user.email, "role": user.role.value},
+        metadata={"email": user.email, "role": user.role.value, "is_reviewer": bool(user.is_reviewer)},
     )
     db.commit()
     db.refresh(user)
@@ -416,13 +432,28 @@ def update_user(
                 )
         user.role = payload.role
 
+    if payload.is_reviewer is not None and payload.is_reviewer != user.is_reviewer:
+        user.is_reviewer = payload.is_reviewer
+        if not payload.is_reviewer and user.role == UserRole.reviewer:
+            # Compatibilidad con el rol antiguo.
+            profile = (
+                db.query(DoctorProfile)
+                .filter(DoctorProfile.user_id == user.id)
+                .first()
+            )
+            user.role = (
+                UserRole.doctor
+                if profile and profile.status == DoctorApprovalStatus.approved
+                else UserRole.patient
+            )
+
     audit_service.log(
         db,
         action="user.updated",
         entity_type="user",
         entity_id=user.id,
         actor_user_id=current_user.id,
-        metadata={"email": user.email, "role": user.role.value},
+        metadata={"email": user.email, "role": user.role.value, "is_reviewer": bool(user.is_reviewer)},
     )
     db.commit()
     db.refresh(user)

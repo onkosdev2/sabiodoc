@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { Activity, Bell, Briefcase, CalendarDays, FileText } from 'lucide-react'
+import { Activity, Briefcase, CalendarDays, FileText } from 'lucide-react'
 
 import PanelLayout, { PanelNavItem } from './PanelLayout'
 import { useAuth } from '../context/AuthContext'
@@ -13,19 +13,15 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
   const isApproved = user?.doctor_status === 'approved'
 
   // Un medico sin aprobar no puede entrar a las rutas clinicas: le mostramos
-  // solo las opciones utiles (completar su postulacion y notificaciones).
+  // solo la opcion de completar su postulacion.
   const navItems: PanelNavItem[] = isApproved
     ? [
         { to: '/doctor', label: 'Dashboard', icon: CalendarDays },
         { to: '/doctor/video-sessions', label: 'Videoconsultas', icon: Activity },
         { to: '/doctor/availability', label: 'Disponibilidad', icon: CalendarDays },
-        { to: '/notifications', label: 'Notificaciones', icon: Bell },
         { to: '/doctor/profile', label: 'Perfil médico', icon: FileText },
       ]
-    : [
-        { to: '/doctor/apply', label: 'Mi postulación', icon: FileText },
-        { to: '/notifications', label: 'Notificaciones', icon: Bell },
-      ]
+    : [{ to: '/doctor/apply', label: 'Mi postulación', icon: FileText }]
 
   return (
     <PanelLayout
@@ -33,6 +29,7 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
       brandIcon={Briefcase}
       accent="emerald"
       navItems={navItems}
+      notificationsTo={isApproved ? '/doctor/notifications' : '/notifications'}
     >
       {children}
     </PanelLayout>

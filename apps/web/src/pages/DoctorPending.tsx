@@ -4,6 +4,7 @@ import { Loader2, ShieldAlert } from 'lucide-react'
 
 import { getMyDoctorApplication, DoctorApplication } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
+import { DOCTOR_APPLICATION_STATUS_LABELS } from '../utils/statusLabels'
 
 export default function DoctorPending() {
   const { user, isAuthenticated, isLoading: authLoading, refreshUser } = useAuth()
@@ -98,7 +99,7 @@ export default function DoctorPending() {
               <p className="mt-2 text-lg font-semibold text-stone-900">
                 US$ {(application.price_per_min_cents / 100).toFixed(2)} / min
               </p>
-              <p className="mt-1 text-sm text-stone-600">Estado actual: {application.status}</p>
+              <p className="mt-1 text-sm text-stone-600">Estado actual: {DOCTOR_APPLICATION_STATUS_LABELS[application.status] || application.status}</p>
               <p className="mt-1 text-sm text-stone-600">Zona horaria: {application.timezone || 'UTC'}</p>
             </div>
           </div>

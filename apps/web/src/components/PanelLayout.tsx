@@ -1,10 +1,10 @@
-import { ReactNode, useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
-import { Bell, ChevronDown, Home, LogOut, UserRound } from 'lucide-react'
+import { Bell } from 'lucide-react'
 
-import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationsContext'
+import UserMenu, { UserMenuItem } from './UserMenu'
 
 export interface PanelNavItem {
   to: string
@@ -19,6 +19,8 @@ interface PanelLayoutProps {
   brandIcon: LucideIcon
   accent: PanelAccent
   navItems: PanelNavItem[]
+  /** Destino del icono de notificaciones (por defecto el portal de paciente). */
+  notificationsTo?: string
   children: ReactNode
 }
 
@@ -28,56 +30,22 @@ const ACCENTS: Record<PanelAccent, { wrapper: string; icon: string }> = {
   violet: { wrapper: 'bg-violet-400/15', icon: 'text-violet-300' },
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  patient: 'Paciente',
-  doctor: 'Médico',
-  reviewer: 'Revisor',
-  admin: 'Administrador',
-}
-
 /**
  * Layout de los paneles especializados (médico, admin y revisión).
- * La navegación vive en un botón de usuario en la cabecera, igual que en la
+ * La navegación vive en el botón de usuario de la cabecera, igual que en la
  * pantalla principal, para dejar todo el ancho disponible al contenido.
  */
-export default function PanelLayout({ panelName, brandIcon: BrandIcon, accent, navItems, children }: PanelLayoutProps) {
-  const { user, logout } = useAuth()
+export default function PanelLayout({
+  panelName,
+  brandIcon: BrandIcon,
+  accent,
+  navItems,
+  notificationsTo = '/notifications',
+  children,
+}: PanelLayoutProps) {
   const { unread } = useNotifications()
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setIsMenuOpen(false)
-  }, [location.pathname])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const handleLogout = () => {
-    setIsMenuOpen(false)
-    logout()
-    navigate('/')
-  }
-
-  const homePath = navItems[0]?.to || '/'
   const accentClasses = ACCENTS[accent]
-
-  const roleParts = new Set<string>()
-  if (user?.role) roleParts.add(ROLE_LABELS[user.role] || user.role)
-  if (user?.doctor_status) roleParts.add('Médico')
-  const roleLabel = Array.from(roleParts).join(' · ')
-
-  const isActive = (to: string) => location.pathname === to
+  const homePath = navItems[0]?.to || '/'
 
   return (
     <div className="min-h-screen bg-stone-100">
@@ -95,7 +63,7 @@ export default function PanelLayout({ panelName, brandIcon: BrandIcon, accent, n
 
           <div className="flex items-center gap-2">
             <Link
-              to="/notifications"
+              to={notificationsTo}
               className="relative rounded-full p-2 text-stone-300 transition-colors hover:bg-stone-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-500"
               aria-label="Notificaciones"
             >
@@ -107,69 +75,7 @@ export default function PanelLayout({ panelName, brandIcon: BrandIcon, accent, n
               )}
             </Link>
 
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setIsMenuOpen((open) => !open)}
-                className="flex items-center gap-2 rounded-full border border-stone-700 px-3 py-2 text-sm text-stone-200 transition-colors hover:border-stone-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-500"
-                aria-expanded={isMenuOpen}
-                aria-haspopup="true"
-              >
-                <UserRound className="h-4 w-4" />
-                <span className="hidden max-w-[180px] truncate md:inline">{user?.email}</span>
-                <ChevronDown className={`h-4 w-4 text-stone-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-72 overflow-hidden rounded-2xl border border-stone-200 bg-white text-stone-700 shadow-xl">
-                  <div className="border-b border-stone-100 px-4 py-3">
-                    <p className="truncate text-sm font-medium text-stone-900" title={user?.email}>
-                      {user?.email}
-                    </p>
-                    <p className="mt-0.5 text-xs uppercase tracking-[0.18em] text-stone-400">{roleLabel}</p>
-                  </div>
-
-                  <div className="py-1">
-                    {navItems.map((item) => {
-                      const Icon = item.icon
-                      const active = isActive(item.to)
-                      return (
-                        <Link
-                          key={item.to}
-                          to={item.to}
-                          onClick={() => setIsMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                            active
-                              ? 'bg-stone-100 font-medium text-stone-950'
-                              : 'text-stone-700 hover:bg-stone-50'
-                          }`}
-                        >
-                          <Icon className={`h-4 w-4 ${active ? 'text-stone-900' : 'text-stone-400'}`} />
-                          {item.label}
-                        </Link>
-                      )
-                    })}
-                  </div>
-
-                  <div className="border-t border-stone-100 py-1">
-                    <Link
-                      to="/"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 transition-colors hover:bg-stone-50"
-                    >
-                      <Home className="h-4 w-4 text-stone-400" />
-                      Portal general
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Cerrar sesión
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <UserMenu theme="dark" groups={[navItems as UserMenuItem[]]} showPortalGeneral />
           </div>
         </div>
       </header>

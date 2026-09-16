@@ -14,7 +14,7 @@ from app.models.user import User, UserRole
 from app.models.video_session import PaymentStatus, VideoSession, VideoSessionStatus, VideoProvider
 from app.models.video_session_event import VideoSessionEvent
 from sqlalchemy import and_, or_
-from app.services.daily_service import daily_service
+from app.services.jitsi_service import jitsi_service
 from app.services.payment_service import payment_service
 from app.services.pricing_service import pricing_service
 
@@ -112,7 +112,7 @@ class VideoSessionService:
             consultation_id=consultation.id,
             patient_id=patient_id,
             doctor_id=doctor_profile.id,
-            provider=VideoProvider.mock_daily if daily_service.is_mock else VideoProvider.daily,
+            provider=VideoProvider.jitsi_mock if jitsi_service.is_mock else VideoProvider.jitsi,
             status=VideoSessionStatus.prepared,
             payment_status=PaymentStatus.pending,
             provider_room_name=room_name,
@@ -125,7 +125,7 @@ class VideoSessionService:
         db.flush()
 
         try:
-            room_data = daily_service.prepare_room(
+            room_data = jitsi_service.prepare_room(
                 room_name=room_name,
                 consultation_id=consultation.id,
                 doctor_profile_id=doctor_profile.id,
@@ -157,6 +157,7 @@ class VideoSessionService:
             ) from exc
 
         video_session.provider = VideoProvider(room_data["provider"])
+        video_session.provider_room_name = room_data["room_name"]
         video_session.provider_room_url = room_data.get("room_url")
         video_session.payment_reference = payment_data.get("reference")
         video_session.payment_status = PaymentStatus(payment_data["status"])
@@ -187,7 +188,7 @@ class VideoSessionService:
             "provider": video_session.provider,
             "payment_status": video_session.payment_status,
             "room_name": room_data["room_name"],
-            "room_url": room_data.get("room_url"),
+            "room_url": jitsi_service.build_participant_url(room_data["room_name"], room_data["patient_token"]),
             "patient_token": room_data["patient_token"],
             "doctor_token": room_data["doctor_token"],
             "doctor_price_per_min_cents": video_session.doctor_price_per_min_cents,
@@ -232,7 +233,7 @@ class VideoSessionService:
             existing_session = None
 
         if existing_session:
-            participant_token = daily_service.create_meeting_token(
+            participant_token = jitsi_service.create_meeting_token(
                 room_name=existing_session.provider_room_name,
                 owner_id=current_user.id,
                 role=participant_role,
@@ -255,7 +256,7 @@ class VideoSessionService:
             appointment_id=appointment.id,
             patient_id=appointment.patient_id,
             doctor_id=appointment.doctor_id,
-            provider=VideoProvider.mock_daily if daily_service.is_mock else VideoProvider.daily,
+            provider=VideoProvider.jitsi_mock if jitsi_service.is_mock else VideoProvider.jitsi,
             status=VideoSessionStatus.prepared,
             payment_status=PaymentStatus.waived,
             provider_room_name=room_name,
@@ -268,7 +269,7 @@ class VideoSessionService:
         db.flush()
 
         try:
-            room_data = daily_service.prepare_room(
+            room_data = jitsi_service.prepare_room(
                 room_name=room_name,
                 consultation_id=appointment.consultation_id,
                 appointment_id=appointment.id,
@@ -287,6 +288,7 @@ class VideoSessionService:
 
         participant_token = room_data[f"{participant_role}_token"]
         video_session.provider = VideoProvider(room_data["provider"])
+        video_session.provider_room_name = room_data["room_name"]
         video_session.provider_room_url = room_data.get("room_url")
         video_session.metadata_json = json.dumps(room_data.get("metadata", {}))
         db.add(
@@ -389,7 +391,7 @@ class VideoSessionService:
             "status": video_session.status,
             "provider": video_session.provider,
             "room_name": video_session.provider_room_name,
-            "room_url": video_session.provider_room_url,
+            "room_url": jitsi_service.build_participant_url(video_session.provider_room_name, participant_token),
             "participant_token": participant_token,
             "participant_role": participant_role,
             "specialty_name": appointment.specialty.name if appointment.specialty else "Especialidad",

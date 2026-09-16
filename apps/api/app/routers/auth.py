@@ -22,6 +22,7 @@ def build_user_response(user: User) -> UserResponse:
         email=user.email,
         role=user.role,
         doctor_status=doctor_profile.status if doctor_profile else None,
+        is_reviewer=bool(user.is_reviewer),
         created_at=user.created_at,
     )
 

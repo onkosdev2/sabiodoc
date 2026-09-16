@@ -97,7 +97,7 @@ export interface AppointmentVideoSession {
   appointment_id: number
   consultation_id: number | null
   status: 'prepared' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed'
-  provider: 'daily' | 'mock_daily'
+  provider: 'jitsi' | 'jitsi_mock'
   room_name: string
   room_url: string | null
   participant_token: string

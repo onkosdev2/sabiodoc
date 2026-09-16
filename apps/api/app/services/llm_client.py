@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Optional
 from openai import OpenAI
 from app.core.config import settings
@@ -47,20 +48,91 @@ Responde SIEMPRE en formato JSON válido con esta estructura exacta:
 
 class LLMClient:
     def __init__(self):
-        self.api_key = settings.DEEPSEEK_API_KEY
-        self.base_url = settings.DEEPSEEK_BASE_URL
-        self.model = settings.DEEPSEEK_MODEL
-        self.is_mock = not self.api_key
-        
-        if not self.is_mock:
-            self.client = OpenAI(
-                api_key=self.api_key,
-                base_url=f"{self.base_url}/v1" if not self.base_url.endswith("/v1") else self.base_url
+        self.timeout = settings.LLM_TIMEOUT_SECONDS
+        self.providers: list[tuple[str, OpenAI, str]] = []
+
+        if settings.DEEPSEEK_API_KEY:
+            deepseek_base = settings.DEEPSEEK_BASE_URL
+            if not deepseek_base.endswith("/v1"):
+                deepseek_base = f"{deepseek_base}/v1"
+            self.providers.append(
+                (
+                    "deepseek",
+                    OpenAI(
+                        api_key=settings.DEEPSEEK_API_KEY,
+                        base_url=deepseek_base,
+                        timeout=self.timeout,
+                        max_retries=0,
+                    ),
+                    settings.DEEPSEEK_MODEL,
+                )
             )
-            logger.info(f"LLM Client initialized with model: {self.model}")
-        else:
+
+        if settings.GROQ_API_KEY:
+            self.providers.append(
+                (
+                    "groq",
+                    OpenAI(
+                        api_key=settings.GROQ_API_KEY,
+                        base_url=settings.GROQ_BASE_URL,
+                        timeout=self.timeout,
+                        max_retries=0,
+                    ),
+                    settings.GROQ_MODEL,
+                )
+            )
+
+        self.is_mock = not self.providers
+
+        if self.is_mock:
             logger.warning("LLM Client running in MOCK mode - no API key configured")
-    
+        else:
+            logger.info(
+                "LLM Client initialized with providers: %s (timeout=%ss)",
+                " -> ".join(name for name, _, _ in self.providers),
+                self.timeout,
+            )
+
+    def _try_providers(
+        self,
+        *,
+        messages: list[dict],
+        temperature: float,
+        max_tokens: int,
+        json_mode: bool,
+        parse,
+    ):
+        """Ejecuta la peticion en orden de prioridad.
+
+        Si un proveedor falla, no responde o excede el timeout, se pasa al
+        siguiente (p. ej. DeepSeek -> Groq). Devuelve el resultado ya parseado
+        o ``None`` si todos fallan.
+        """
+        for index, (name, client, model) in enumerate(self.providers):
+            try:
+                params: dict = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "timeout": self.timeout,
+                }
+                if json_mode:
+                    params["response_format"] = {"type": "json_object"}
+
+                response = client.chat.completions.create(**params)
+                content = response.choices[0].message.content or ""
+                result = parse(content)
+                logger.info(f"LLM response OK from provider={name}")
+                return result
+            except Exception as e:  # noqa: BLE001 - queremos capturar todo para el fallback
+                next_provider = self.providers[index + 1][0] if index + 1 < len(self.providers) else None
+                if next_provider:
+                    logger.warning(f"LLM provider '{name}' failed ({e}); falling back to '{next_provider}'")
+                else:
+                    logger.error(f"LLM provider '{name}' failed and no fallback available: {e}")
+        return None
+
     def get_triage_response(
         self,
         symptoms_text: str,
@@ -69,37 +141,30 @@ class LLMClient:
     ) -> dict:
         if self.is_mock:
             return self._get_mock_response(symptoms_text)
-        
-        try:
-            user_message = f"Síntomas del paciente: {symptoms_text}"
-            if age:
-                user_message += f"\nEdad: {age} años"
-            if sex:
-                sex_map = {"male": "masculino", "female": "femenino", "other": "otro"}
-                user_message += f"\nSexo: {sex_map.get(sex, sex)}"
-            
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": TRIAGE_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message}
-                ],
-                temperature=0.3,
-                max_tokens=1000
-            )
-            
-            content = response.choices[0].message.content
 
-            result = self._parse_json_content(content or "")
-            logger.info(f"Triage completed: urgency={result.get('urgency')}")
-            return result
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response as JSON: {e}")
+        user_message = f"Síntomas del paciente: {symptoms_text}"
+        if age:
+            user_message += f"\nEdad: {age} años"
+        if sex:
+            sex_map = {"male": "masculino", "female": "femenino", "other": "otro"}
+            user_message += f"\nSexo: {sex_map.get(sex, sex)}"
+
+        result = self._try_providers(
+            messages=[
+                {"role": "system", "content": TRIAGE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+            json_mode=True,
+            parse=self._parse_json_content,
+        )
+        if not isinstance(result, dict):
+            logger.error("Triage: todos los proveedores LLM fallaron o devolvieron JSON invalido")
             return self._get_fallback_response()
-        except Exception as e:
-            logger.error(f"LLM API error: {e}")
-            return self._get_fallback_response()
+
+        logger.info(f"Triage completed: urgency={result.get('urgency')}")
+        return result
 
     def chat_json(
         self,
@@ -110,31 +175,80 @@ class LLMClient:
     ) -> Optional[dict]:
         """Ejecuta una consulta al LLM forzando una respuesta JSON.
 
-        Devuelve el dict parseado o ``None`` si el cliente está en modo mock
-        o si la respuesta no es un JSON válido.
+        Devuelve el dict parseado, o ``None`` si el cliente esta en modo mock
+        o si todos los proveedores fallan.
         """
         if self.is_mock:
             return None
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"},
-            )
-            content = response.choices[0].message.content or ""
-            return self._parse_json_content(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM JSON response: {e}")
+        result = self._try_providers(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=True,
+            parse=self._parse_json_content,
+        )
+        return result if isinstance(result, dict) else None
+
+    def health_check(self) -> dict:
+        """Comprueba la disponibilidad de cada proveedor LLM (sin consumir tokens)."""
+        if self.is_mock or not self.providers:
+            return {
+                "healthy": True,
+                "mode": "mock",
+                "providers": [],
+            }
+
+        providers_status = []
+        for name, client, model in self.providers:
+            started = time.perf_counter()
+            try:
+                client.models.list(timeout=self.timeout)
+                providers_status.append(
+                    {
+                        "name": name,
+                        "model": model,
+                        "status": "ok",
+                        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                    }
+                )
+            except Exception as e:  # noqa: BLE001
+                providers_status.append(
+                    {
+                        "name": name,
+                        "model": model,
+                        "status": "error",
+                        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                        "detail": str(e)[:200],
+                    }
+                )
+
+        return {
+            "healthy": any(item["status"] == "ok" for item in providers_status),
+            "mode": "live",
+            "providers": providers_status,
+        }
+
+    def chat_text(
+        self,
+        messages: list[dict],
+        temperature: float = 0.7,
+        max_tokens: int = 600,
+    ) -> Optional[str]:
+        """Chat conversacional (texto plano) con fallback de proveedores."""
+        if self.is_mock:
             return None
-        except Exception as e:
-            logger.error(f"LLM JSON chat error: {e}")
-            return None
+        result = self._try_providers(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=False,
+            parse=lambda content: content,
+        )
+        return result if result else None
 
     def _parse_json_content(self, content: str) -> dict:
         """Limpia los bloques de código Markdown y parsea el JSON."""

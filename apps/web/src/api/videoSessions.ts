@@ -7,7 +7,7 @@ export interface VideoSessionStatus {
   patient_id: number
   patient_email: string
   status: 'prepared' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed'
-  provider: 'daily' | 'mock_daily'
+  provider: 'jitsi' | 'jitsi_mock'
   participant_role: 'patient' | 'doctor'
   room_name: string
   started_at: string | null

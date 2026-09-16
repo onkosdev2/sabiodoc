@@ -1,0 +1,371 @@
+import { useCallback, useState, useEffect, useRef } from 'react'
+import { Send, Bot, User, Loader2, FileText, AlertCircle, CheckCircle, X } from 'lucide-react'
+
+import {
+  getConsultation,
+  getChatHistory,
+  startChat,
+  sendChatMessage,
+  generateSummary,
+  closeConsultation,
+  Consultation,
+  ChatMessage,
+} from '../api/consultations'
+import StructuredIntakeCard from './StructuredIntakeCard'
+import RichText from './RichText'
+
+interface ConsultationChatViewProps {
+  consultationId: number
+  variant?: 'page' | 'panel'
+  onClose?: () => void
+}
+
+export default function ConsultationChatView({
+  consultationId,
+  variant = 'page',
+  onClose,
+}: ConsultationChatViewProps) {
+  const [consultation, setConsultation] = useState<Consultation | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [inputMessage, setInputMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [generatingSummary, setGeneratingSummary] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [summaryGenerated, setSummaryGenerated] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    // Scroll interno del listado, sin mover la página completa.
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [messages, sending])
+
+  const loadConsultation = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const consultationData = await getConsultation(consultationId)
+      setConsultation(consultationData)
+      if (consultationData.summary) {
+        setSummaryGenerated(true)
+      }
+
+      const historyData = await getChatHistory(consultationId)
+      if (historyData.messages.length === 0) {
+        const welcomeMessage = await startChat(consultationId)
+        setMessages([welcomeMessage])
+      } else {
+        setMessages(historyData.messages)
+      }
+    } catch (err: unknown) {
+      const requestError = err as { response?: { data?: { detail?: string } } }
+      console.error('Error loading consultation:', err)
+      setError(requestError.response?.data?.detail || 'Error al cargar la consulta')
+    } finally {
+      setLoading(false)
+    }
+  }, [consultationId])
+
+  useEffect(() => {
+    loadConsultation()
+  }, [loadConsultation])
+
+  const handleSendMessage = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const messageText = inputMessage.trim()
+    if (!messageText || sending) return
+
+    const tempId = -Date.now()
+    const tempUserMessage: ChatMessage = {
+      id: tempId,
+      consultation_id: consultationId,
+      role: 'user',
+      content: messageText,
+      created_at: new Date().toISOString(),
+    }
+
+    setInputMessage('')
+    setSending(true)
+    setError(null)
+    setMessages((prev) => [...prev, tempUserMessage])
+
+    try {
+      const response = await sendChatMessage(consultationId, messageText)
+      setMessages((prev) => [
+        ...prev.filter((message) => message.id !== tempId),
+        response.user_message,
+        response.assistant_message,
+      ])
+    } catch (err: unknown) {
+      console.error('Error sending message:', err)
+      setMessages((prev) => prev.filter((message) => message.id !== tempId))
+      setError('Error al enviar el mensaje. Intenta de nuevo.')
+    } finally {
+      setSending(false)
+      // Mantiene el cursor en el campo para seguir escribiendo.
+      inputRef.current?.focus()
+    }
+  }
+
+  const handleGenerateSummary = async () => {
+    if (generatingSummary) return
+    setGeneratingSummary(true)
+    try {
+      const response = await generateSummary(consultationId)
+      setSummaryGenerated(true)
+      // El backend finaliza la consulta al generar el resumen.
+      setConsultation((current) =>
+        current
+          ? { ...current, summary: response.summary, intake: response.intake, status: 'closed' }
+          : current,
+      )
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: -Date.now(),
+          consultation_id: consultationId,
+          role: 'assistant',
+          content:
+            '✅ He generado un resumen de nuestra conversación para el médico. Ya puedes agendar tu videoconsulta con el especialista desde la página de la especialidad.',
+          created_at: new Date().toISOString(),
+        },
+      ])
+    } catch (err: unknown) {
+      const requestError = err as { response?: { data?: { detail?: string } } }
+      setError(requestError.response?.data?.detail || 'Error al generar el resumen')
+    } finally {
+      setGeneratingSummary(false)
+    }
+  }
+
+  const handleClose = async () => {
+    if (closing) return
+    setClosing(true)
+    setError(null)
+    try {
+      const updated = await closeConsultation(consultationId)
+      setConsultation(updated)
+    } catch (err: unknown) {
+      const requestError = err as { response?: { data?: { detail?: string } } }
+      setError(requestError.response?.data?.detail || 'No se pudo finalizar la consulta')
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  const isClosed = consultation?.status === 'closed'
+
+  const heightClass = variant === 'panel' ? 'h-full' : 'h-[70vh] min-h-[420px]'
+
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center bg-gray-50 ${heightClass}`}>
+        <div className="text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-600" />
+          <p className="mt-3 text-gray-600">Cargando consulta...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!consultation) {
+    return (
+      <div className={`flex items-center justify-center bg-gray-50 p-6 ${heightClass}`}>
+        <div className="max-w-md text-center">
+          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-500" />
+          <p className="text-gray-700">{error || 'No se pudo cargar la consulta'}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`flex flex-col overflow-hidden bg-gray-50 ${heightClass}`}>
+      {/* Header */}
+      <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="min-w-0">
+            <h1 className="truncate font-semibold text-gray-900">
+              Asistente de {consultation?.specialty?.name || 'Especialidad'}
+            </h1>
+            <p className="text-xs text-gray-500">Pre-consulta con IA</p>
+          </div>
+        </div>
+
+        <div className="flex flex-none items-center gap-2">
+          {!isClosed && messages.length >= 4 && !summaryGenerated && (
+            <button
+              onClick={handleGenerateSummary}
+              disabled={generatingSummary}
+              className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+            >
+              {generatingSummary ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="mr-2 h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Generar resumen</span>
+            </button>
+          )}
+
+          {!isClosed && messages.length >= 2 && (
+            <button
+              onClick={handleClose}
+              disabled={closing}
+              className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+            >
+              {closing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="mr-2 h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Finalizar</span>
+            </button>
+          )}
+
+          {isClosed && (
+            <span className="inline-flex items-center rounded-lg bg-green-100 px-3 py-2 text-sm text-green-700">
+              <CheckCircle className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Consulta finalizada</span>
+            </span>
+          )}
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100"
+              aria-label="Cerrar chat"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-800">
+              <strong>Importante:</strong> Este asistente virtual te ayuda a preparar tu consulta
+              médica. No proporciona diagnósticos ni tratamientos. La información recopilada será útil
+              para el especialista durante tu videoconsulta.
+            </p>
+          </div>
+
+          {consultation?.intake && (
+            <StructuredIntakeCard intake={consultation.intake} title="Ficha estructurada para la videoconsulta" />
+          )}
+
+          {messages.map((message) => (
+            <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`flex max-w-[85%] items-start gap-3 ${
+                  message.role === 'user' ? 'flex-row-reverse' : ''
+                }`}
+              >
+                <div
+                  className={`flex h-8 w-8 flex-none items-center justify-center rounded-full ${
+                    message.role === 'user' ? 'bg-primary-100 text-primary-600' : 'bg-teal-100 text-teal-600'
+                  }`}
+                >
+                  {message.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                </div>
+
+                <div
+                  className={`min-w-0 rounded-2xl px-4 py-3 ${
+                    message.role === 'user'
+                      ? 'bg-primary-600 text-white'
+                      : 'border border-gray-200 bg-white text-gray-800'
+                  }`}
+                >
+                  {message.role === 'user' ? (
+                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                  ) : (
+                    <RichText text={message.content} className="break-words" />
+                  )}
+                  <p
+                    className={`mt-1 text-xs ${
+                      message.role === 'user' ? 'text-primary-200' : 'text-gray-400'
+                    }`}
+                  >
+                    {new Date(message.created_at).toLocaleTimeString('es-ES', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {sending && (
+            <div className="flex justify-start">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-teal-100 text-teal-600">
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                  <div className="flex space-x-1">
+                    <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: '0ms' }} />
+                    <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: '150ms' }} />
+                    <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {error && (
+        <div className="mx-4 mb-2 flex items-center justify-between rounded-lg bg-red-500 px-4 py-2 text-white">
+          <span className="flex items-center gap-2 text-sm">
+            <AlertCircle className="h-4 w-4" />
+            {error}
+          </span>
+          <button onClick={() => setError(null)} className="text-white/80 hover:text-white">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Input */}
+      {isClosed ? (
+        <div className="border-t border-gray-200 bg-white p-4 text-center text-sm text-gray-500">
+          Esta consulta finalizó. Puedes iniciar una nueva desde la página de la especialidad.
+        </div>
+      ) : (
+        <footer className="border-t border-gray-200 bg-white p-4">
+          <form onSubmit={handleSendMessage} className="mx-auto max-w-3xl">
+            <div className="flex items-center gap-3">
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputMessage}
+                onChange={(event) => setInputMessage(event.target.value)}
+                placeholder="Escribe tu mensaje..."
+                autoFocus={variant === 'panel'}
+                className="flex-1 rounded-full border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-primary-500"
+              />
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || sending}
+                className="rounded-full bg-primary-600 p-3 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              </button>
+            </div>
+          </form>
+        </footer>
+      )}
+    </div>
+  )
+}
