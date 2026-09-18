@@ -1,14 +1,10 @@
-import { ReactNode } from 'react'
-import { Activity, Briefcase, CalendarDays, FileText } from 'lucide-react'
+import { Outlet } from 'react-router-dom'
+import { Activity, Briefcase, CalendarDays, FileText, Star, Users } from 'lucide-react'
 
 import PanelLayout, { PanelNavItem } from './PanelLayout'
 import { useAuth } from '../context/AuthContext'
 
-interface DoctorLayoutProps {
-  children: ReactNode
-}
-
-export default function DoctorLayout({ children }: DoctorLayoutProps) {
+export default function DoctorLayout() {
   const { user } = useAuth()
   const isApproved = user?.doctor_status === 'approved'
 
@@ -16,10 +12,13 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
   // solo la opcion de completar su postulacion.
   const navItems: PanelNavItem[] = isApproved
     ? [
-        { to: '/doctor', label: 'Dashboard', icon: CalendarDays },
+        { to: '/doctor', label: 'Panel operativo', icon: CalendarDays },
+        { to: '/doctor/appointments', label: 'Citas', icon: CalendarDays },
+        { to: '/doctor/patients', label: 'Mis pacientes', icon: Users },
         { to: '/doctor/video-sessions', label: 'Videoconsultas', icon: Activity },
         { to: '/doctor/availability', label: 'Disponibilidad', icon: CalendarDays },
-        { to: '/doctor/profile', label: 'Perfil médico', icon: FileText },
+        { to: '/doctor/reviews', label: 'Valoraciones', icon: Star },
+        { to: '/doctor/profile', label: 'Mi perfil profesional', icon: FileText },
       ]
     : [{ to: '/doctor/apply', label: 'Mi postulación', icon: FileText }]
 
@@ -31,7 +30,7 @@ export default function DoctorLayout({ children }: DoctorLayoutProps) {
       navItems={navItems}
       notificationsTo={isApproved ? '/doctor/notifications' : '/notifications'}
     >
-      {children}
+      <Outlet />
     </PanelLayout>
   )
 }

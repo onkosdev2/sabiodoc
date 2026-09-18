@@ -8,14 +8,14 @@ interface StructuredIntakeCardProps {
 
 const renderList = (items: string[]) => {
   if (items.length === 0) {
-    return <p className="text-sm text-gray-500">Sin datos relevantes.</p>
+    return <p className="text-sm text-slate-500">Sin datos relevantes.</p>
   }
 
   return (
-    <ul className="space-y-1 text-sm text-gray-700">
+    <ul className="space-y-1 text-sm text-slate-700">
       {items.map((item) => (
         <li key={item} className="flex gap-2">
-          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-gray-400" />
+          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
           <span>{item}</span>
         </li>
       ))}

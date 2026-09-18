@@ -12,6 +12,7 @@ import {
 
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
+import { Select, Textarea } from '../components/ui/Field'
 import { DoctorDetail, getDoctorDetail } from '../api/doctors'
 import {
   BookableSlot,
@@ -19,9 +20,7 @@ import {
   getDoctorBookableSlots,
 } from '../api/appointments'
 import { useAuth } from '../context/AuthContext'
-
-const currency = (cents: number) =>
-  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'USD' }).format(cents / 100)
+import { formatMoney as currency } from '../utils/format'
 
 function Stars({ value, className = 'h-4 w-4' }: { value: number; className?: string }) {
   return (
@@ -29,7 +28,7 @@ function Stars({ value, className = 'h-4 w-4' }: { value: number; className?: st
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          className={`${className} ${star <= Math.round(value) ? 'fill-current text-amber-400' : 'text-gray-300'}`}
+          className={`${className} ${star <= Math.round(value) ? 'fill-current text-amber-400' : 'text-slate-300'}`}
         />
       ))}
     </span>
@@ -150,7 +149,7 @@ export default function DoctorDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-500">
+      <div className="flex items-center justify-center py-20 text-slate-500">
         <Loader2 className="mr-3 h-5 w-5 animate-spin" />
         Cargando perfil del médico...
       </div>
@@ -182,7 +181,7 @@ export default function DoctorDetailPage() {
       <BackButton to={backTo} label="Volver a especialidades" />
 
       {/* Cabecera del médico */}
-      <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div className="flex h-20 w-20 flex-none items-center justify-center rounded-2xl bg-primary-100 text-2xl font-bold text-primary-700">
             {initials || 'MD'}
@@ -190,22 +189,22 @@ export default function DoctorDetailPage() {
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">{doctor.display_name}</h1>
+              <h1 className="text-3xl font-bold text-slate-900">{doctor.display_name}</h1>
               <PresenceBadge presence={doctor.presence} />
             </div>
 
-            <p className="mt-1 text-lg text-gray-600">{doctor.professional_title || 'Profesional médico'}</p>
+            <p className="mt-1 text-lg text-slate-600">{doctor.professional_title || 'Profesional médico'}</p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-700">
+            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-700">
               {doctor.rating_count > 0 ? (
                 <span className="inline-flex items-center gap-2">
                   <Stars value={ratingAverage} />
-                  <span className="font-semibold text-gray-900">{ratingAverage.toFixed(1)}</span>
-                  <span className="text-gray-500">({doctor.rating_count} valoraciones)</span>
+                  <span className="font-semibold text-slate-900">{ratingAverage.toFixed(1)}</span>
+                  <span className="text-slate-500">({doctor.rating_count} valoraciones)</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-2 text-gray-500">
-                  <Star className="h-4 w-4 text-gray-300" />
+                <span className="inline-flex items-center gap-2 text-slate-500">
+                  <Star className="h-4 w-4 text-slate-300" />
                   Sin valoraciones todavía
                 </span>
               )}
@@ -235,7 +234,7 @@ export default function DoctorDetailPage() {
                     className={`rounded-full px-3 py-1 text-sm ${
                       specialty.id === selectedSpecialty?.id
                         ? 'bg-primary-100 text-primary-700'
-                        : 'bg-gray-100 text-gray-600'
+                        : 'bg-slate-100 text-slate-600'
                     }`}
                   >
                     {specialty.name}
@@ -245,7 +244,7 @@ export default function DoctorDetailPage() {
             )}
 
             {doctor.bio_short && (
-              <p className="mt-4 leading-relaxed text-gray-600">{doctor.bio_short}</p>
+              <p className="mt-4 leading-relaxed text-slate-600">{doctor.bio_short}</p>
             )}
           </div>
         </div>
@@ -266,23 +265,23 @@ export default function DoctorDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Reseñas */}
-        <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex items-center gap-3">
             <MessageSquareQuote className="h-6 w-6 text-primary-600" />
-            <h2 className="text-2xl font-semibold text-gray-900">Reseñas de pacientes</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">Reseñas de pacientes</h2>
           </div>
 
           <div className="mt-6 space-y-4">
             {doctor.reviews.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 px-6 py-10 text-center text-gray-500">
+              <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center text-slate-500">
                 Aún no hay reseñas escritas. Las valoraciones se generan al completar una cita con el médico.
               </div>
             ) : (
               doctor.reviews.map((review) => (
-                <article key={review.id} className="rounded-2xl border border-gray-200 p-5">
+                <article key={review.id} className="rounded-2xl border border-slate-200 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Stars value={review.rating} />
-                    <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
+                    <span className="text-xs uppercase tracking-[0.16em] text-slate-400">
                       {new Date(review.created_at).toLocaleDateString('es-ES', {
                         day: 'numeric',
                         month: 'long',
@@ -290,8 +289,8 @@ export default function DoctorDetailPage() {
                       })}
                     </span>
                   </div>
-                  {review.comment && <p className="mt-3 leading-relaxed text-gray-700">{review.comment}</p>}
-                  <p className="mt-3 text-sm font-medium text-gray-500">{review.patient_label}</p>
+                  {review.comment && <p className="mt-3 leading-relaxed text-slate-700">{review.comment}</p>}
+                  <p className="mt-3 text-sm font-medium text-slate-500">{review.patient_label}</p>
                 </article>
               ))
             )}
@@ -300,22 +299,21 @@ export default function DoctorDetailPage() {
 
         {/* Acciones: agendar o videoconsulta inmediata */}
         <aside className="space-y-6">
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900">Agendar una cita</h2>
-            <p className="mt-1 text-sm text-gray-600">Elige un horario disponible en la agenda del médico.</p>
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-900">Agendar una cita</h2>
+            <p className="mt-1 text-sm text-slate-600">Elige un horario disponible en la agenda del médico.</p>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Duración de la cita</label>
-              <select
+              <Select
+                label="Duración de la cita"
                 value={durationMinutes}
                 onChange={(event) => setDurationMinutes(event.target.value)}
-                className="input-field mt-1 w-full"
               >
                 <option value="15">15 minutos</option>
                 <option value="30">30 minutos</option>
                 <option value="45">45 minutos</option>
                 <option value="60">60 minutos</option>
-              </select>
+              </Select>
             </div>
 
             <div className="mt-3 flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 text-sm">
@@ -330,12 +328,12 @@ export default function DoctorDetailPage() {
                 Este médico no está aceptando nuevas citas por ahora.
               </div>
             ) : slotsLoading ? (
-              <div className="mt-4 flex items-center justify-center py-8 text-gray-500">
+              <div className="mt-4 flex items-center justify-center py-8 text-slate-500">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Cargando disponibilidad...
               </div>
             ) : slots.length === 0 ? (
-              <div className="mt-4 rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">
                 No hay horarios disponibles en los próximos días.
               </div>
             ) : (
@@ -343,7 +341,7 @@ export default function DoctorDetailPage() {
                 <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
                   {Object.entries(groupedSlots).map(([day, daySlots]) => (
                     <div key={day}>
-                      <p className="text-sm font-semibold capitalize text-gray-900">{day}</p>
+                      <p className="text-sm font-semibold capitalize text-slate-900">{day}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {daySlots.map((slot) => (
                           <button
@@ -353,7 +351,7 @@ export default function DoctorDetailPage() {
                             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                               selectedSlot === slot.starts_at
                                 ? 'bg-primary-600 text-white'
-                                : 'border border-gray-300 bg-white text-gray-700 hover:border-primary-400'
+                                : 'border border-slate-300 bg-white text-slate-700 hover:border-primary-400'
                             }`}
                           >
                             {new Date(slot.starts_at).toLocaleTimeString('es-ES', {
@@ -367,11 +365,12 @@ export default function DoctorDetailPage() {
                   ))}
                 </div>
 
-                <textarea
+                <Textarea
+                  label="Nota para el médico (opcional)"
                   value={patientNote}
                   onChange={(event) => setPatientNote(event.target.value)}
-                  className="input-field min-h-24"
-                  placeholder="Nota opcional para el médico"
+                  className="min-h-24"
+                  placeholder="Comparte lo que consideres relevante antes de la cita."
                 />
 
                 <label className="flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50 p-3 text-xs text-sky-900">
@@ -386,7 +385,7 @@ export default function DoctorDetailPage() {
                   </span>
                 </label>
 
-                <button
+                <button type="button"
                   onClick={handleBook}
                   disabled={!selectedSlot || booking || !acceptedTerms}
                   className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"

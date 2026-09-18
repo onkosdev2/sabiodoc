@@ -77,7 +77,12 @@ def mark_all_notifications_as_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    notifications = db.query(Notification).filter(Notification.user_id == current_user.id).all()
+    notifications = (
+        db.query(Notification)
+        .filter(Notification.user_id == current_user.id)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
     for notification in notifications:
         notification.status = NotificationStatus.read
         notification.read_at = datetime.now(UTC)

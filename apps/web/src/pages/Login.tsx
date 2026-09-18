@@ -1,9 +1,21 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2, LogIn } from 'lucide-react'
+import { LogIn } from 'lucide-react'
+
 import { login } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
+import Alert from '../components/ui/Alert'
+import Button from '../components/ui/Button'
+import { Input, PasswordInput } from '../components/ui/Field'
+import { getApiErrorMessage } from '../utils/apiError'
+
+interface FieldErrors {
+  email?: string
+  password?: string
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Login() {
   const navigate = useNavigate()
@@ -12,14 +24,26 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  const validate = (): boolean => {
+    const next: FieldErrors = {}
+    if (!email.trim()) next.email = 'Ingresa tu correo.'
+    else if (!EMAIL_PATTERN.test(email.trim())) next.email = 'El correo no parece válido.'
+    if (!password) next.password = 'Ingresa tu contraseña.'
+    else if (password.length < 6) next.password = 'Debe tener al menos 6 caracteres.'
+    setFieldErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     setError(null)
+    if (!validate()) return
 
+    setLoading(true)
     try {
-      const response = await login(email, password)
+      const response = await login(email.trim(), password)
       authLogin(response.access_token, response.user)
       if (response.user.doctor_status === 'approved') {
         navigate('/doctor')
@@ -33,80 +57,52 @@ export default function Login() {
         navigate('/')
       }
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } }
-      setError(error.response?.data?.detail || 'Error al iniciar sesión')
+      setError(getApiErrorMessage(err, 'No pudimos iniciar sesión. Revisa tus datos.'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="mx-auto max-w-md">
       <BackButton useHistoryBack />
-      
+
       <div className="card">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-          Iniciar Sesión
-        </h1>
+        <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">Iniciar sesión</h1>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input-field"
-              required
-              placeholder="tu@email.com"
-            />
-          </div>
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <Input
+            label="Correo electrónico"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="tu@email.com"
+            autoComplete="email"
+            autoFocus
+            required
+            error={fieldErrors.email}
+          />
 
-          <div className="mb-6">
-            <label className="block text-gray-700 font-medium mb-2">
-              Contraseña
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-field"
-              required
-              placeholder="••••••••"
-              minLength={6}
-            />
-          </div>
+          <PasswordInput
+            label="Contraseña"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+            error={fieldErrors.password}
+          />
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="danger">{error}</Alert>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Iniciando...
-              </>
-            ) : (
-              <>
-                <LogIn className="w-5 h-5" />
-                Iniciar Sesión
-              </>
-            )}
-          </button>
+          <Button type="submit" size="lg" loading={loading} leftIcon={<LogIn className="h-5 w-5" />} className="w-full">
+            {loading ? 'Iniciando...' : 'Iniciar sesión'}
+          </Button>
         </form>
 
-        <p className="text-center text-gray-600 mt-6">
+        <p className="mt-6 text-center text-slate-600">
           ¿No tienes cuenta?{' '}
-          <Link to="/register" replace className="text-primary-600 hover:underline font-medium">
+          <Link to="/register" replace className="font-medium text-primary-600 hover:underline">
             Regístrate
           </Link>
         </p>

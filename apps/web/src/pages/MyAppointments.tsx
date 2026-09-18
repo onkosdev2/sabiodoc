@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CalendarDays, Loader2, RefreshCcw, Star, Video, XCircle } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { CalendarDays, CalendarPlus, RefreshCcw, Star, Video, XCircle } from 'lucide-react'
 
 import {
   Appointment,
@@ -9,34 +9,76 @@ import {
   prepareAppointmentVideoSession,
   reviewAppointment,
 } from '../api/appointments'
-import { APPOINTMENT_STATUS_LABELS } from '../utils/statusLabels'
+import { useToast } from '../context/ToastContext'
+import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
+import EmptyState from '../components/ui/EmptyState'
+import Modal from '../components/ui/Modal'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
+import { Textarea } from '../components/ui/Field'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
+import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES } from '../utils/statusLabels'
+import { getApiErrorMessage } from '../utils/apiError'
 
 export default function MyAppointments() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [reviewingId, setReviewingId] = useState<number | null>(null)
+  const [reviewDrafts, setReviewDrafts] = useState<Record<number, { rating: number; comment: string }>>({})
   const [joiningId, setJoiningId] = useState<number | null>(null)
-  const [cancellingId, setCancellingId] = useState<number | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     const loadAppointments = async () => {
       try {
         const response = await getMyAppointments()
         setAppointments(response.appointments)
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, 'No se pudieron cargar tus citas.'))
       } finally {
         setLoading(false)
       }
     }
     loadAppointments()
-  }, [])
+  }, [toast])
 
-  const handleReview = async (appointmentId: number, rating: number) => {
+  const updateReviewDraft = (appointmentId: number, patch: Partial<{ rating: number; comment: string }>) => {
+    setReviewDrafts((current) => {
+      const existing = current[appointmentId]
+      return {
+        ...current,
+        [appointmentId]: {
+          rating: patch.rating ?? existing?.rating ?? 0,
+          comment: patch.comment ?? existing?.comment ?? '',
+        },
+      }
+    })
+  }
+
+  const handleReview = async (appointmentId: number) => {
+    const draft = reviewDrafts[appointmentId]
+    if (!draft || !draft.rating) return
     setReviewingId(appointmentId)
     try {
-      const updated = await reviewAppointment(appointmentId, { rating, comment: 'Reseña rápida desde el panel del paciente.' })
+      const updated = await reviewAppointment(appointmentId, {
+        rating: draft.rating,
+        comment: draft.comment.trim() || undefined,
+      })
       setAppointments((current) => current.map((item) => (item.id === appointmentId ? updated : item)))
+      setReviewDrafts((current) => {
+        const next = { ...current }
+        delete next[appointmentId]
+        return next
+      })
+      toast.success('¡Gracias! Tu valoración quedó registrada.')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo enviar la reseña.'))
     } finally {
       setReviewingId(null)
     }
@@ -80,150 +122,231 @@ export default function MyAppointments() {
           prepaid_amount_cents: 0,
           estimated_minutes: appointment.duration_minutes,
           expires_at: session.expires_at,
-        })
+        }),
       )
       navigate('/video-room')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo preparar la sala.'))
     } finally {
       setJoiningId(null)
     }
   }
 
-  const handleCancel = async (appointment: Appointment) => {
-    const reason = window.prompt('Motivo de cancelación (opcional):') || undefined
-    setCancellingId(appointment.id)
+  const confirmCancel = async () => {
+    if (!cancelTarget) return
+    setCancelling(true)
     try {
-      const updated = await cancelAppointmentWithReason(appointment.id, { reason })
-      setAppointments((current) => current.map((item) => (item.id === appointment.id ? updated : item)))
+      const updated = await cancelAppointmentWithReason(cancelTarget.id, {
+        reason: cancelReason.trim() || undefined,
+      })
+      setAppointments((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      toast.success('Cita cancelada.')
+      setCancelTarget(null)
+      setCancelReason('')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo cancelar la cita.'))
     } finally {
-      setCancellingId(null)
+      setCancelling(false)
     }
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Mis citas</h1>
-        <p className="mt-2 text-gray-600">Revisa tus citas programadas, resúmenes IA y seguimiento postconsulta.</p>
-      </div>
+      <PageHeader
+        icon={CalendarDays}
+        title="Mis citas"
+        description="Revisa tus citas programadas, resúmenes IA y seguimiento postconsulta."
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-500">
-          <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-          Cargando citas...
+        <div className="space-y-4">
+          {[0, 1].map((index) => (
+            <Skeleton key={index} className="h-44 w-full rounded-2xl" />
+          ))}
         </div>
       ) : appointments.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center text-gray-500">
-          <CalendarDays className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-          Todavía no tienes citas agendadas.
-        </div>
+        <EmptyState
+          icon={CalendarDays}
+          title="Todavía no tienes citas"
+          description="Cuando agendes una videoconsulta, aparecerá aquí con su resumen y seguimiento."
+          action={
+            <Link to="/specialties" className="btn-primary">
+              <CalendarPlus className="h-4 w-4" />
+              Agendar una cita
+            </Link>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {appointments.map((appointment) => {
             const roomAvailability = getRoomAvailability(appointment)
 
             return (
-              <div key={appointment.id} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{appointment.specialty_name}</h2>
-                  <p className="mt-1 text-sm text-gray-600">Con {appointment.doctor_name}</p>
-                  <p className="mt-2 text-sm text-gray-500">
-                    {new Date(appointment.scheduled_at).toLocaleString('es-ES')} · {appointment.duration_minutes} min
-                  </p>
+              <Card key={appointment.id}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">{appointment.specialty_name}</h2>
+                    <p className="mt-1 text-sm text-slate-600">Con {appointment.doctor_name}</p>
+                    <p className="mt-2 text-sm text-slate-500">
+                      {new Date(appointment.scheduled_at).toLocaleString('es-ES')} · {appointment.duration_minutes} min
+                    </p>
+                  </div>
+                  <Badge tone={APPOINTMENT_STATUS_TONES[appointment.status]}>
+                    {APPOINTMENT_STATUS_LABELS[appointment.status]}
+                  </Badge>
                 </div>
-                <span className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
-                  {APPOINTMENT_STATUS_LABELS[appointment.status]}
-                </span>
-              </div>
 
-              {appointment.status === 'scheduled' && (
-                <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50 p-4">
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-sky-700">Videoconsulta programada</p>
-                      <p className="mt-2 text-sm text-sky-900">{roomAvailability.note}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button
+                {appointment.status === 'scheduled' && (
+                  <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-sky-700">Videoconsulta programada</p>
+                    <p className="mt-2 text-sm text-sky-900">{roomAvailability.note}</p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Button
                         onClick={() => handleJoinRoom(appointment)}
-                        disabled={!roomAvailability.enabled || joiningId === appointment.id}
-                        className="inline-flex items-center justify-center gap-2 rounded-full bg-sky-900 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!roomAvailability.enabled}
+                        loading={joiningId === appointment.id}
+                        leftIcon={<Video className="h-4 w-4" />}
                       >
-                        {joiningId === appointment.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
                         {joiningId === appointment.id ? 'Preparando sala...' : roomAvailability.label}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
                         onClick={() => navigate(`/me/appointments/${appointment.id}/reschedule`)}
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-sky-300 px-5 py-3 text-sm font-semibold text-sky-800 hover:bg-white"
+                        leftIcon={<RefreshCcw className="h-4 w-4" />}
                       >
-                        <RefreshCcw className="h-4 w-4" />
                         Reprogramar
-                      </button>
-                      <button
-                        onClick={() => handleCancel(appointment)}
-                        disabled={cancellingId === appointment.id}
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-300 px-5 py-3 text-sm font-semibold text-rose-700 hover:bg-white disabled:opacity-50"
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setCancelTarget(appointment)}
+                        leftIcon={<XCircle className="h-4 w-4" />}
+                        className="text-rose-700 hover:bg-rose-50"
                       >
-                        {cancellingId === appointment.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                         Cancelar
-                      </button>
+                      </Button>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {appointment.cancellation_reason && (
-                <div className="mt-4 rounded-2xl bg-rose-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-rose-700">Motivo registrado</p>
-                  <p className="mt-2 text-sm text-rose-900">{appointment.cancellation_reason}</p>
-                </div>
-              )}
+                {appointment.cancellation_reason && (
+                  <div className="mt-4 rounded-2xl bg-rose-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-rose-700">Motivo registrado</p>
+                    <p className="mt-2 text-sm text-rose-900">{appointment.cancellation_reason}</p>
+                  </div>
+                )}
 
-              {appointment.ai_summary_snapshot && (
-                <div className="mt-5 rounded-2xl bg-blue-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-blue-700">Brief IA</p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-blue-900">{appointment.ai_summary_snapshot}</p>
-                </div>
-              )}
+                {appointment.ai_summary_snapshot && (
+                  <div className="mt-5 rounded-2xl bg-primary-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-primary-700">Brief IA</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-primary-900">{appointment.ai_summary_snapshot}</p>
+                  </div>
+                )}
 
-              {appointment.ai_intake_snapshot && (
-                <StructuredIntakeCard
-                  intake={appointment.ai_intake_snapshot}
-                  title="Ficha previa compartida con el médico"
-                  className="mt-4"
-                />
-              )}
+                {appointment.ai_intake_snapshot && (
+                  <StructuredIntakeCard
+                    intake={appointment.ai_intake_snapshot}
+                    title="Ficha previa compartida con el médico"
+                    className="mt-4"
+                  />
+                )}
 
-              {appointment.followup_instructions && (
-                <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-700">Indicaciones postconsulta</p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-emerald-900">{appointment.followup_instructions}</p>
-                </div>
-              )}
+                {appointment.followup_instructions && (
+                  <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-700">Indicaciones postconsulta</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-emerald-900">
+                      {appointment.followup_instructions}
+                    </p>
+                  </div>
+                )}
 
-              {appointment.status === 'completed' && !appointment.review_rating && (
-                <div className="mt-5 flex items-center gap-2">
-                  {[1, 2, 3, 4, 5].map((rating) => (
-                    <button
-                      key={rating}
-                      onClick={() => handleReview(appointment.id, rating)}
-                      disabled={reviewingId === appointment.id}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-300 text-amber-500 hover:bg-amber-50"
+                {appointment.status === 'completed' && !appointment.review_rating && (
+                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-medium text-amber-800">Deja tu reseña</p>
+
+                    <div className="mt-2 flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((rating) => {
+                        const filled = (reviewDrafts[appointment.id]?.rating ?? 0) >= rating
+                        return (
+                          <button
+                            key={rating}
+                            type="button"
+                            onClick={() => updateReviewDraft(appointment.id, { rating })}
+                            disabled={reviewingId === appointment.id}
+                            aria-label={`${rating} de 5 estrellas`}
+                            className="rounded-full p-1 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-50"
+                          >
+                            <Star className={`h-6 w-6 ${filled ? 'fill-current text-amber-500' : 'text-amber-300'}`} />
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <Textarea
+                      aria-label="Comentario de la reseña"
+                      value={reviewDrafts[appointment.id]?.comment ?? ''}
+                      onChange={(event) => updateReviewDraft(appointment.id, { comment: event.target.value })}
+                      placeholder="Comentario (opcional)"
+                      maxLength={1200}
+                      className="mt-3 min-h-20"
+                    />
+
+                    <Button
+                      onClick={() => handleReview(appointment.id)}
+                      disabled={!reviewDrafts[appointment.id]?.rating}
+                      loading={reviewingId === appointment.id}
+                      leftIcon={<Star className="h-4 w-4" />}
+                      className="mt-3"
                     >
-                      <Star className="h-4 w-4" />
-                    </button>
-                  ))}
-                </div>
-              )}
+                      Enviar reseña
+                    </Button>
+                  </div>
+                )}
 
-              {appointment.review_rating && (
-                <p className="mt-5 text-sm font-medium text-amber-700">Reseña enviada: {appointment.review_rating}/5</p>
-              )}
-              </div>
+                {appointment.review_rating && (
+                  <div className="mt-5">
+                    <p className="text-sm font-medium text-amber-700">Reseña enviada: {appointment.review_rating}/5</p>
+                    {appointment.review_comment && (
+                      <p className="mt-1 text-sm text-slate-600">{appointment.review_comment}</p>
+                    )}
+                  </div>
+                )}
+              </Card>
             )
           })}
         </div>
       )}
+
+      <Modal
+        open={cancelTarget !== null}
+        onClose={() => !cancelling && setCancelTarget(null)}
+        title="¿Cancelar esta cita?"
+        description={
+          cancelTarget ? `${cancelTarget.specialty_name} con ${cancelTarget.doctor_name}` : undefined
+        }
+        icon={
+          <span className="inline-flex rounded-full bg-red-100 p-2 text-red-600">
+            <XCircle className="h-5 w-5" aria-hidden="true" />
+          </span>
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCancelTarget(null)} disabled={cancelling}>
+              Volver
+            </Button>
+            <Button variant="danger" loading={cancelling} onClick={confirmCancel}>
+              Cancelar cita
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          label="Motivo (opcional)"
+          value={cancelReason}
+          onChange={(event) => setCancelReason(event.target.value)}
+          placeholder="Cuéntanos brevemente por qué cancelas."
+          className="min-h-20"
+        />
+      </Modal>
     </div>
   )
 }

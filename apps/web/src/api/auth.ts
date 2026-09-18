@@ -6,6 +6,9 @@ export interface User {
   role: 'patient' | 'doctor' | 'reviewer' | 'admin'
   doctor_status?: 'pending' | 'approved' | 'rejected' | 'suspended' | null
   is_reviewer?: boolean
+  display_name?: string | null
+  doctor_display_name?: string | null
+  patient_display_name?: string | null
   created_at: string
 }
 

@@ -17,12 +17,24 @@ logger = get_logger(__name__)
 
 def build_user_response(user: User) -> UserResponse:
     doctor_profile = getattr(user, "doctor_profile", None)
+    patient_profile = getattr(user, "patient_profile", None)
+
+    doctor_name = doctor_profile.display_name if doctor_profile and doctor_profile.display_name else None
+    patient_name = None
+    if patient_profile and (patient_profile.first_name or patient_profile.last_name):
+        patient_name = " ".join(
+            part for part in [patient_profile.first_name, patient_profile.last_name] if part
+        ).strip() or None
+
     return UserResponse(
         id=user.id,
         email=user.email,
         role=user.role,
         doctor_status=doctor_profile.status if doctor_profile else None,
         is_reviewer=bool(user.is_reviewer),
+        display_name=doctor_name or patient_name,
+        doctor_display_name=doctor_name,
+        patient_display_name=patient_name,
         created_at=user.created_at,
     )
 

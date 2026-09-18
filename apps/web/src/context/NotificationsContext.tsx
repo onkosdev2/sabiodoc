@@ -94,8 +94,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   )
 
   const markAllRead = useCallback(async () => {
-    const response = await markAllNotificationsAsRead()
-    applyNotifications(response.notifications)
+    await markAllNotificationsAsRead()
+    // Mantenemos el orden actual y solo actualizamos el estado a leída.
+    applyNotifications(notificationsRef.current.map((item) => ({ ...item, status: 'read' })))
   }, [applyNotifications])
 
   useEffect(() => {

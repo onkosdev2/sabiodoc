@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403
 from app.core.logging import get_logger
@@ -153,7 +153,11 @@ def get_my_doctor_appointments(
     doctor_profile = get_doctor_profile_or_403(db, current_user, require_approved=True)
     reminder_service.process_due_reminders(db)
 
-    query = db.query(Appointment).filter(Appointment.doctor_id == doctor_profile.id)
+    query = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.patient).joinedload(User.patient_profile))
+        .filter(Appointment.doctor_id == doctor_profile.id)
+    )
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
     appointments = query.order_by(Appointment.scheduled_at.asc()).all()

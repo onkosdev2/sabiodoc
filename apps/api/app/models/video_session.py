@@ -52,6 +52,9 @@ class VideoSession(Base):
     joined_doctor_at = Column(DateTime(timezone=True), nullable=True)
     doctor_note = Column(Text, nullable=True)
     followup_instructions = Column(Text, nullable=True)
+    # Guion de apertura generado por IA (ayuda a identificar voces en la transcripcion).
+    intro_script = Column(Text, nullable=True)
+    intro_generated_at = Column(DateTime(timezone=True), nullable=True)
     closed_reason = Column(String(120), nullable=True)
     ended_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     metadata_json = Column(Text, nullable=True)

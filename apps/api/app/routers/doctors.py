@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403, require_application_reviewer
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
@@ -12,6 +12,7 @@ from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
 from app.models.notification import Notification, NotificationStatus
+from app.models.patient_profile import PatientProfile
 from app.models.specialty import Specialty
 from app.models.user import User, UserRole
 from app.models.video_session import VideoSession, VideoSessionStatus
@@ -32,21 +33,29 @@ from app.schemas.doctor import (
     DoctorCardResponse,
     DoctorDetailResponse,
     DoctorListResponse,
+    DoctorPatientListResponse,
+    DoctorPatientSummary,
     DoctorPatientTimelineItemResponse,
     DoctorPatientTimelineResponse,
     DoctorPresenceResponse,
     DoctorProfileUpsertRequest,
     DoctorPresenceUpdate,
     DoctorReviewResponse,
+    DoctorReviewsResponse,
     DoctorSpecialtySummary,
 )
+from app.schemas.patient import PatientProfileResponse
 from app.schemas.video_session import DoctorVideoSessionListResponse, DoctorVideoSessionResponse
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
 from app.services.jitsi_service import jitsi_service
 from app.services.doctor_onboarding_service import doctor_onboarding_service
 from app.services.notification_service import notification_service
+from app.services.patient_profile_service import get_patient_display_name, serialize_patient_profile
+from app.services.presence_service import resolve_presence, touch_presence
+from app.services.consultation_service import close_stale_consultations
 from app.services.reminder_service import reminder_service
+from app.services.video_session_service import video_session_service
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 logger = get_logger(__name__)
@@ -117,6 +126,23 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
         .all()
     )
 
+    # Expira sesiones vencidas y prepara el calculo de presencia real.
+    video_session_service.expire_stale_sessions(db)
+    active_doctor_ids: set[int] = set()
+    if doctor_profiles:
+        now = datetime.now(timezone.utc)
+        rows = (
+            db.query(VideoSession.doctor_id)
+            .filter(
+                VideoSession.doctor_id.in_([profile.id for profile in doctor_profiles]),
+                VideoSession.status == VideoSessionStatus.active,
+                VideoSession.expires_at > now,
+            )
+            .distinct()
+            .all()
+        )
+        active_doctor_ids = {row[0] for row in rows}
+
     aggregates = _rating_aggregates(db, [profile.id for profile in doctor_profiles])
     doctor_profiles.sort(
         key=lambda profile: (
@@ -129,13 +155,7 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
     doctors = []
     for profile in doctor_profiles:
         rating_avg, rating_count = aggregates.get(profile.id, (0.0, 0))
-        presence = profile.presence
-        if not presence:
-            presence = DoctorPresence(
-                status=DoctorPresenceStatus.offline,
-                status_message="Desconectado",
-                last_seen_at=datetime.now(timezone.utc),
-            )
+        resolved = resolve_presence(db, profile, has_active_session=profile.id in active_doctor_ids)
         doctors.append(
             DoctorCardResponse(
                 id=profile.id,
@@ -148,11 +168,30 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
                 rating_count=rating_count,
                 is_accepting_consultations=profile.is_accepting_consultations,
                 status=profile.status,
-                presence=DoctorPresenceResponse.model_validate(presence),
+                presence=DoctorPresenceResponse(
+                    status=resolved.status,
+                    status_message=resolved.status_message,
+                    last_seen_at=resolved.last_seen_at,
+                ),
             )
         )
 
     return DoctorListResponse(doctors=doctors, total=len(doctors))
+
+
+@router.post("/presence/heartbeat", response_model=DoctorPresenceResponse)
+def presence_heartbeat(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Marca al medico como activo ahora (heartbeat del frontend)."""
+    doctor_profile = get_doctor_profile_or_403(db, current_user)
+    presence = touch_presence(db, doctor_profile)
+    return DoctorPresenceResponse(
+        status=presence.status,
+        status_message=presence.status_message,
+        last_seen_at=presence.last_seen_at,
+    )
 
 
 @router.post("/presence", response_model=DoctorPresenceResponse)
@@ -374,6 +413,39 @@ def upsert_my_availability(
     )
 
 
+def _get_live_video_sessions(db: Session, doctor_profile: DoctorProfile) -> list[VideoSession]:
+    """Sesiones preparadas/activas que aun no expiran.
+
+    Marca como expiradas las preparadas vencidas. Centraliza la regla para que el
+    dashboard y la pagina de videoconsultas muestren exactamente lo mismo.
+    """
+    now = datetime.now(UTC)
+    sessions = (
+        db.query(VideoSession)
+        .options(joinedload(VideoSession.patient).joinedload(User.patient_profile))
+        .filter(
+            VideoSession.doctor_id == doctor_profile.id,
+            VideoSession.status.in_([VideoSessionStatus.prepared, VideoSessionStatus.active]),
+        )
+        .order_by(VideoSession.created_at.desc())
+        .all()
+    )
+
+    live: list[VideoSession] = []
+    changed = False
+    for session in sessions:
+        if session.expires_at <= now:
+            if session.status == VideoSessionStatus.prepared:
+                session.status = VideoSessionStatus.expired
+                changed = True
+            continue
+        live.append(session)
+
+    if changed:
+        db.commit()
+    return live
+
+
 @router.get("/me/dashboard", response_model=DoctorDashboardResponse)
 def get_doctor_dashboard(
     db: Session = Depends(get_db),
@@ -385,6 +457,7 @@ def get_doctor_dashboard(
     now = datetime.now(UTC)
     upcoming = (
         db.query(Appointment)
+        .options(joinedload(Appointment.patient).joinedload(User.patient_profile))
         .filter(
             Appointment.doctor_id == doctor_profile.id,
             Appointment.status == AppointmentStatus.scheduled,
@@ -396,6 +469,7 @@ def get_doctor_dashboard(
     )
     recent_completed = (
         db.query(Appointment)
+        .options(joinedload(Appointment.patient).joinedload(User.patient_profile))
         .filter(
             Appointment.doctor_id == doctor_profile.id,
             Appointment.status == AppointmentStatus.completed,
@@ -420,20 +494,11 @@ def get_doctor_dashboard(
         .count()
     )
     average_rating = _rating_for(db, doctor_profile.id)[0]
-    active_video_sessions = (
-        db.query(VideoSession)
-        .filter(
-            VideoSession.doctor_id == doctor_profile.id,
-            VideoSession.status.in_([VideoSessionStatus.prepared, VideoSessionStatus.active]),
-        )
-        .order_by(VideoSession.created_at.desc())
-        .limit(5)
-        .all()
-    )
+    active_video_sessions = _get_live_video_sessions(db, doctor_profile)[:5]
     metrics = [
         DoctorDashboardMetricCard(key="scheduled", label="Citas programadas", value=str(total_scheduled)),
-        DoctorDashboardMetricCard(key="completed", label="Consultas completadas", value=str(total_completed)),
-        DoctorDashboardMetricCard(key="rating", label="Rating promedio", value=f"{average_rating:.1f}"),
+        DoctorDashboardMetricCard(key="completed", label="Citas completadas", value=str(total_completed)),
+        DoctorDashboardMetricCard(key="rating", label="Valoración promedio", value=f"{average_rating:.1f}"),
         DoctorDashboardMetricCard(key="notifications", label="Notificaciones sin leer", value=str(unread_notifications)),
     ]
     return DoctorDashboardResponse(
@@ -447,6 +512,7 @@ def get_doctor_dashboard(
                 consultation_id=session.consultation_id,
                 doctor_name=doctor_profile.display_name,
                 patient_email=session.patient.email if session.patient else "",
+                patient_name=get_patient_display_name(session.patient),
                 status=session.status.value,
                 started_at=session.started_at,
                 expires_at=session.expires_at,
@@ -477,6 +543,9 @@ def get_patient_timeline_for_doctor(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo puedes ver el historial de pacientes con relacion clinica previa o cita agendada",
         )
+
+    # Reflejar borradores inactivos como cerrados en el historial.
+    close_stale_consultations(db, user_id=patient_id)
 
     consultation_items = []
     consultations = (
@@ -531,7 +600,33 @@ def get_patient_timeline_for_doctor(
             )
         )
 
-    items = sorted([*appointment_items, *consultation_items], key=lambda item: item.sort_at, reverse=True)
+    video_items = []
+    standalone_sessions = (
+        db.query(VideoSession)
+        .filter(
+            VideoSession.doctor_id == doctor_profile.id,
+            VideoSession.patient_id == patient_id,
+            VideoSession.appointment_id.is_(None),
+            VideoSession.status.in_([VideoSessionStatus.active, VideoSessionStatus.completed]),
+        )
+        .all()
+    )
+    for session in standalone_sessions:
+        specialty = session.consultation.specialty if session.consultation else None
+        video_items.append(
+            DoctorPatientTimelineItemResponse(
+                item_type="video_session",
+                sort_at=session.ended_at or session.started_at or session.created_at,
+                specialty_id=session.consultation.specialty_id if session.consultation else 0,
+                specialty_name=specialty.name if specialty else "Videoconsulta",
+                consultation_id=session.consultation_id,
+                video_session_id=session.id,
+                video_session_status=session.status.value,
+                created_at=session.created_at,
+            )
+        )
+
+    items = sorted([*appointment_items, *consultation_items, *video_items], key=lambda item: item.sort_at, reverse=True)
     return DoctorPatientTimelineResponse(
         patient_id=patient.id,
         patient_email=patient.email,
@@ -540,6 +635,93 @@ def get_patient_timeline_for_doctor(
         items=items,
         total=len(items),
     )
+
+
+@router.get("/me/patients", response_model=DoctorPatientListResponse)
+def list_my_patients(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Pacientes con los que el medico ha trabajado (citas y/o videoconsultas)."""
+    doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
+    now = datetime.now(timezone.utc)
+
+    appointments = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.patient).joinedload(User.patient_profile))
+        .filter(Appointment.doctor_id == doctor_profile.id)
+        .all()
+    )
+    video_sessions = (
+        db.query(VideoSession)
+        .options(joinedload(VideoSession.patient).joinedload(User.patient_profile))
+        .filter(VideoSession.doctor_id == doctor_profile.id)
+        .all()
+    )
+
+    entries: dict[int, dict] = {}
+
+    def _entry(patient: User | None, patient_id: int) -> dict:
+        if patient_id not in entries:
+            entries[patient_id] = {
+                "patient": patient,
+                "appointments_count": 0,
+                "completed_appointments": 0,
+                "upcoming_appointments": 0,
+                "video_sessions_count": 0,
+                "last_activity_at": None,
+                "last_review_rating": None,
+            }
+        elif patient is not None and entries[patient_id]["patient"] is None:
+            entries[patient_id]["patient"] = patient
+        return entries[patient_id]
+
+    def _touch(entry: dict, moment: datetime | None) -> None:
+        if moment is None:
+            return
+        current = entry["last_activity_at"]
+        if current is None or moment > current:
+            entry["last_activity_at"] = moment
+
+    for appointment in appointments:
+        entry = _entry(appointment.patient, appointment.patient_id)
+        entry["appointments_count"] += 1
+        if appointment.status == AppointmentStatus.completed:
+            entry["completed_appointments"] += 1
+        if appointment.status == AppointmentStatus.scheduled and appointment.scheduled_at >= now:
+            entry["upcoming_appointments"] += 1
+        _touch(entry, appointment.completed_at or appointment.scheduled_at or appointment.created_at)
+        review = appointment.review[0] if appointment.review else None
+        if review and entry["last_review_rating"] is None:
+            entry["last_review_rating"] = review.rating
+
+    for session in video_sessions:
+        # Solo cuentan las sesiones que realmente ocurrieron (no salas abandonadas/expiradas).
+        if session.status not in {VideoSessionStatus.active, VideoSessionStatus.completed}:
+            continue
+        entry = _entry(session.patient, session.patient_id)
+        entry["video_sessions_count"] += 1
+        _touch(entry, session.ended_at or session.started_at or session.created_at)
+
+    patients = [
+        DoctorPatientSummary(
+            patient_id=patient_id,
+            email=entry["patient"].email if entry["patient"] else "",
+            full_name=get_patient_display_name(entry["patient"]),
+            appointments_count=entry["appointments_count"],
+            completed_appointments=entry["completed_appointments"],
+            upcoming_appointments=entry["upcoming_appointments"],
+            video_sessions_count=entry["video_sessions_count"],
+            last_activity_at=entry["last_activity_at"],
+            last_review_rating=entry["last_review_rating"],
+        )
+        for patient_id, entry in entries.items()
+    ]
+    patients.sort(
+        key=lambda item: (item.last_activity_at or datetime.min.replace(tzinfo=timezone.utc)),
+        reverse=True,
+    )
+    return DoctorPatientListResponse(patients=patients, total=len(patients))
 
 
 @router.get("/{doctor_id}/bookable-slots", response_model=DoctorBookableSlotListResponse)
@@ -570,6 +752,28 @@ def get_doctor_bookable_slots(
     )
 
 
+@router.get("/patients/{patient_id}/profile", response_model=PatientProfileResponse)
+def get_patient_profile_for_doctor(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Perfil del paciente para el medico, si existe relacion clinica."""
+    doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
+    if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo puedes ver pacientes con relacion clinica previa o cita agendada",
+        )
+
+    patient = db.query(User).filter(User.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado")
+
+    profile = db.query(PatientProfile).filter(PatientProfile.user_id == patient_id).first()
+    return serialize_patient_profile(profile, patient)
+
+
 @router.get("/me/video-sessions", response_model=DoctorVideoSessionListResponse)
 def get_my_video_sessions(
     db: Session = Depends(get_db),
@@ -577,23 +781,10 @@ def get_my_video_sessions(
 ):
     doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
 
-    sessions = (
-        db.query(VideoSession)
-        .filter(VideoSession.doctor_id == doctor_profile.id)
-        .order_by(VideoSession.created_at.desc())
-        .all()
-    )
+    sessions = _get_live_video_sessions(db, doctor_profile)
 
-    now = datetime.now(UTC)
     result = []
     for session in sessions:
-        if session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
-            continue
-        if session.expires_at <= now:
-            if session.status == VideoSessionStatus.prepared:
-                session.status = VideoSessionStatus.expired
-            continue
-
         try:
             doctor_token = jitsi_service.create_meeting_token(
                 room_name=session.provider_room_name,
@@ -624,6 +815,7 @@ def get_my_video_sessions(
                 expires_at=session.expires_at,
                 created_at=session.created_at,
                 patient_email=session.patient.email,
+                patient_name=get_patient_display_name(session.patient),
                 specialty_name=(
                     session.consultation.specialty.name
                     if session.consultation and session.consultation.specialty
@@ -638,6 +830,37 @@ def get_my_video_sessions(
     return DoctorVideoSessionListResponse(sessions=result, total=len(result))
 
 
+@router.get("/me/reviews", response_model=DoctorReviewsResponse)
+def get_my_reviews(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reseñas reales del medico autenticado."""
+    doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
+    reviews = (
+        db.query(ConsultationReview)
+        .filter(ConsultationReview.doctor_id == doctor_profile.id)
+        .order_by(ConsultationReview.created_at.desc())
+        .all()
+    )
+    rating_avg, rating_count = _rating_for(db, doctor_profile.id)
+    return DoctorReviewsResponse(
+        reviews=[
+            DoctorReviewResponse(
+                id=review.id,
+                rating=review.rating,
+                comment=review.comment,
+                patient_label="Paciente verificado",
+                created_at=review.created_at,
+            )
+            for review in reviews
+        ],
+        total=len(reviews),
+        rating_avg=rating_avg,
+        rating_count=rating_count,
+    )
+
+
 @router.get("/{doctor_id}", response_model=DoctorDetailResponse)
 def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
     """Perfil publico de un medico aprobado con sus especialidades y resenas."""
@@ -649,13 +872,13 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
     if not doctor_profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
 
-    presence = doctor_profile.presence
-    if not presence:
-        presence = DoctorPresence(
-            status=DoctorPresenceStatus.offline,
-            status_message="Desconectado",
-            last_seen_at=datetime.now(timezone.utc),
-        )
+    video_session_service.expire_stale_sessions(db, doctor_id=doctor_id)
+    resolved = resolve_presence(db, doctor_profile)
+    presence = DoctorPresenceResponse(
+        status=resolved.status,
+        status_message=resolved.status_message,
+        last_seen_at=resolved.last_seen_at,
+    )
 
     specialties = sorted(
         (link.specialty for link in doctor_profile.doctor_specialties if link.specialty),
@@ -682,7 +905,7 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
         rating_count=rating_count,
         is_accepting_consultations=doctor_profile.is_accepting_consultations,
         status=doctor_profile.status,
-        presence=DoctorPresenceResponse.model_validate(presence),
+        presence=presence,
         years_experience=doctor_profile.years_experience,
         city=doctor_profile.city,
         country=doctor_profile.country,

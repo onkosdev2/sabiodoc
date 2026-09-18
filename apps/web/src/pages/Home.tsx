@@ -1,8 +1,45 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, MessageSquare, HelpCircle, Star, FileText, AlertTriangle, Briefcase, X, BookOpenText, History } from 'lucide-react'
+import {
+  AlertTriangle,
+  BookOpenText,
+  Briefcase,
+  FileText,
+  HelpCircle,
+  History,
+  MessageSquare,
+  Search,
+  Star,
+} from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
+import Alert from '../components/ui/Alert'
+import Badge from '../components/ui/Badge'
+import Modal from '../components/ui/Modal'
+
+const MODAL_OPTIONS = [
+  {
+    to: '/triage',
+    icon: MessageSquare,
+    title: 'Describir mi caso',
+    description: 'Cuéntanos tus síntomas libremente a nuestra IA.',
+    accent: 'text-emerald-600 bg-emerald-100 group-hover:bg-emerald-200',
+  },
+  {
+    to: '/guide',
+    icon: BookOpenText,
+    title: 'Guía de especialidades',
+    description: 'Te guiamos paso a paso con preguntas sencillas generadas por IA.',
+    accent: 'text-violet-600 bg-violet-100 group-hover:bg-violet-200',
+  },
+  {
+    to: '/me/history',
+    icon: History,
+    title: 'Historial de orientaciones',
+    description: 'Revisa tus consultas anteriores de ambas herramientas.',
+    accent: 'text-primary-600 bg-primary-100 group-hover:bg-primary-200',
+  },
+] as const
 
 export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -10,104 +47,88 @@ export default function Home() {
   const { isAuthenticated, isLoading } = useAuth()
 
   return (
-    <div className="max-w-4xl mx-auto relative">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">
-          Bienvenido a SabioDoc
-        </h1>
-        <p className="text-xl text-gray-600">
-          Tu asistente de orientación médica inteligente
-        </p>
-        <p className="text-sm text-gray-500 mt-2">
+    <div className="relative mx-auto max-w-4xl">
+      <div className="mb-12 text-center">
+        <h1 className="text-4xl font-bold text-slate-800">Bienvenido a SabioDoc</h1>
+        <p className="mt-4 text-xl text-slate-600">Tu asistente de orientación médica inteligente</p>
+        <p className="mt-2 text-sm text-slate-500">
           Te ayudamos a encontrar la especialidad médica adecuada para tus necesidades
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {/* 1. Buscar Especialidad */}
-        <Link 
+      <div className="mb-8 grid gap-6 md:grid-cols-2">
+        <Link
           to="/specialties"
-          className="card hover:shadow-lg transition-shadow group"
+          className="card group transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">
-              <Search className="w-8 h-8 text-primary-600" />
+            <div className="rounded-lg bg-primary-100 p-3 transition-colors group-hover:bg-primary-200">
+              <Search className="h-8 w-8 text-primary-600" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                🔍 Buscar Especialidad
-              </h2>
-              <p className="text-gray-600">
+              <h2 className="mb-2 text-xl font-semibold text-slate-800">Buscar especialidad</h2>
+              <p className="text-slate-600">
                 Busca por nombre o palabras clave entre todas las especialidades médicas disponibles.
               </p>
             </div>
           </div>
         </Link>
 
-        {/* 2. No Sé Qué Especialidad Escoger (Abre el Popup) */}
-        <button 
+        <button
+          type="button"
           onClick={() => setIsModalOpen(true)}
-          className="card hover:shadow-lg transition-shadow group text-left w-full cursor-pointer"
+          className="card group w-full cursor-pointer text-left transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
-              <HelpCircle className="w-8 h-8 text-purple-600" />
+            <div className="rounded-lg bg-violet-100 p-3 transition-colors group-hover:bg-violet-200">
+              <HelpCircle className="h-8 w-8 text-violet-600" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                🤖 No Sé Qué Especialidad Escoger
-              </h2>
-              <p className="text-gray-600">
-                Te ayudamos a descubrir la especialidad correcta usando IA.
-              </p>
+              <h2 className="mb-2 text-xl font-semibold text-slate-800">No sé qué especialidad escoger</h2>
+              <p className="text-slate-600">Te ayudamos a descubrir la especialidad correcta usando IA.</p>
             </div>
           </div>
         </button>
 
-        {/* 4. Emergencias */}
-        <Link 
+        <Link
           to="/emergency"
-          className="card hover:shadow-lg transition-shadow group border-red-200"
+          className="card group border-red-200 transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:col-span-2"
         >
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+            <div className="rounded-lg bg-red-100 p-3 transition-colors group-hover:bg-red-200">
+              <AlertTriangle className="h-8 w-8 text-red-600" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                🚨 Emergencias
-              </h2>
-              <p className="text-gray-600">
-                Información importante sobre cuándo acudir a urgencias.
-              </p>
+              <h2 className="mb-2 text-xl font-semibold text-slate-800">Emergencias</h2>
+              <p className="text-slate-600">Información importante sobre cuándo acudir a urgencias.</p>
             </div>
           </div>
         </Link>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <Link 
+      <div className="mb-8 grid gap-6 md:grid-cols-2">
+        <Link
           to="/me/favorites"
-          className="card hover:shadow-lg transition-shadow group bg-yellow-50"
+          className="card group bg-amber-50 transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           <div className="flex items-center gap-4">
-            <Star className="w-6 h-6 text-yellow-500" />
+            <Star className="h-6 w-6 text-amber-500" aria-hidden="true" />
             <div>
-              <h3 className="font-semibold text-gray-800">Mis Favoritos</h3>
-              <p className="text-sm text-gray-600">Especialidades guardadas</p>
+              <h3 className="font-semibold text-slate-800">Mis favoritos</h3>
+              <p className="text-sm text-slate-600">Especialidades guardadas</p>
             </div>
           </div>
         </Link>
 
-        <Link 
+        <Link
           to="/me/consultations"
-          className="card hover:shadow-lg transition-shadow group bg-blue-50"
+          className="card group bg-primary-50 transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           <div className="flex items-center gap-4">
-            <FileText className="w-6 h-6 text-blue-500" />
+            <FileText className="h-6 w-6 text-primary-500" aria-hidden="true" />
             <div>
-              <h3 className="font-semibold text-gray-800">Mis Consultas</h3>
-              <p className="text-sm text-gray-600">Historial de Consultas</p>
+              <h3 className="font-semibold text-slate-800">Mis consultas</h3>
+              <p className="text-sm text-slate-600">Historial de consultas</p>
             </div>
           </div>
         </Link>
@@ -118,13 +139,16 @@ export default function Home() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-4">
               <div className="rounded-2xl bg-emerald-100 p-3">
-                <Briefcase className="h-7 w-7 text-emerald-700" />
+                <Briefcase className="h-7 w-7 text-emerald-700" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">Onboarding médico</p>
-                <h2 className="mt-1 text-2xl font-semibold text-gray-900">¿Quieres atender videoconsultas en SabioDoc?</h2>
-                <p className="mt-2 text-gray-700">
-                  Postúlate con tus especialidades, descripción profesional y costo por minuto. Revisamos tu perfil antes de habilitar el panel médico.
+                <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+                  ¿Quieres atender videoconsultas en SabioDoc?
+                </h2>
+                <p className="mt-2 text-slate-700">
+                  Postúlate con tus especialidades, descripción profesional y costo por minuto. Revisamos tu perfil
+                  antes de habilitar el panel médico.
                 </p>
               </div>
             </div>
@@ -135,90 +159,52 @@ export default function Home() {
         </div>
       )}
 
-      {/* POPUP / MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative border border-gray-100">
-            {/* Botón de cerrar */}
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="text-center mb-6">
-              <div className="inline-block p-3 bg-purple-100 rounded-full mb-3 text-purple-600">
-                <HelpCircle className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800">¿Cómo prefieres que te ayudemos?</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Selecciona una de las opciones para encontrar tu especialidad ideal.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {/* Opción 1: Describir mi caso */}
+      <Modal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="¿Cómo prefieres que te ayudemos?"
+        description="Selecciona una opción para encontrar tu especialidad ideal."
+        icon={
+          <span className="inline-flex rounded-full bg-violet-100 p-2 text-violet-600">
+            <HelpCircle className="h-5 w-5" aria-hidden="true" />
+          </span>
+        }
+        className="max-w-lg"
+      >
+        <div className="space-y-3">
+          {MODAL_OPTIONS.map((option) => {
+            const Icon = option.icon
+            return (
               <button
+                key={option.to}
+                type="button"
                 onClick={() => {
                   setIsModalOpen(false)
-                  navigate('/triage')
+                  navigate(option.to)
                 }}
-                className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-green-500 hover:bg-green-50/50 transition-all group flex items-start gap-4 cursor-pointer"
+                className="group flex w-full items-start gap-4 rounded-xl border border-slate-200 p-4 text-left transition-colors hover:border-primary-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
-                <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors text-green-600 mt-0.5">
-                  <MessageSquare className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800 group-hover:text-green-700">🗣️ Describir Mi Caso</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Cuéntanos tus síntomas libremente a nuestra IA.</p>
-                </div>
+                <span className={`mt-0.5 rounded-lg p-2 transition-colors ${option.accent}`}>
+                  <Icon className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="font-semibold text-slate-800">{option.title}</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{option.description}</span>
+                </span>
               </button>
-
-              {/* Opción 2: Guía de preguntas (Original /guide) */}
-              <button
-                onClick={() => {
-                  setIsModalOpen(false)
-                  navigate('/guide')
-                }}
-                className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-purple-500 hover:bg-purple-50/50 transition-all group flex items-start gap-4 cursor-pointer"
-              >
-                <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors text-purple-600 mt-0.5">
-                  <BookOpenText className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800 group-hover:text-purple-700">💡 Guía de Especialidades</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Te guiaremos paso a paso con preguntas sencillas generadas por IA.</p>
-                </div>
-              </button>
-
-              {/* Opción 3: Historial conjunto de consultas IA */}
-              <button
-                onClick={() => {
-                  setIsModalOpen(false)
-                  navigate('/me/history')
-                }}
-                className="w-full text-left p-4 rounded-xl border border-gray-200 hover:border-blue-500 hover:bg-blue-50/50 transition-all group flex items-start gap-4 cursor-pointer"
-              >
-                <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors text-blue-600 mt-0.5">
-                  <History className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800 group-hover:text-blue-700">📋 Historial de Orientaciones</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Revisa tus consultas anteriores de ambas herramientas.</p>
-                </div>
-              </button>
-
-              <div className="bg-gray-100 rounded-xl p-6 text-center">
-                <p className="text-gray-600 text-sm">
-                  ⚠️ <strong>Importante:</strong> Las herramientas IA de SabioDoc son para orientación. 
-                  No reemplaza la consulta con un profesional de la salud.
-                </p>
-              </div>
-            </div>
-          </div>
+            )
+          })}
         </div>
-      )}
+
+        <Alert tone="warning" className="mt-4">
+          <strong>Importante:</strong> las herramientas de IA de SabioDoc son para orientación. No reemplazan la
+          consulta con un profesional de la salud.
+        </Alert>
+
+        <div className="mt-4 text-center">
+          <Badge tone="neutral">Orientación con IA, no diagnóstico</Badge>
+        </div>
+      </Modal>
     </div>
   )
 }

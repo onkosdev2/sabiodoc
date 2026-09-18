@@ -1,4 +1,5 @@
 import client from './client'
+import type { AppointmentListResponse, AppointmentStatus } from './appointments'
 
 export interface MarketplaceOverview {
   doctors_online: number
@@ -18,6 +19,7 @@ export interface AdminLiveVideoSession {
   consultation_id: number | null
   doctor_name: string
   patient_email: string
+  patient_name: string | null
   status: string
   started_at: string | null
   expires_at: string
@@ -58,6 +60,13 @@ export const getAdminIncidents = async (): Promise<AdminIncidentListResponse> =>
   return response.data
 }
 
+export const getAdminAppointments = async (status?: AppointmentStatus): Promise<AppointmentListResponse> => {
+  const response = await client.get<AppointmentListResponse>('/admin/appointments', {
+    params: status ? { status_filter: status } : {},
+  })
+  return response.data
+}
+
 export interface Reviewer {
   id: number
   email: string
@@ -89,6 +98,7 @@ export type AdminUserRole = 'patient' | 'doctor' | 'reviewer' | 'admin'
 export interface AdminUser {
   id: number
   email: string
+  full_name: string | null
   role: AdminUserRole
   doctor_status: 'pending' | 'approved' | 'rejected' | 'suspended' | null
   is_reviewer: boolean

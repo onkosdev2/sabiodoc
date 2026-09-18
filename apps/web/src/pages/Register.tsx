@@ -1,9 +1,22 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2, UserPlus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
+
 import { register } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
+import Alert from '../components/ui/Alert'
+import Button from '../components/ui/Button'
+import { Input, PasswordInput } from '../components/ui/Field'
+import { getApiErrorMessage } from '../utils/apiError'
+
+interface FieldErrors {
+  email?: string
+  password?: string
+  confirmPassword?: string
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Register() {
   const navigate = useNavigate()
@@ -13,120 +26,94 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden')
-      return
-    }
+  const validate = (): boolean => {
+    const next: FieldErrors = {}
+    if (!email.trim()) next.email = 'Ingresa tu correo.'
+    else if (!EMAIL_PATTERN.test(email.trim())) next.email = 'El correo no parece válido.'
+    if (!password) next.password = 'Ingresa una contraseña.'
+    else if (password.length < 6) next.password = 'Debe tener al menos 6 caracteres.'
+    if (confirmPassword !== password) next.confirmPassword = 'Las contraseñas no coinciden.'
+    setFieldErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    if (!validate()) return
 
     setLoading(true)
-    setError(null)
-
     try {
-      const response = await register(email, password)
+      const response = await register(email.trim(), password)
       authLogin(response.access_token, response.user)
       navigate('/')
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } }
-      setError(error.response?.data?.detail || 'Error al registrarse')
+      setError(getApiErrorMessage(err, 'No pudimos crear tu cuenta. Intenta de nuevo.'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="mx-auto max-w-md">
       <BackButton useHistoryBack />
-      
+
       <div className="card">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-          Crear Cuenta
-        </h1>
+        <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">Crear cuenta</h1>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input-field"
-              required
-              placeholder="tu@email.com"
-            />
-          </div>
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <Input
+            label="Correo electrónico"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="tu@email.com"
+            autoComplete="email"
+            autoFocus
+            required
+            error={fieldErrors.email}
+          />
 
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">
-              Contraseña
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-field"
-              required
-              placeholder="••••••••"
-              minLength={6}
-            />
-            <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
-          </div>
+          <PasswordInput
+            label="Contraseña"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            required
+            hint="Mínimo 6 caracteres"
+            error={fieldErrors.password}
+          />
 
-          <div className="mb-6">
-            <label className="block text-gray-700 font-medium mb-2">
-              Confirmar Contraseña
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="input-field"
-              required
-              placeholder="••••••••"
-              minLength={6}
-            />
-          </div>
+          <PasswordInput
+            label="Confirmar contraseña"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            required
+            error={fieldErrors.confirmPassword}
+          />
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="danger">{error}</Alert>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Registrando...
-              </>
-            ) : (
-              <>
-                <UserPlus className="w-5 h-5" />
-                Crear Cuenta
-              </>
-            )}
-          </button>
+          <Button type="submit" size="lg" loading={loading} leftIcon={<UserPlus className="h-5 w-5" />} className="w-full">
+            {loading ? 'Registrando...' : 'Crear cuenta'}
+          </Button>
         </form>
 
-        <p className="text-center text-gray-600 mt-6">
+        <p className="mt-6 text-center text-slate-600">
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" replace className="text-primary-600 hover:underline font-medium">
+          <Link to="/login" replace className="font-medium text-primary-600 hover:underline">
             Inicia sesión
           </Link>
         </p>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="mt-4 text-center text-sm text-slate-500">
           ¿Eres un profesional de la salud?{' '}
-          <Link to="/doctor/apply" replace className="text-primary-600 hover:underline font-medium">
+          <Link to="/doctor/apply" replace className="font-medium text-primary-600 hover:underline">
             Postula como médico aquí
           </Link>
         </p>

@@ -6,7 +6,7 @@ export type DoctorPresenceStatus = 'offline' | 'online' | 'busy'
 export interface DoctorPresence {
   status: DoctorPresenceStatus
   status_message: string | null
-  last_seen_at: string
+  last_seen_at: string | null
 }
 
 export interface DoctorCard {
@@ -71,6 +71,7 @@ export interface DoctorVideoSession {
   expires_at: string
   created_at: string
   patient_email: string
+  patient_name: string | null
   specialty_name: string
 }
 
@@ -134,14 +135,16 @@ export interface DoctorApplicationStatusPayload {
 }
 
 export interface DoctorPatientTimelineItem {
-  item_type: 'consultation' | 'appointment'
+  item_type: 'consultation' | 'appointment' | 'video_session'
   sort_at: string
   specialty_id: number
   specialty_name: string
   consultation_id: number | null
   appointment_id: number | null
+  video_session_id?: number | null
   consultation_status: 'created' | 'active' | 'closed' | null
   appointment_status: 'scheduled' | 'completed' | 'cancelled' | 'no_show' | null
+  video_session_status?: string | null
   summary: string | null
   intake: ConsultationStructuredIntake | null
   patient_note: string | null
@@ -168,8 +171,26 @@ export const getDoctorsBySpecialty = async (slug: string): Promise<DoctorListRes
   return response.data
 }
 
+/** Heartbeat de presencia: mantiene al medico como "Disponible" mientras usa la app. */
+export const heartbeatPresence = async (): Promise<DoctorPresence> => {
+  const response = await client.post<DoctorPresence>('/doctors/presence/heartbeat')
+  return response.data
+}
+
 export const getDoctorDetail = async (doctorId: number): Promise<DoctorDetail> => {
   const response = await client.get<DoctorDetail>(`/doctors/${doctorId}`)
+  return response.data
+}
+
+export interface DoctorReviewsResponse {
+  reviews: DoctorReview[]
+  total: number
+  rating_avg: number
+  rating_count: number
+}
+
+export const getMyDoctorReviews = async (): Promise<DoctorReviewsResponse> => {
+  const response = await client.get<DoctorReviewsResponse>('/doctors/me/reviews')
   return response.data
 }
 
@@ -205,5 +226,27 @@ export const getMyDoctorVideoSessions = async (): Promise<DoctorVideoSessionList
 
 export const getDoctorPatientTimeline = async (patientId: number): Promise<DoctorPatientTimeline> => {
   const response = await client.get<DoctorPatientTimeline>(`/doctors/patients/${patientId}/timeline`)
+  return response.data
+}
+
+export interface DoctorPatientSummary {
+  patient_id: number
+  email: string
+  full_name: string | null
+  appointments_count: number
+  completed_appointments: number
+  upcoming_appointments: number
+  video_sessions_count: number
+  last_activity_at: string | null
+  last_review_rating: number | null
+}
+
+export interface DoctorPatientListResponse {
+  patients: DoctorPatientSummary[]
+  total: number
+}
+
+export const getMyPatients = async (): Promise<DoctorPatientListResponse> => {
+  const response = await client.get<DoctorPatientListResponse>('/doctors/me/patients')
   return response.data
 }

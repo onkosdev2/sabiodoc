@@ -1,5 +1,5 @@
-import { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Bell } from 'lucide-react'
 
@@ -48,15 +48,25 @@ export default function PanelLayout({
   const homePath = navItems[0]?.to || '/'
 
   return (
-    <div className="min-h-screen bg-stone-100">
-      <header className="sticky top-0 z-50 border-b border-stone-200 bg-stone-950 text-stone-50">
+    <div className="min-h-screen bg-slate-100">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:font-medium focus:text-slate-900 focus:shadow-lg focus:ring-2 focus:ring-primary-500"
+      >
+        Saltar al contenido
+      </a>
+
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-slate-950 text-slate-50">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <Link to={homePath} className="flex min-w-0 items-center gap-3">
+          <Link
+            to={homePath}
+            className="flex min-w-0 items-center gap-3 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
             <div className={`rounded-xl p-2 ${accentClasses.wrapper}`}>
-              <BrandIcon className={`h-6 w-6 ${accentClasses.icon}`} />
+              <BrandIcon className={`h-6 w-6 ${accentClasses.icon}`} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-stone-400">SabioDoc</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">SabioDoc</p>
               <p className="truncate text-base font-semibold leading-tight">{panelName}</p>
             </div>
           </Link>
@@ -64,23 +74,28 @@ export default function PanelLayout({
           <div className="flex items-center gap-2">
             <Link
               to={notificationsTo}
-              className="relative rounded-full p-2 text-stone-300 transition-colors hover:bg-stone-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-stone-500"
-              aria-label="Notificaciones"
+              className="relative rounded-full p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+              aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : 'Notificaciones'}
             >
-              <Bell className="h-5 w-5" />
+              <Bell className="h-5 w-5" aria-hidden="true" />
               {unread > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-stone-950">
+                <span
+                  className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-slate-950"
+                  aria-hidden="true"
+                >
                   {unread > 9 ? '9+' : unread}
                 </span>
               )}
             </Link>
 
-            <UserMenu theme="dark" groups={[navItems as UserMenuItem[]]} showPortalGeneral />
+            <UserMenu theme="dark" groups={[navItems as UserMenuItem[]]} showPortalGeneral nameContext="professional" />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-8">{children}</main>
+      <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-8">
+        {children}
+      </main>
     </div>
   )
 }

@@ -38,6 +38,9 @@ class UserResponse(BaseModel):
     role: UserRole
     doctor_status: Optional[DoctorApprovalStatus] = None
     is_reviewer: bool = False
+    display_name: Optional[str] = None
+    doctor_display_name: Optional[str] = None
+    patient_display_name: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -80,6 +83,7 @@ class AdminUserUpdate(BaseModel):
 class AdminUserResponse(BaseModel):
     id: int
     email: str
+    full_name: Optional[str] = None
     role: UserRole
     doctor_status: Optional[DoctorApprovalStatus] = None
     is_reviewer: bool = False

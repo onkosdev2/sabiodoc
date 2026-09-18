@@ -19,8 +19,6 @@ DOCTORS_DATA = [
             {"weekday": 2, "start": "14:00", "end": "18:00"},
             {"weekday": 4, "start": "09:00", "end": "12:00"}
         ],
-        "presence_status": "online",
-        "presence_message": "En linea - Disponible ahora",
         "rating_avg": 4.8,
         "rating_count": 124,
         "status": "approved",
@@ -44,8 +42,6 @@ DOCTORS_DATA = [
             {"weekday": 1, "start": "10:00", "end": "13:00"},
             {"weekday": 3, "start": "15:00", "end": "19:00"}
         ],
-        "presence_status": "busy",
-        "presence_message": "En linea - En consulta",
         "rating_avg": 4.6,
         "rating_count": 89,
         "status": "approved",
@@ -69,8 +65,6 @@ DOCTORS_DATA = [
             {"weekday": 0, "start": "08:00", "end": "11:00"},
             {"weekday": 5, "start": "09:00", "end": "13:00"}
         ],
-        "presence_status": "offline",
-        "presence_message": "Desconectado",
         "rating_avg": 4.9,
         "rating_count": 203,
         "status": "approved",
@@ -151,8 +145,6 @@ def _build_dummy_doctors():
                             {"weekday": 4, "start": "15:00", "end": "19:00"},
                         ]
                     ),
-                    "presence_status": "online" if variant == 0 else "offline",
-                    "presence_message": "Disponible para pruebas" if variant == 0 else "Demo - No disponible",
                     "rating_avg": 4.5 + (variant * 0.2),
                     "rating_count": 20 + (specialty_index * 3) + (variant * 10),
                     "status": "approved",

@@ -20,10 +20,10 @@ export default function SpecialtyCard({
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-gray-800">{specialty.name}</h3>
+            <h3 className="text-lg font-semibold text-slate-800">{specialty.name}</h3>
           </div>
           {specialty.description && (
-            <p className="text-gray-600 mt-2 text-sm line-clamp-2">
+            <p className="text-slate-600 mt-2 text-sm line-clamp-2">
               {specialty.description}
             </p>
           )}
@@ -31,27 +31,28 @@ export default function SpecialtyCard({
         
         {showFavorite && (
           <button
-            onClick={(e) => {
-              e.preventDefault()
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
               onToggleFavorite?.()
             }}
-            className={`p-2 rounded-full transition-colors ${
-              isFavorite 
-                ? 'text-yellow-500 hover:text-yellow-600' 
-                : 'text-gray-300 hover:text-yellow-500'
+            aria-label={isFavorite ? `Quitar ${specialty.name} de favoritos` : `Añadir ${specialty.name} a favoritos`}
+            aria-pressed={isFavorite}
+            className={`rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+              isFavorite ? 'text-yellow-500 hover:text-yellow-600' : 'text-slate-300 hover:text-yellow-500'
             }`}
           >
-            <Star className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
+            <Star className={`h-5 w-5 ${isFavorite ? 'fill-current' : ''}`} aria-hidden="true" />
           </button>
         )}
       </div>
       
-      <Link 
+      <Link
         to={`/specialties/${specialty.slug}`}
-        className="inline-flex items-center gap-1 mt-4 text-primary-600 hover:text-primary-700 font-medium text-sm"
+        className="mt-4 inline-flex items-center gap-1 rounded text-sm font-medium text-primary-600 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         Ver detalles
-        <ArrowRight className="w-4 h-4" />
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>
   )

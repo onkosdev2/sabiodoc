@@ -17,7 +17,7 @@ export default function ConsultationChat() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto h-full max-w-4xl">
       <ConsultationChatView consultationId={consultationId} variant="page" />
     </div>
   )

@@ -4,6 +4,7 @@ import { Bell, CheckCheck, Loader2 } from 'lucide-react'
 
 import { NotificationItem } from '../api/notifications'
 import { useNotifications } from '../context/NotificationsContext'
+import { hasUsefulAction } from '../utils/notificationActions'
 
 export default function NotificationsPage() {
   const navigate = useNavigate()
@@ -34,12 +35,12 @@ export default function NotificationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
-          <p className="mt-2 text-gray-600">Recordatorios, cambios de estado y eventos clínicos relevantes.</p>
+          <h1 className="text-3xl font-bold text-slate-900">Notificaciones</h1>
+          <p className="mt-2 text-slate-600">Recordatorios, cambios de estado y eventos clínicos relevantes.</p>
         </div>
-        <button
+        <button type="button"
           onClick={handleMarkAllRead}
-          className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:border-gray-900"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-900"
         >
           <CheckCheck className="h-4 w-4" />
           Marcar todo como leído
@@ -47,15 +48,15 @@ export default function NotificationsPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-500">
+        <div className="flex items-center justify-center py-20 text-slate-500">
           <Loader2 className="mr-3 h-5 w-5 animate-spin" />
           Cargando notificaciones...
         </div>
       ) : error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>
       ) : notifications.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center text-gray-500">
-          <Bell className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+        <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center text-slate-500">
+          <Bell className="mx-auto mb-4 h-12 w-12 text-slate-300" />
           No tienes notificaciones todavía.
         </div>
       ) : (
@@ -63,19 +64,19 @@ export default function NotificationsPage() {
           {notifications.map((notification) => (
             <div
               key={notification.id}
-              className={`rounded-3xl border p-5 ${notification.status === 'unread' ? 'border-primary-200 bg-primary-50' : 'border-gray-200 bg-white'}`}
+              className={`rounded-3xl border p-5 ${notification.status === 'unread' ? 'border-primary-200 bg-primary-50' : 'border-slate-200 bg-white'}`}
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{notification.title}</p>
-                  <p className="mt-2 text-sm text-gray-600">{notification.body}</p>
-                  <p className="mt-3 text-xs uppercase tracking-[0.22em] text-gray-400">
+                  <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
+                  <p className="mt-2 text-sm text-slate-600">{notification.body}</p>
+                  <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-400">
                     {new Date(notification.created_at).toLocaleString('es-ES')}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {notification.action_url && (
-                    <button
+                  {hasUsefulAction(notification) && (
+                    <button type="button"
                       onClick={() => handleOpenNotification(notification)}
                       className="inline-flex items-center justify-center rounded-full border border-primary-300 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-white"
                     >
@@ -83,9 +84,9 @@ export default function NotificationsPage() {
                     </button>
                   )}
                   {notification.status === 'unread' && (
-                    <button
+                    <button type="button"
                       onClick={() => handleMarkRead(notification.id)}
-                      className="inline-flex items-center justify-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-white"
+                      className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white"
                     >
                       Marcar leída
                     </button>

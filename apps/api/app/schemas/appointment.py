@@ -88,6 +88,7 @@ class AppointmentResponse(BaseModel):
     specialty_name: str
     patient_id: int
     patient_email: str
+    patient_name: Optional[str] = None
     doctor_id: int
     doctor_name: str
     status: AppointmentStatus
@@ -127,6 +128,7 @@ class AdminLiveVideoSessionResponse(BaseModel):
     consultation_id: Optional[int] = None
     doctor_name: str
     patient_email: str
+    patient_name: Optional[str] = None
     status: str
     started_at: Optional[datetime] = None
     expires_at: datetime

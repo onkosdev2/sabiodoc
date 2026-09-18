@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, ForeignKey, Text, DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 from app.db.base import Base
 
@@ -16,6 +16,6 @@ class ConsultationReview(Base):
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    appointment = relationship("Appointment", backref="review")
+    appointment = relationship("Appointment", backref=backref("review", cascade="all, delete-orphan"))
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("DoctorProfile", foreign_keys=[doctor_id])

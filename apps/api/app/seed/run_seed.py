@@ -204,8 +204,12 @@ def seed_demo_doctors():
                 presence = DoctorPresence(doctor_id=profile.id)
                 db.add(presence)
 
-            presence.status = DoctorPresenceStatus(doctor_data["presence_status"])
-            presence.status_message = doctor_data["presence_message"]
+            # La presencia es real: se deriva de la ultima actividad y de las
+            # sesiones. En el seed los medicos demo no estan usando la app, por
+            # eso aparecen "Desconectado" hasta que inicien sesion (heartbeat).
+            presence.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=1)
+            presence.status = DoctorPresenceStatus.offline
+            presence.status_message = "Desconectado"
             inserted += 1
 
         db.commit()

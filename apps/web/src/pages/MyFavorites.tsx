@@ -1,53 +1,66 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2, Heart, Trash2 } from 'lucide-react'
+import { Heart, Trash2 } from 'lucide-react'
+
 import { getMyFavorites, removeFavorite, Favorite } from '../api/favorites'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import BackButton from '../components/BackButton'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
+import { getApiErrorMessage } from '../utils/apiError'
 
 export default function MyFavorites() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const toast = useToast()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [loading, setLoading] = useState(true)
+  const [removingId, setRemovingId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       navigate('/login')
       return
     }
+    if (!isAuthenticated) return
 
     const loadFavorites = async () => {
-      if (!isAuthenticated) return
-      
       try {
         const data = await getMyFavorites()
         setFavorites(data.favorites)
       } catch (error) {
-        console.error('Error loading favorites:', error)
+        toast.error(getApiErrorMessage(error, 'No se pudieron cargar tus favoritos.'))
       } finally {
         setLoading(false)
       }
     }
-    
-    if (isAuthenticated) {
-      loadFavorites()
-    }
-  }, [isAuthenticated, authLoading, navigate])
+
+    loadFavorites()
+  }, [isAuthenticated, authLoading, navigate, toast])
 
   const handleRemove = async (specialtyId: number) => {
+    setRemovingId(specialtyId)
     try {
       await removeFavorite(specialtyId)
-      setFavorites(prev => prev.filter(f => f.specialty_id !== specialtyId))
+      setFavorites((prev) => prev.filter((favorite) => favorite.specialty_id !== specialtyId))
+      toast.success('Quitado de favoritos.')
     } catch (error) {
-      console.error('Error removing favorite:', error)
+      toast.error(getApiErrorMessage(error, 'No se pudo quitar de favoritos.'))
+    } finally {
+      setRemovingId(null)
     }
   }
 
   if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+      <div className="grid gap-4 md:grid-cols-2">
+        {[0, 1, 2, 3].map((index) => (
+          <Skeleton key={index} className="h-32 w-full rounded-2xl" />
+        ))}
       </div>
     )
   }
@@ -55,52 +68,55 @@ export default function MyFavorites() {
   return (
     <div>
       <BackButton />
-      
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">
-        ⭐ Mis Favoritos
-      </h1>
+
+      <PageHeader icon={Heart} title="Mis favoritos" description="Tus especialidades guardadas." className="mb-6" />
 
       {favorites.length === 0 ? (
-        <div className="card text-center py-12">
-          <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">No tienes especialidades favoritas</p>
-          <Link to="/specialties" className="btn-primary">
-            Explorar especialidades
-          </Link>
-        </div>
+        <EmptyState
+          icon={Heart}
+          title="No tienes especialidades favoritas"
+          description="Guarda especialidades para acceder rápido a sus médicos."
+          action={
+            <Link to="/specialties" className="btn-primary">
+              Explorar especialidades
+            </Link>
+          }
+        />
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {favorites.map((favorite) => (
-            <div key={favorite.id} className="card">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-800">
+            <Card key={favorite.id}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-semibold text-slate-800">
                     {favorite.specialty?.name || 'Especialidad'}
                   </h3>
                   {favorite.specialty?.description && (
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                      {favorite.specialty.description}
-                    </p>
+                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{favorite.specialty.description}</p>
                   )}
                   {favorite.specialty && (
                     <Link
                       to={`/specialties/${favorite.specialty.slug}`}
-                      className="inline-block mt-3 text-primary-600 hover:text-primary-700 text-sm font-medium"
+                      className="mt-3 inline-block text-sm font-medium text-primary-600 hover:text-primary-700"
                     >
                       Ver detalles →
                     </Link>
                   )}
                 </div>
-                
-                <button
+
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => favorite.specialty_id && handleRemove(favorite.specialty_id)}
-                  className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                  loading={removingId === favorite.specialty_id}
+                  aria-label={`Quitar ${favorite.specialty?.name || 'especialidad'} de favoritos`}
                   title="Eliminar de favoritos"
+                  className="text-slate-400 hover:text-red-600"
                 >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                  <Trash2 className="h-5 w-5" />
+                </Button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     NO_SHOW_GRACE_MINUTES: int = 10
     VIDEO_CONSENT_VERSION: str = "v1"
 
+    # Borradores de consulta IA: se cierran automaticamente si no registran
+    # actividad (mensajes) en este tiempo. 168 h = 7 dias.
+    CONSULTATION_DRAFT_TTL_HOURS: int = 168
+
+    # Presencia de medicos: se considera "activo" si tuvo actividad en esta ventana.
+    DOCTOR_PRESENCE_ONLINE_MINUTES: int = 5
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

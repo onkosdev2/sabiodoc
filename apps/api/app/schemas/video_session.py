@@ -42,6 +42,7 @@ class DoctorVideoSessionResponse(BaseModel):
     expires_at: datetime
     created_at: datetime
     patient_email: str
+    patient_name: str | None = None
     specialty_name: str
 
 
@@ -71,6 +72,7 @@ class VideoSessionStatusResponse(BaseModel):
     appointment_id: int | None = None
     patient_id: int
     patient_email: str
+    patient_name: str | None = None
     status: VideoSessionStatus
     provider: VideoProvider
     participant_role: str
@@ -81,11 +83,13 @@ class VideoSessionStatusResponse(BaseModel):
     joined_doctor_at: datetime | None = None
     expires_at: datetime
     estimated_minutes: int
+    billable_seconds: int = 0
     elapsed_seconds: int
     remaining_seconds: int
     is_overtime: bool
     doctor_note: str | None = None
     followup_instructions: str | None = None
+    intro_script: str | None = None
     closed_reason: str | None = None
 
 

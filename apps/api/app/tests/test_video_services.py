@@ -148,8 +148,10 @@ def test_video_session_status_includes_patient_identity():
         joined_doctor_at=None,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=20),
         estimated_minutes=20,
+        billable_seconds=0,
         doctor_note=None,
         followup_instructions=None,
+        intro_script=None,
         closed_reason=None,
     )
 

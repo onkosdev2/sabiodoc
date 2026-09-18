@@ -6,6 +6,7 @@ export interface VideoSessionStatus {
   appointment_id: number | null
   patient_id: number
   patient_email: string
+  patient_name: string | null
   status: 'prepared' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed'
   provider: 'jitsi' | 'jitsi_mock'
   participant_role: 'patient' | 'doctor'
@@ -16,11 +17,13 @@ export interface VideoSessionStatus {
   joined_doctor_at: string | null
   expires_at: string
   estimated_minutes: number
+  billable_seconds: number
   elapsed_seconds: number
   remaining_seconds: number
   is_overtime: boolean
   doctor_note: string | null
   followup_instructions: string | null
+  intro_script: string | null
   closed_reason: string | null
 }
 
@@ -31,6 +34,26 @@ export const getVideoSessionStatus = async (videoSessionId: number): Promise<Vid
 
 export const joinVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
   const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/join`)
+  return response.data
+}
+
+export const startVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/start`)
+  return response.data
+}
+
+export const pauseVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/pause`)
+  return response.data
+}
+
+export const generateVideoSessionIntro = async (videoSessionId: number): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/intro`)
+  return response.data
+}
+
+export const leaveVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/leave`)
   return response.data
 }
 

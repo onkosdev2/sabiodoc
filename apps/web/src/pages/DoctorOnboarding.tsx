@@ -1,9 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, ShieldCheck } from 'lucide-react'
+import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check } from 'lucide-react'
 import { Country, City } from 'country-state-city'
 
 import BackButton from '../components/BackButton'
+import Alert from '../components/ui/Alert'
+import Button from '../components/ui/Button'
+import { Field, Input, PasswordInput, Select, Textarea } from '../components/ui/Field'
 import { registerDoctor } from '../api/auth'
 import { getSpecialties, Specialty } from '../api/specialties'
 import { getMyDoctorApplication, updateMyDoctorProfile } from '../api/doctors'
@@ -265,6 +268,8 @@ export default function DoctorOnboarding() {
     setError(null)
     setSuccess(null)
     
+    if (selectedSpecialties.length === 0) return setError('Selecciona al menos una especialidad.')
+    if (!professionalTitle) return setError('El título profesional es obligatorio.')
     if (parsedPricePerMinCents === null || parsedPricePerMinCents <= 0) return setError('Ingresa un costo válido.')
     if (!idNumber || !licenseNumberVal) return setError('Completa tus credenciales de identidad y médicas.')
     if (idType === 'Otro' && !customIdType) return setError('Especifica el tipo de documento.')
@@ -320,6 +325,22 @@ export default function DoctorOnboarding() {
 
   const isProfileRoute = location.pathname.startsWith('/doctor/profile')
 
+  const statusBanner =
+    user?.doctor_status === 'approved'
+      ? {
+          className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+          text: 'Perfil verificado: los pacientes ya pueden encontrarte y agendar citas.',
+        }
+      : user?.doctor_status === 'pending'
+        ? {
+            className: 'border-amber-200 bg-amber-50 text-amber-800',
+            text: 'Tu perfil está en revisión. Puedes seguir editándolo mientras tanto.',
+          }
+        : {
+            className: 'border-red-200 bg-red-50 text-red-700',
+            text: 'Tu perfil requiere cambios. Actualiza tus datos y vuelve a guardar.',
+          }
+
   if (!authLoading && isAuthenticated && user?.role === 'patient' && !user.doctor_status) return <Navigate to="/" replace />
   // Un medico aprobado no debe volver al formulario de postulacion, pero si
   // puede seguir usando /doctor/profile para actualizar sus datos.
@@ -331,30 +352,39 @@ export default function DoctorOnboarding() {
     <div className="mx-auto max-w-4xl">
       <BackButton useHistoryBack />
 
-      <div className="card shadow-sm border border-gray-100 rounded-2xl bg-white p-6 sm:p-8">
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 border-b border-gray-100 pb-6">
+      <div className="card shadow-sm border border-slate-100 rounded-2xl bg-white p-6 sm:p-8">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4 border-b border-slate-100 pb-6">
           <div className="rounded-2xl bg-primary-100 p-3 w-fit">
             <ClipboardList className="h-8 w-8 text-primary-600" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              {isDoctorEditing ? 'Actualizar perfil' : 'Postulación médica'}
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+              {isProfileRoute ? 'Mi perfil profesional' : isDoctorEditing ? 'Actualizar perfil' : 'Postulación médica'}
             </h1>
-            <p className="mt-1 text-gray-500 text-sm">
-              Completa tu perfil profesional para habilitar el panel médico y videoconsultas.
+            <p className="mt-1 text-slate-500 text-sm">
+              {isProfileRoute
+                ? 'Datos profesionales visibles para los pacientes. Tu perfil de paciente (datos personales y clínicos) se edita por separado en el portal del paciente.'
+                : 'Completa tu perfil profesional para habilitar el panel médico y videoconsultas.'}
             </p>
           </div>
         </div>
 
+        {isProfileRoute && (
+          <div className={`mb-6 rounded-xl border px-4 py-3 text-sm ${statusBanner.className}`}>
+            {statusBanner.text}
+          </div>
+        )}
+
         {isBootstrapping ? (
-          <div className="flex min-h-[200px] items-center justify-center text-gray-500">
+          <div className="flex min-h-[200px] items-center justify-center text-slate-500">
             <Loader2 className="mr-3 h-6 w-6 animate-spin" /> Cargando formulario...
           </div>
         ) : (
           <>
             {/* Indicador de Pasos (Stepper) */}
+            {!isProfileRoute && (
             <div className="mb-8 flex items-center justify-between relative">
-              <div className="absolute left-0 top-1/2 -z-10 h-0.5 w-full bg-gray-100 -translate-y-1/2"></div>
+              <div className="absolute left-0 top-1/2 -z-10 h-0.5 w-full bg-slate-100 -translate-y-1/2"></div>
               {[
                 { id: 1, label: 'Cuenta' },
                 { id: 2, label: 'Perfil' },
@@ -366,283 +396,360 @@ export default function DoctorOnboarding() {
                       ? 'border-primary-600 bg-primary-600 text-white' 
                       : step === s.id 
                         ? 'border-primary-600 bg-white text-primary-600' 
-                        : 'border-gray-200 bg-white text-gray-400'
+                        : 'border-slate-200 bg-white text-slate-400'
                   }`}>
                     {step > s.id ? <Check className="w-5 h-5" /> : s.id}
                   </div>
-                  <span className={`text-xs font-medium ${step >= s.id ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <span className={`text-xs font-medium ${step >= s.id ? 'text-slate-900' : 'text-slate-400'}`}>
                     {s.label}
                   </span>
                 </div>
               ))}
             </div>
+            )}
 
-            <form onSubmit={step === totalSteps ? handleSubmit : (e) => e.preventDefault()} className="space-y-6">
+            <form onSubmit={isProfileRoute || step === totalSteps ? handleSubmit : (e) => e.preventDefault()} className="space-y-6">
               
               {/* PASO 1: CUENTA Y UBICACIÓN */}
-              {step === 1 && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-800">Datos Personales y Ubicación</h2>
+              {(isProfileRoute || step === 1) && (
+                <div className="animate-fade-in">
+                  <h2 className="text-xl font-semibold mb-4 text-slate-800">Datos personales y ubicación</h2>
                   <div className="grid gap-6 md:grid-cols-2">
-                    
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Email profesional *</label>
-                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isDoctorEditing} className={`input-field ${isDoctorEditing ? 'bg-gray-50 cursor-not-allowed' : ''}`} required placeholder="medico@clinica.pe" />
-                    </div>
-                    
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Nombres y Apellidos *</label>
+                    <Input
+                      label="Email profesional"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isDoctorEditing}
+                      required
+                      placeholder="medico@clinica.pe"
+                      autoComplete="email"
+                    />
+
+                    <Field label="Nombres y apellidos" required htmlFor="doctor-name">
                       <div className="flex gap-2">
-                        <select value={namePrefix} onChange={(e) => setNamePrefix(e.target.value)} className="input-field bg-white flex-none px-2" style={{ width: '100px' }}>
+                        <select
+                          aria-label="Tratamiento"
+                          value={namePrefix}
+                          onChange={(e) => setNamePrefix(e.target.value)}
+                          className="input-field flex-none bg-white px-2"
+                          style={{ width: '100px' }}
+                        >
                           <option value="Dr.">Dr.</option>
                           <option value="Dra.">Dra.</option>
                           <option value="Lic.">Lic.</option>
                           <option value="Psic.">Psic.</option>
                           <option value="Odont.">Odont.</option>
                         </select>
-                        <input type="text" value={baseName} onChange={(e) => setBaseName(e.target.value)} className="input-field flex-1 min-w-0" required placeholder="Juan Pérez" />
+                        <input
+                          id="doctor-name"
+                          type="text"
+                          value={baseName}
+                          onChange={(e) => setBaseName(e.target.value)}
+                          className="input-field min-w-0 flex-1"
+                          required
+                          placeholder="Juan Pérez"
+                        />
                       </div>
-                    </div>
-                    
+                    </Field>
+
                     {!isDoctorEditing && (
                       <>
-                        <div>
-                          <label className="mb-1.5 block font-medium text-gray-700">Contraseña *</label>
-                          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-field" required minLength={6} placeholder="••••••••" />
-                        </div>
-                        <div>
-                          <label className="mb-1.5 block font-medium text-gray-700">Confirmar contraseña *</label>
-                          <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="input-field" required minLength={6} placeholder="••••••••" />
-                        </div>
+                        <PasswordInput
+                          label="Contraseña"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          minLength={6}
+                          placeholder="••••••••"
+                          autoComplete="new-password"
+                        />
+                        <PasswordInput
+                          label="Confirmar contraseña"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          required
+                          minLength={6}
+                          placeholder="••••••••"
+                          autoComplete="new-password"
+                        />
                       </>
                     )}
 
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">País de residencia *</label>
-                      <select value={countryIso} onChange={handleCountryChange} className="input-field bg-white">
-                        {allCountries.map((c) => (
-                          <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <Select label="País de residencia" value={countryIso} onChange={handleCountryChange} required>
+                      {allCountries.map((c) => (
+                        <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
+                      ))}
+                    </Select>
 
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Ciudad *</label>
-                      {cityName === 'Otra' || availableCities.length === 0 ? (
-                        <div className="flex gap-2 animate-in fade-in">
-                          {availableCities.length > 0 && (
-                            <select value={cityName} onChange={(e) => setCityName(e.target.value)} className="input-field bg-white flex-none" style={{ width: '100px' }}>
-                              <option value="Otra">Otra</option>
-                            </select>
-                          )}
-                          <input type="text" value={customCity} onChange={(e) => setCustomCity(e.target.value)} className="input-field flex-1 min-w-0" required placeholder="Escribe tu ciudad" autoFocus />
-                        </div>
-                      ) : (
-                        <select value={cityName} onChange={(e) => setCityName(e.target.value)} className="input-field bg-white">
-                          {availableCities.map((c) => (
-                            <option key={c.name} value={c.name}>{c.name}</option>
-                          ))}
-                          <option value="Otra">Otra...</option>
-                        </select>
-                      )}
-                    </div>
-                    
+                    {availableCities.length > 0 ? (
+                      <Select label="Ciudad" value={cityName} onChange={(e) => setCityName(e.target.value)} required>
+                        {availableCities.map((c) => (
+                          <option key={c.name} value={c.name}>{c.name}</option>
+                        ))}
+                        <option value="Otra">Otra…</option>
+                      </Select>
+                    ) : (
+                      <Input
+                        label="Ciudad"
+                        value={customCity}
+                        onChange={(e) => setCustomCity(e.target.value)}
+                        required
+                        placeholder="Escribe tu ciudad"
+                      />
+                    )}
+
+                    {availableCities.length > 0 && cityName === 'Otra' && (
+                      <Input
+                        label="Especifica tu ciudad"
+                        value={customCity}
+                        onChange={(e) => setCustomCity(e.target.value)}
+                        required
+                        placeholder="Escribe tu ciudad"
+                      />
+                    )}
+
                     <div className="md:col-span-2">
-                      <label className="mb-1.5 block font-medium text-gray-700">Zona Horaria (Crítico para videollamadas) *</label>
-                      <select value={doctorTimezone} onChange={(e) => setDoctorTimezone(e.target.value)} className="input-field bg-white" required>
+                      <Select
+                        label="Zona horaria (crítico para videollamadas)"
+                        value={doctorTimezone}
+                        onChange={(e) => setDoctorTimezone(e.target.value)}
+                        required
+                      >
                         {timezones.map((tz: string) => (
                           <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* PASO 2: PERFIL PROFESIONAL */}
-              {step === 2 && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-800">Especialidad y Experiencia</h2>
+              {(isProfileRoute || step === 2) && (
+                <div className="animate-fade-in">
+                  <h2 className="text-xl font-semibold mb-4 text-slate-800">Especialidad y experiencia</h2>
                   <div className="grid gap-6 md:grid-cols-2 mb-6">
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Título profesional *</label>
-                      <input type="text" value={professionalTitle} onChange={(e) => setProfessionalTitle(e.target.value)} className="input-field" required placeholder="Ej: Médico Cirujano" />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Años de experiencia *</label>
-                      <input type="number" min="0" max="80" value={yearsExperience} onChange={(e) => setYearsExperience(e.target.value)} className="input-field" required />
-                    </div>
+                    <Input
+                      label="Título profesional"
+                      value={professionalTitle}
+                      onChange={(e) => setProfessionalTitle(e.target.value)}
+                      required
+                      placeholder="Ej: Médico Cirujano"
+                    />
+                    <Input
+                      label="Años de experiencia"
+                      type="number"
+                      min={0}
+                      max={80}
+                      value={yearsExperience}
+                      onChange={(e) => setYearsExperience(e.target.value)}
+                      required
+                    />
                   </div>
 
                   <div className="mb-6">
-                    <label className="mb-1.5 block font-medium text-gray-700">Resumen Profesional</label>
-                    <textarea 
-                      value={bioShort} 
-                      onChange={(e) => setBioShort(e.target.value)} 
-                      className="input-field min-h-[100px] resize-y" 
-                      maxLength={500} 
-                      placeholder="Resume tu enfoque clínico y experiencia para los pacientes..." 
+                    <Textarea
+                      label="Resumen profesional"
+                      value={bioShort}
+                      onChange={(e) => setBioShort(e.target.value)}
+                      className="min-h-[100px] resize-y"
+                      maxLength={500}
+                      placeholder="Resume tu enfoque clínico y experiencia para los pacientes..."
                     />
                     <div className="mt-1.5 flex justify-end">
-                      <span className={`text-xs transition-colors ${bioShort.length >= 480 ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
+                      <span className={`text-xs transition-colors ${bioShort.length >= 480 ? 'font-medium text-red-500' : 'text-slate-500'}`}>
                         {bioShort.length} / 500 caracteres
                       </span>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="mb-3 block font-medium text-gray-700">Selecciona tus Especialidades *</label>
-                    <div className="grid gap-3 md:grid-cols-2 max-h-60 overflow-y-auto p-1">
+                  <fieldset>
+                    <legend className="mb-3 block font-medium text-slate-700">Selecciona tus especialidades *</legend>
+                    <div className="grid max-h-60 gap-3 overflow-y-auto p-1 md:grid-cols-2">
                       {specialties.map((specialty) => {
                         const selected = selectedSpecialties.includes(specialty.id)
                         return (
-                          <label key={specialty.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${selected ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-gray-200 bg-white hover:border-primary-200'}`}>
-                            <input type="checkbox" checked={selected} onChange={() => toggleSpecialty(specialty.id)} className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-                            <div><p className="font-medium text-sm text-gray-900">{specialty.name}</p></div>
+                          <label key={specialty.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${selected ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-slate-200 bg-white hover:border-primary-200'}`}>
+                            <input type="checkbox" checked={selected} onChange={() => toggleSpecialty(specialty.id)} className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+                            <div><p className="text-sm font-medium text-slate-900">{specialty.name}</p></div>
                           </label>
                         )
                       })}
                     </div>
-                  </div>
+                  </fieldset>
                 </div>
               )}
 
               {/* PASO 3: CREDENCIALES */}
-              {step === 3 && (
-                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-800">Verificación y Honorarios</h2>
+              {(isProfileRoute || step === 3) && (
+                <div className="animate-fade-in">
+                  <h2 className="text-xl font-semibold mb-4 text-slate-800">Verificación y honorarios</h2>
                   <div className="grid gap-6 md:grid-cols-2">
-                    
                     <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Costo por minuto (USD) *</label>
-                      <div className="relative flex items-center">
-                        <span className="absolute left-3 text-gray-500 pointer-events-none">$</span>
-                        <input type="number" step="0.01" min="1" value={pricePerMinute} onChange={(e) => setPricePerMinute(e.target.value)} className="input-field" style={{ paddingLeft: '1.75rem' }} required />
-                      </div>
-                      <p className="mt-1 text-xs text-gray-500">Ej: 15 min = ${(Number(pricePerMinute) * 15 || 0).toFixed(2)} USD</p>
+                      <Field label="Costo por minuto (USD)" required htmlFor="doctor-price">
+                        <div className="relative flex items-center">
+                          <span className="pointer-events-none absolute left-3 text-slate-500">$</span>
+                          <input
+                            id="doctor-price"
+                            type="number"
+                            step="0.01"
+                            min="1"
+                            value={pricePerMinute}
+                            onChange={(e) => setPricePerMinute(e.target.value)}
+                            className="input-field"
+                            style={{ paddingLeft: '1.75rem' }}
+                            required
+                          />
+                        </div>
+                      </Field>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Ej: 15 min = ${(Number(pricePerMinute) * 15 || 0).toFixed(2)} USD
+                      </p>
                     </div>
-                    
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Documento de Identidad *</label>
-                      <div className="flex flex-col xl:flex-row gap-2">
-                        <select 
-                          value={idType} 
-                          onChange={(e) => setIdType(e.target.value)} 
-                          className="input-field bg-white flex-none" 
+
+                    <Field label="Documento de identidad" required htmlFor="doctor-id-number">
+                      <div className="flex flex-col gap-2 xl:flex-row">
+                        <select
+                          aria-label="Tipo de documento"
+                          value={idType}
+                          onChange={(e) => setIdType(e.target.value)}
+                          className="input-field flex-none bg-white"
                           style={{ width: '110px' }}
                         >
-                          {(DOC_DATA[countryIso] || DOC_DATA['DEFAULT']).idTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                          {(DOC_DATA[countryIso] || DOC_DATA['DEFAULT']).idTypes.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
                         </select>
-                        
+
                         {idType === 'Otro' && (
-                          <input 
-                            type="text" 
-                            value={customIdType} 
-                            onChange={(e) => setCustomIdType(e.target.value)} 
-                            className="input-field flex-none bg-blue-50 focus:bg-white transition-colors" 
-                            style={{ width: '100px' }} 
-                            placeholder="Ej: RUT" 
-                            required 
+                          <input
+                            type="text"
+                            aria-label="Tipo de documento personalizado"
+                            value={customIdType}
+                            onChange={(e) => setCustomIdType(e.target.value)}
+                            className="input-field flex-none bg-primary-50 transition-colors focus:bg-white"
+                            style={{ width: '100px' }}
+                            placeholder="Ej: RUT"
+                            required
                             autoFocus
                           />
                         )}
-                        <input type="text" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} className="input-field flex-1 min-w-0" required placeholder="Número" />
+                        <input
+                          id="doctor-id-number"
+                          type="text"
+                          value={idNumber}
+                          onChange={(e) => setIdNumber(e.target.value)}
+                          className="input-field min-w-0 flex-1"
+                          required
+                          placeholder="Número"
+                        />
                       </div>
-                    </div>
+                    </Field>
 
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">País de Expedición (Licencia) *</label>
-                      <select value={licenseCountryIso} onChange={handleLicenseCountryChange} className="input-field bg-white">
-                         {allCountries.map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
-                      </select>
-                    </div>
+                    <Select
+                      label="País de expedición (licencia)"
+                      value={licenseCountryIso}
+                      onChange={handleLicenseCountryChange}
+                    >
+                      {allCountries.map((c) => (
+                        <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
+                      ))}
+                    </Select>
 
-                    <div>
-                      <label className="mb-1.5 block font-medium text-gray-700">Registro Médico *</label>
-                      <div className="flex flex-col xl:flex-row gap-2">
-                        <select 
-                          value={licenseType} 
-                          onChange={(e) => setLicenseType(e.target.value)} 
-                          className="input-field bg-white flex-none" 
+                    <Field label="Registro médico" required htmlFor="doctor-license-number">
+                      <div className="flex flex-col gap-2 xl:flex-row">
+                        <select
+                          aria-label="Tipo de registro médico"
+                          value={licenseType}
+                          onChange={(e) => setLicenseType(e.target.value)}
+                          className="input-field flex-none bg-white"
                           style={{ width: '110px' }}
                         >
-                          {(DOC_DATA[licenseCountryIso] || DOC_DATA['DEFAULT']).licenseTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                          {(DOC_DATA[licenseCountryIso] || DOC_DATA['DEFAULT']).licenseTypes.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
                         </select>
 
                         {licenseType === 'Otro' && (
-                          <input 
-                            type="text" 
-                            value={customLicenseType} 
-                            onChange={(e) => setCustomLicenseType(e.target.value)} 
-                            className="input-field flex-none bg-blue-50 focus:bg-white transition-colors" 
-                            style={{ width: '110px' }} 
-                            placeholder="Entidad" 
-                            required 
+                          <input
+                            type="text"
+                            aria-label="Entidad de registro personalizada"
+                            value={customLicenseType}
+                            onChange={(e) => setCustomLicenseType(e.target.value)}
+                            className="input-field flex-none bg-primary-50 transition-colors focus:bg-white"
+                            style={{ width: '110px' }}
+                            placeholder="Entidad"
+                            required
                             autoFocus
                           />
                         )}
-                        <input type="text" value={licenseNumberVal} onChange={(e) => setLicenseNumberVal(e.target.value)} className="input-field flex-1 min-w-0" required placeholder="Número" />
+                        <input
+                          id="doctor-license-number"
+                          type="text"
+                          value={licenseNumberVal}
+                          onChange={(e) => setLicenseNumberVal(e.target.value)}
+                          className="input-field min-w-0 flex-1"
+                          required
+                          placeholder="Número"
+                        />
                       </div>
-                    </div>
+                    </Field>
                   </div>
 
                   {!isDoctorEditing && (
-                    <div className="mt-6 p-4 bg-blue-50 text-blue-800 rounded-xl text-sm flex gap-3 items-start">
-                      <ShieldCheck className="w-5 h-5 flex-shrink-0 text-blue-600 mt-0.5" />
-                      <p>Al enviar tus datos, nuestro equipo verificará tu identidad y registro médico antes de habilitar tu perfil para teleconsultas.</p>
-                    </div>
+                    <Alert tone="info" className="mt-6">
+                      Al enviar tus datos, nuestro equipo verificará tu identidad y registro médico antes de habilitar
+                      tu perfil para teleconsultas.
+                    </Alert>
                   )}
                 </div>
               )}
 
               {/* Mensajes de feedback */}
-              {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm animate-in fade-in">{error}</div>}
-              {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 text-sm animate-in fade-in">{success}</div>}
+              {error && <Alert tone="danger">{error}</Alert>}
+              {success && <Alert tone="success">{success}</Alert>}
 
               {/* Controles de Navegación del Wizard */}
-              <div className="flex items-center justify-between pt-6 border-t border-gray-100 mt-8">
-                <button 
-                  type="button" 
+              <div className={`mt-8 flex items-center border-t border-slate-100 pt-6 ${isProfileRoute ? 'justify-end' : 'justify-between'}`}>
+                <Button
+                  variant="ghost"
                   onClick={handlePrevStep}
                   disabled={step === 1 || isSubmitting}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${step === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                  leftIcon={<ChevronLeft className="h-4 w-4" />}
+                  className={isProfileRoute ? 'hidden' : ''}
                 >
-                  <ChevronLeft className="w-4 h-4" /> Atrás
-                </button>
+                  Atrás
+                </Button>
 
-                {step < totalSteps ? (
-                  <button 
+                {isProfileRoute ? (
+                  <Button type="submit" loading={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-500">
+                    Guardar cambios
+                  </Button>
+                ) : step < totalSteps ? (
+                  <Button
                     key="wizard-next"
-                    type="button" 
+                    type="button"
                     onClick={(event) => {
-                      // Evita que el navegador aplique la accion por defecto del click
-                      // si React reutiliza este nodo y lo convierte en type="submit"
-                      // al cambiar de paso (dispararia el guardado sin querer).
+                      // Evita que el navegador aplique la acción por defecto del click
+                      // si React reutiliza este nodo y lo convierte en type="submit".
                       event.preventDefault()
                       void handleNextStep()
                     }}
-                    disabled={isValidating}
-                    className="btn-primary inline-flex items-center gap-2"
+                    loading={isValidating}
+                    rightIcon={!isValidating ? <ChevronRight className="h-4 w-4" /> : undefined}
                   >
-                    {isValidating ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Verificando...</>
-                    ) : (
-                      <>Siguiente <ChevronRight className="w-4 h-4" /></>
-                    )}
-                  </button>
+                    {isValidating ? 'Verificando...' : 'Siguiente'}
+                  </Button>
                 ) : (
-                  <button 
+                  <Button
                     key="wizard-submit"
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="btn-primary inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500"
+                    type="submit"
+                    loading={isSubmitting}
+                    className="bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-500"
                   >
-                    {isSubmitting ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</>
-                    ) : (
-                      isDoctorEditing ? 'Actualizar Perfil' : 'Enviar Postulación'
-                    )}
-                  </button>
+                    {isDoctorEditing ? 'Actualizar perfil' : 'Enviar postulación'}
+                  </Button>
                 )}
               </div>
             </form>
@@ -650,7 +757,7 @@ export default function DoctorOnboarding() {
         )}
 
         {!isDoctorEditing && !isBootstrapping && (
-          <p className="mt-8 text-center text-sm text-gray-500">
+          <p className="mt-8 text-center text-sm text-slate-500">
             ¿Ya tienes cuenta médica? <Link to="/login" replace className="font-medium text-primary-600 hover:underline">Inicia sesión</Link>
           </p>
         )}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Bell, CalendarClock, FileText, Loader2, UserRoundX, Video } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { CalendarClock, ChevronRight, FileText, UserRoundX, Video } from 'lucide-react'
 
 import {
   Appointment,
@@ -9,30 +9,46 @@ import {
   markAppointmentNoShow,
   prepareAppointmentVideoSession,
 } from '../api/appointments'
-import { APPOINTMENT_STATUS_LABELS } from '../utils/statusLabels'
-import { getMyNotifications, NotificationItem } from '../api/notifications'
+import { useToast } from '../context/ToastContext'
+import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES, VIDEO_SESSION_STATUS_LABELS } from '../utils/statusLabels'
+import { getRoomAvailability } from '../utils/appointmentRoom'
+import { getApiErrorMessage } from '../utils/apiError'
+import Alert from '../components/ui/Alert'
+import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
+import Modal from '../components/ui/Modal'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
+import { Textarea } from '../components/ui/Field'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
+
+// Cada tarjeta del dashboard lleva al detalle real correspondiente.
+const METRIC_DESTINATIONS: Record<string, string> = {
+  scheduled: '/doctor/appointments?status=scheduled',
+  completed: '/doctor/appointments?status=completed',
+  rating: '/doctor/reviews',
+  notifications: '/doctor/notifications',
+}
 
 export default function DoctorDashboard() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [dashboard, setDashboard] = useState<DoctorDashboardResponse | null>(null)
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [joiningId, setJoiningId] = useState<number | null>(null)
-  const [noShowId, setNoShowId] = useState<number | null>(null)
+  const [noShowTarget, setNoShowTarget] = useState<Appointment | null>(null)
+  const [noShowReason, setNoShowReason] = useState('')
+  const [noShowBusy, setNoShowBusy] = useState(false)
 
   const loadDashboard = async () => {
     try {
       setError(null)
-      const [dashboardResponse, notificationsResponse] = await Promise.all([
-        getDoctorDashboard(),
-        getMyNotifications(),
-      ])
+      const dashboardResponse = await getDoctorDashboard()
       setDashboard(dashboardResponse)
-      setNotifications(notificationsResponse.notifications.slice(0, 5))
-    } catch (requestError: any) {
-      setError(requestError.response?.data?.detail || 'No se pudo cargar el panel médico.')
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'No se pudo cargar el panel médico.'))
     } finally {
       setLoading(false)
     }
@@ -41,25 +57,6 @@ export default function DoctorDashboard() {
   useEffect(() => {
     loadDashboard()
   }, [])
-
-  const getRoomAvailability = (appointment: Appointment) => {
-    if (appointment.status !== 'scheduled') {
-      return { enabled: false, label: 'Sala no disponible' }
-    }
-
-    const now = Date.now()
-    const scheduledAt = new Date(appointment.scheduled_at).getTime()
-    const openAt = scheduledAt - 60 * 60 * 1000
-    const closeAt = scheduledAt + (appointment.duration_minutes + 180) * 60 * 1000
-
-    if (now < openAt) {
-      return { enabled: false, label: 'Disponible 60 min antes' }
-    }
-    if (now > closeAt) {
-      return { enabled: false, label: 'Ventana cerrada' }
-    }
-    return { enabled: true, label: 'Entrar a la sala' }
-  }
 
   const openAppointmentRoom = async (appointment: Appointment) => {
     setJoiningId(appointment.id)
@@ -80,9 +77,11 @@ export default function DoctorDashboard() {
           prepaid_amount_cents: 0,
           estimated_minutes: appointment.duration_minutes,
           expires_at: session.expires_at,
-        })
+        }),
       )
       navigate('/video-room')
+    } catch (requestError) {
+      toast.error(getApiErrorMessage(requestError, 'No se pudo preparar la sala.'))
     } finally {
       setJoiningId(null)
     }
@@ -96,120 +95,152 @@ export default function DoctorDashboard() {
     return Date.now() >= graceLimit && !appointment.joined_patient_at
   }
 
-  const handleMarkNoShow = async (appointment: Appointment) => {
-    const reason = window.prompt('Motivo del no-show (opcional):') || undefined
-    setNoShowId(appointment.id)
+  const confirmNoShow = async () => {
+    if (!noShowTarget) return
+    setNoShowBusy(true)
     try {
-      const updated = await markAppointmentNoShow(appointment.id, { reason })
+      const updated = await markAppointmentNoShow(noShowTarget.id, { reason: noShowReason.trim() || undefined })
       setDashboard((current) =>
         current
           ? {
               ...current,
-              upcoming_appointments: current.upcoming_appointments.map((item) => (item.id === updated.id ? updated : item)),
+              upcoming_appointments: current.upcoming_appointments.map((item) =>
+                item.id === updated.id ? updated : item,
+              ),
             }
-          : current
+          : current,
       )
+      toast.success('Cita marcada como no asistida.')
+      setNoShowTarget(null)
+      setNoShowReason('')
+    } catch (requestError) {
+      toast.error(getApiErrorMessage(requestError, 'No se pudo marcar el no-show.'))
     } finally {
-      setNoShowId(null)
+      setNoShowBusy(false)
     }
   }
 
-  if (loading || !dashboard) {
-    if (!loading && error) {
-      return (
-        <div className="rounded-[32px] border border-rose-200 bg-rose-50 p-8 text-rose-800">
-          <p className="text-lg font-semibold">No se pudo cargar el panel</p>
-          <p className="mt-2 text-sm">{error}</p>
-          <button
-            onClick={() => {
-              setLoading(true)
-              loadDashboard()
-            }}
-            className="mt-4 rounded-full border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-800"
-          >
-            Reintentar
-          </button>
-        </div>
-      )
-    }
+  if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-stone-500">
-        <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-        Cargando panel médico...
+      <div className="space-y-6">
+        <Skeleton className="h-28 w-full rounded-2xl" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((index) => (
+            <Skeleton key={index} className="h-28 w-full rounded-2xl" />
+          ))}
+        </div>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Skeleton className="h-64 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!dashboard) {
+    return (
+      <div className="space-y-4">
+        <Alert tone="danger" title="No se pudo cargar el panel">
+          {error}
+        </Alert>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setLoading(true)
+            loadDashboard()
+          }}
+        >
+          Reintentar
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.28em] text-emerald-700">Panel clínico</p>
-        <h1 className="mt-2 text-3xl font-bold text-stone-950">Resumen operativo</h1>
-        <p className="mt-2 text-stone-600">Agenda próxima, briefs IA, reseñas recientes y notificaciones para tu práctica digital.</p>
-        {error && <p className="mt-4 text-sm text-amber-700">{error}</p>}
+      <PageHeader
+        title="Panel operativo"
+        description="Agenda próxima, briefs IA, reseñas recientes y notificaciones para tu práctica digital."
+      />
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {dashboard.metrics.map((metric) => (
-            <div key={metric.key} className="rounded-3xl bg-stone-100 p-5">
-              <p className="text-xs uppercase tracking-[0.22em] text-stone-500">{metric.label}</p>
-              <p className="mt-3 text-3xl font-bold text-stone-950">{metric.value}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {error && <Alert tone="warning">{error}</Alert>}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {dashboard.metrics.map((metric) => (
+          <Link
+            key={metric.key}
+            to={METRIC_DESTINATIONS[metric.key] || '/doctor'}
+            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{metric.label}</p>
+            <p className="mt-3 text-3xl font-bold text-slate-950">{metric.value}</p>
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 opacity-0 transition-opacity group-hover:opacity-100">
+              Ver detalle
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+          </Link>
+        ))}
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <CalendarClock className="h-5 w-5 text-emerald-700" />
-            <h2 className="text-xl font-semibold text-stone-950">Próximas citas</h2>
+            <CalendarClock className="h-5 w-5 text-emerald-700" aria-hidden="true" />
+            <h2 className="text-xl font-semibold text-slate-950">Próximas citas</h2>
           </div>
           <div className="mt-6 space-y-4">
             {dashboard.upcoming_appointments.length === 0 ? (
-              <p className="text-sm text-stone-500">No tienes citas próximas.</p>
+              <EmptyState icon={CalendarClock} title="No tienes citas próximas" description="Cuando agenden contigo, aparecerán aquí." />
             ) : (
               dashboard.upcoming_appointments.map((appointment) => (
-                <div key={appointment.id} className="rounded-3xl border border-stone-200 bg-stone-50 p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={appointment.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <p className="text-lg font-semibold text-stone-950">{appointment.specialty_name}</p>
-                      <p className="mt-1 text-sm text-stone-600">{appointment.patient_email}</p>
-                      <p className="mt-2 text-sm text-stone-500">{new Date(appointment.scheduled_at).toLocaleString('es-ES')}</p>
+                      <p className="text-lg font-semibold text-slate-950">{appointment.specialty_name}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {appointment.patient_name || appointment.patient_email}
+                        {appointment.patient_name && (
+                          <span className="text-slate-500"> · {appointment.patient_email}</span>
+                        )}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {new Date(appointment.scheduled_at).toLocaleString('es-ES')}
+                      </p>
                     </div>
-                    <span className="rounded-full bg-stone-950 px-3 py-1 text-xs font-semibold text-white">
+                    <Badge tone={APPOINTMENT_STATUS_TONES[appointment.status]}>
                       {APPOINTMENT_STATUS_LABELS[appointment.status]}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button
+                    <Button
                       onClick={() => openAppointmentRoom(appointment)}
-                      disabled={!getRoomAvailability(appointment).enabled || joiningId === appointment.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!getRoomAvailability(appointment).enabled}
+                      loading={joiningId === appointment.id}
+                      leftIcon={<Video className="h-4 w-4" />}
                     >
-                      {joiningId === appointment.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
                       {joiningId === appointment.id ? 'Preparando sala...' : getRoomAvailability(appointment).label}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
                       onClick={() => navigate(`/doctor/patients/${appointment.patient_id}`)}
-                      className="inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-white"
+                      leftIcon={<FileText className="h-4 w-4" />}
                     >
-                      <FileText className="h-4 w-4" />
                       Ver historial
-                    </button>
+                    </Button>
                     {canMarkNoShow(appointment) && (
-                      <button
-                        onClick={() => handleMarkNoShow(appointment)}
-                        disabled={noShowId === appointment.id}
-                        className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50"
+                      <Button
+                        variant="secondary"
+                        onClick={() => setNoShowTarget(appointment)}
+                        leftIcon={<UserRoundX className="h-4 w-4" />}
+                        className="text-rose-700 hover:bg-rose-50"
                       >
-                        {noShowId === appointment.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundX className="h-4 w-4" />}
                         Marcar no-show
-                      </button>
+                      </Button>
                     )}
                   </div>
                   {appointment.ai_summary_snapshot && (
-                    <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm text-blue-900">
-                      <p className="mb-2 text-xs uppercase tracking-[0.22em] text-blue-700">Brief IA</p>
+                    <div className="mt-4 rounded-2xl bg-primary-50 p-4 text-sm text-primary-900">
+                      <p className="mb-2 text-xs uppercase tracking-[0.22em] text-primary-700">Brief IA</p>
                       <p className="whitespace-pre-wrap">{appointment.ai_summary_snapshot}</p>
                     </div>
                   )}
@@ -226,27 +257,35 @@ export default function DoctorDashboard() {
           </div>
         </section>
 
-        <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <Bell className="h-5 w-5 text-amber-700" />
-            <h2 className="text-xl font-semibold text-stone-950">Notificaciones recientes</h2>
+            <Video className="h-5 w-5 text-sky-700" aria-hidden="true" />
+            <h2 className="text-xl font-semibold text-slate-950">Sesiones activas y preparadas</h2>
           </div>
           <div className="mt-6 space-y-4">
-            {notifications.length === 0 ? (
-              <p className="text-sm text-stone-500">No hay notificaciones pendientes.</p>
+            {dashboard.active_video_sessions.length === 0 ? (
+              <EmptyState icon={Video} title="Sin sesiones activas" description="No hay videoconsultas activas o preparadas." />
             ) : (
-              notifications.map((notification) => (
-                <div key={notification.id} className="rounded-3xl border border-stone-200 bg-stone-50 p-4">
-                  <p className="text-sm font-semibold text-stone-900">{notification.title}</p>
-                  <p className="mt-2 text-sm text-stone-600">{notification.body}</p>
-                  {notification.action_url && (
-                    <button
-                      onClick={() => navigate(notification.action_url || '/notifications')}
-                      className="mt-3 text-sm font-medium text-amber-700 hover:text-amber-900"
+              dashboard.active_video_sessions.map((session) => (
+                <div key={session.video_session_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-semibold text-slate-950">
+                        {session.patient_name || session.patient_email}
+                      </p>
+                      {session.patient_name && <p className="text-sm text-slate-500">{session.patient_email}</p>}
+                      <p className="mt-1 text-sm text-slate-600">
+                        Estado: {VIDEO_SESSION_STATUS_LABELS[session.status] || session.status}
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => navigate('/doctor/video-sessions')}
+                      leftIcon={<Video className="h-4 w-4" />}
                     >
-                      {notification.action_label || 'Abrir'}
-                    </button>
-                  )}
+                      Revisar
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
@@ -254,39 +293,35 @@ export default function DoctorDashboard() {
         </section>
       </div>
 
-      <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Video className="h-5 w-5 text-sky-700" />
-          <h2 className="text-xl font-semibold text-stone-950">Sesiones activas y preparadas</h2>
-        </div>
-        <div className="mt-6 space-y-4">
-          {dashboard.active_video_sessions.length === 0 ? (
-            <p className="text-sm text-stone-500">No hay sesiones de video activas o preparadas.</p>
-          ) : (
-            dashboard.active_video_sessions.map((session) => (
-              <div key={session.video_session_id} className="rounded-3xl border border-stone-200 bg-stone-50 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold text-stone-950">{session.patient_email}</p>
-                    <p className="mt-1 text-sm text-stone-600">Estado: {session.status}</p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      navigate(
-                        session.appointment_id ? '/doctor' : '/doctor/video-sessions'
-                      )
-                    }
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-sky-300 px-4 py-2 text-sm font-semibold text-sky-800"
-                  >
-                    <Video className="h-4 w-4" />
-                    Revisar
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+      <Modal
+        open={noShowTarget !== null}
+        onClose={() => !noShowBusy && setNoShowTarget(null)}
+        title="Marcar como no asistida"
+        description={noShowTarget ? `${noShowTarget.specialty_name} · ${noShowTarget.patient_email}` : undefined}
+        icon={
+          <span className="inline-flex rounded-full bg-red-100 p-2 text-red-600">
+            <UserRoundX className="h-5 w-5" aria-hidden="true" />
+          </span>
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setNoShowTarget(null)} disabled={noShowBusy}>
+              Volver
+            </Button>
+            <Button variant="danger" loading={noShowBusy} onClick={confirmNoShow}>
+              Marcar no-show
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          label="Motivo (opcional)"
+          value={noShowReason}
+          onChange={(event) => setNoShowReason(event.target.value)}
+          placeholder="Notas internas sobre la inasistencia."
+          className="min-h-20"
+        />
+      </Modal>
     </div>
   )
 }

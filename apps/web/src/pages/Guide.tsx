@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react'
-import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, ArrowRight, Lightbulb } from 'lucide-react'
+
 import { submitGuideStep, GuideHistoryItem, GuideStepResponse } from '../api/guide'
 import type { TriageResult } from '../api/triage'
 import TriageResultCard from '../components/TriageResultCard'
 import BackButton from '../components/BackButton'
+import Alert from '../components/ui/Alert'
+import Button from '../components/ui/Button'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
+import { getApiErrorMessage } from '../utils/apiError'
+import { useToast } from '../context/ToastContext'
 
 export default function Guide() {
+  const toast = useToast()
   const [history, setHistory] = useState<GuideHistoryItem[]>([])
   const [current, setCurrent] = useState<GuideStepResponse | null>(null)
   const [result, setResult] = useState<GuideStepResponse | null>(null)
@@ -29,8 +37,7 @@ export default function Guide() {
       }
       setSelected(null)
     } catch (err) {
-      console.error('Error en la guía IA:', err)
-      setError('No pudimos continuar la guía. Por favor, intenta de nuevo.')
+      toast.error(getApiErrorMessage(err, 'No pudimos continuar la guía. Intenta de nuevo.'))
     } finally {
       setSubmitting(false)
       setLoading(false)
@@ -39,6 +46,7 @@ export default function Guide() {
 
   useEffect(() => {
     fetchStep([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSelect = (value: string) => {
@@ -74,13 +82,11 @@ export default function Guide() {
     fetchStep([])
   }
 
-  // Mostramos el indicador también mientras se pide una pregunta sin tener
-  // ninguna en pantalla (p. ej. al "Empezar de nuevo").
   if (loading || (submitting && !current && !result)) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
-        <p className="text-gray-500">La IA está preparando la primera pregunta...</p>
+      <div className="mx-auto max-w-2xl space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     )
   }
@@ -97,13 +103,13 @@ export default function Guide() {
     }
 
     return (
-      <div className="max-w-2xl mx-auto pb-12">
+      <div className="mx-auto max-w-2xl pb-12">
         <BackButton />
         <TriageResultCard result={triageResult} />
         <div className="mt-6 text-center">
-          <button onClick={handleReset} className="btn-secondary">
+          <Button variant="secondary" onClick={handleReset}>
             Empezar de nuevo
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -112,86 +118,85 @@ export default function Guide() {
   const currentAnswer = current?.options.find((o) => o.value === selected)
 
   return (
-    <div className="max-w-2xl mx-auto pb-12">
+    <div className="mx-auto max-w-2xl pb-12">
       <BackButton />
 
-      <div className="flex items-center gap-2 mb-2">
-        <h1 className="text-3xl font-bold text-gray-800">💡 Guía de Especialidades</h1>
-      </div>
-      <p className="text-gray-600 mb-6">
-        La IA te hará algunas preguntas. Elige siempre una opción y te orientará hacia
-        la especialidad médica más adecuada.
-      </p>
+      <PageHeader
+        icon={Lightbulb}
+        title="Guía de especialidades"
+        description="La IA te hará algunas preguntas. Elige siempre una opción y te orientará hacia la especialidad médica más adecuada."
+        className="mb-6"
+      />
 
       {current && (
         <>
           <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
+            <div
+              role="progressbar"
+              aria-valuenow={current.step}
+              aria-valuemin={1}
+              aria-valuemax={current.max_steps}
+              aria-label="Progreso de la guía"
+              className="mb-2 flex items-center gap-2"
+            >
               {Array.from({ length: current.max_steps }).map((_, index) => (
                 <div
                   key={index}
                   className={`h-2 flex-1 rounded-full transition-colors ${
-                    index < current.step ? 'bg-primary-500' : 'bg-gray-200'
+                    index < current.step ? 'bg-primary-500' : 'bg-slate-200'
                   }`}
                 />
               ))}
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-500">
               Pregunta {current.step} de {current.max_steps}
             </p>
           </div>
 
           <div className="card">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">{current.question}</h2>
+            <h2 className="mb-6 text-xl font-semibold text-slate-800">{current.question}</h2>
 
-            <div className="space-y-3 mb-8">
-              {current.options.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => handleSelect(option.value)}
-                  disabled={submitting}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all disabled:opacity-60 ${
-                    selected === option.value
-                      ? 'border-primary-500 bg-primary-50'
-                      : 'border-gray-200 hover:border-primary-300'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div role="radiogroup" aria-label="Opciones de respuesta" className="mb-8 space-y-3">
+              {current.options.map((option) => {
+                const isSelected = selected === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => handleSelect(option.value)}
+                    disabled={submitting}
+                    className={`w-full rounded-lg border-2 p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-60 ${
+                      isSelected ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-primary-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
             </div>
 
-            {error && (
-              <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4">{error}</div>
-            )}
+            {error && <Alert tone="danger" className="mb-4">{error}</Alert>}
 
             <div className="flex items-center justify-between">
-              <button
+              <Button
+                variant="secondary"
                 onClick={handleBack}
                 disabled={history.length === 0 || submitting}
-                className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+                leftIcon={<ArrowLeft className="h-4 w-4" />}
               >
-                <ArrowLeft className="w-4 h-4" />
                 Atrás
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleContinue}
                 disabled={!currentAnswer || submitting}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50"
+                loading={submitting}
+                rightIcon={!submitting ? <ArrowRight className="h-4 w-4" /> : undefined}
               >
-                {submitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Pensando...
-                  </>
-                ) : (
-                  <>
-                    Continuar
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+                {submitting ? 'Pensando...' : 'Continuar'}
+              </Button>
             </div>
           </div>
         </>

@@ -1,29 +1,28 @@
-import { ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays,
+  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, UserRound,
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationsContext'
 import UserMenu, { UserMenuItem } from './UserMenu'
 
-interface GeneralLayoutProps {
-  children: ReactNode
-}
-
 // Páginas de autenticación: al navegar entre ellas no deben apilarse en el historial.
 const AUTH_PATHS = ['/login', '/register', '/doctor/apply']
 
-export default function GeneralLayout({ children }: GeneralLayoutProps) {
+export default function GeneralLayout() {
   const { isAuthenticated, user } = useAuth()
   const { unread } = useNotifications()
   const location = useLocation()
   const isAuthPage = AUTH_PATHS.includes(location.pathname)
+  // El chat IA ocupa toda la altura entre cabecera y footer, sin padding vertical.
+  const isChatRoute =
+    location.pathname.startsWith('/consultation/') && location.pathname.endsWith('/chat')
 
   // Enlaces generales del paciente
   const menuGroups: UserMenuItem[][] = [
     [
+      { to: '/me/profile', label: 'Mi perfil de paciente', icon: UserRound },
       { to: '/me/favorites', label: 'Favoritos', icon: Heart },
       { to: '/me/consultations', label: 'Consultas', icon: FileText },
       { to: '/me/appointments', label: 'Citas', icon: CalendarDays },
@@ -46,56 +45,66 @@ export default function GeneralLayout({ children }: GeneralLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-3">
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:font-medium focus:text-slate-900 focus:shadow-lg focus:ring-2 focus:ring-primary-500"
+      >
+        Saltar al contenido
+      </a>
+
+      <header className="sticky top-0 z-50 border-b border-slate-100 bg-white shadow-sm">
+        <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded">
-              <Stethoscope className="w-8 h-8 text-primary-600" aria-hidden="true" />
-              <span className="text-2xl font-bold text-gray-800 tracking-tight">SabioDoc</span>
+            <Link
+              to="/"
+              className="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            >
+              <Stethoscope className="h-8 w-8 text-primary-600" aria-hidden="true" />
+              <span className="text-2xl font-bold tracking-tight text-slate-800">SabioDoc</span>
             </Link>
 
-            <nav className="flex items-center gap-4">
+            <nav className="flex items-center gap-4" aria-label="Principal">
               {isAuthenticated ? (
                 <>
                   <Link
                     to="/notifications"
-                    className="text-gray-500 hover:text-primary-600 transition-colors relative p-1 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-full"
-                    aria-label="Notificaciones"
+                    className="relative rounded-full p-1 text-slate-500 transition-colors hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : 'Notificaciones'}
                   >
-                    <Bell className="w-6 h-6" aria-hidden="true" />
+                    <Bell className="h-6 w-6" aria-hidden="true" />
                     {unread > 0 && (
                       <span
-                        className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-white"
-                        aria-label={`${unread} notificaciones sin leer`}
+                        className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-white"
+                        aria-hidden="true"
                       >
                         {unread > 9 ? '9+' : unread}
                       </span>
                     )}
                   </Link>
 
-                  <UserMenu theme="light" groups={menuGroups} />
+                  <UserMenu theme="light" groups={menuGroups} nameContext="patient" />
                 </>
               ) : (
                 <>
                   <Link
                     to="/doctor/apply"
                     replace={isAuthPage}
-                    className="hidden text-gray-600 hover:text-primary-600 transition-colors md:inline-flex font-medium"
+                    className="hidden font-medium text-slate-600 transition-colors hover:text-primary-600 md:inline-flex"
                   >
                     Soy médico
                   </Link>
                   <Link
                     to="/login"
                     replace={isAuthPage}
-                    className="text-gray-600 hover:text-primary-600 transition-colors font-medium"
+                    className="font-medium text-slate-600 transition-colors hover:text-primary-600"
                   >
                     Iniciar sesión
                   </Link>
                   <Link
                     to="/register"
                     replace={isAuthPage}
-                    className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                    className="rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
                   >
                     Registrarse
                   </Link>
@@ -106,14 +115,14 @@ export default function GeneralLayout({ children }: GeneralLayoutProps) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
-        {children}
+      <main id="main-content" className={`mx-auto w-full max-w-6xl flex-1 px-4 ${isChatRoute ? 'py-0' : 'py-8'}`}>
+        <Outlet />
       </main>
 
-      <footer className="bg-white border-t border-gray-100">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
+      <footer className="border-t border-slate-100 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-6 text-center text-sm text-slate-500">
           <p className="font-medium">SabioDoc - Orientación médica inteligente</p>
-          <p className="mt-2 text-amber-600 bg-amber-50 inline-block px-3 py-1 rounded-full text-xs">
+          <p className="mt-2 inline-block rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-600">
             ⚠️ Los servicios de IA no reemplazan una consulta médica profesional
           </p>
         </div>

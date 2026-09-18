@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, Loader2, FileText, AlertCircle, CheckCircle, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Send, Bot, User, Loader2, FileText, AlertCircle, CheckCircle, X, ArrowLeft } from 'lucide-react'
 
 import {
   getConsultation,
@@ -13,6 +14,9 @@ import {
 } from '../api/consultations'
 import StructuredIntakeCard from './StructuredIntakeCard'
 import RichText from './RichText'
+import Alert from './ui/Alert'
+import Badge from './ui/Badge'
+import Button from './ui/Button'
 
 interface ConsultationChatViewProps {
   consultationId: number
@@ -25,6 +29,7 @@ export default function ConsultationChatView({
   variant = 'page',
   onClose,
 }: ConsultationChatViewProps) {
+  const navigate = useNavigate()
   const [consultation, setConsultation] = useState<Consultation | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
@@ -160,14 +165,14 @@ export default function ConsultationChatView({
 
   const isClosed = consultation?.status === 'closed'
 
-  const heightClass = variant === 'panel' ? 'h-full' : 'h-[70vh] min-h-[420px]'
+  const heightClass = variant === 'panel' ? 'h-full' : 'h-full min-h-[420px]'
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center bg-gray-50 ${heightClass}`}>
+      <div className={`flex items-center justify-center bg-slate-50 ${heightClass}`}>
         <div className="text-center">
           <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-600" />
-          <p className="mt-3 text-gray-600">Cargando consulta...</p>
+          <p className="mt-3 text-slate-600">Cargando consulta...</p>
         </div>
       </div>
     )
@@ -175,70 +180,74 @@ export default function ConsultationChatView({
 
   if (!consultation) {
     return (
-      <div className={`flex items-center justify-center bg-gray-50 p-6 ${heightClass}`}>
+      <div className={`flex items-center justify-center bg-slate-50 p-6 ${heightClass}`}>
         <div className="max-w-md text-center">
           <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-500" />
-          <p className="text-gray-700">{error || 'No se pudo cargar la consulta'}</p>
+          <p className="text-slate-700">{error || 'No se pudo cargar la consulta'}</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className={`flex flex-col overflow-hidden bg-gray-50 ${heightClass}`}>
+    <div className={`flex flex-col overflow-hidden bg-slate-50 ${heightClass}`}>
       {/* Header */}
-      <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
+          {variant === 'page' && (
+            <button type="button"
+              onClick={() => navigate(-1)}
+              className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100"
+              aria-label="Volver a la página anterior"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
           <div className="min-w-0">
-            <h1 className="truncate font-semibold text-gray-900">
+            <h1 className="truncate font-semibold text-slate-900">
               Asistente de {consultation?.specialty?.name || 'Especialidad'}
             </h1>
-            <p className="text-xs text-gray-500">Pre-consulta con IA</p>
+            <p className="text-xs text-slate-500">Pre-consulta con IA</p>
           </div>
         </div>
 
         <div className="flex flex-none items-center gap-2">
           {!isClosed && messages.length >= 4 && !summaryGenerated && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleGenerateSummary}
-              disabled={generatingSummary}
-              className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+              loading={generatingSummary}
+              aria-label="Generar resumen"
+              leftIcon={<FileText className="h-4 w-4" />}
             >
-              {generatingSummary ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FileText className="mr-2 h-4 w-4" />
-              )}
               <span className="hidden sm:inline">Generar resumen</span>
-            </button>
+            </Button>
           )}
 
           {!isClosed && messages.length >= 2 && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleClose}
-              disabled={closing}
-              className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+              loading={closing}
+              aria-label="Finalizar consulta"
+              leftIcon={<CheckCircle className="h-4 w-4" />}
             >
-              {closing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle className="mr-2 h-4 w-4" />
-              )}
               <span className="hidden sm:inline">Finalizar</span>
-            </button>
+            </Button>
           )}
 
           {isClosed && (
-            <span className="inline-flex items-center rounded-lg bg-green-100 px-3 py-2 text-sm text-green-700">
-              <CheckCircle className="mr-2 h-4 w-4" />
+            <Badge tone="success" icon={<CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />}>
               <span className="hidden sm:inline">Consulta finalizada</span>
-            </span>
+            </Badge>
           )}
 
           {onClose && (
-            <button
+            <button type="button"
               onClick={onClose}
-              className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100"
+              className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               aria-label="Cerrar chat"
             >
               <X className="h-5 w-5" />
@@ -248,15 +257,12 @@ export default function ConsultationChatView({
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="Conversación con el asistente">
         <div className="mx-auto max-w-3xl space-y-4">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm text-amber-800">
-              <strong>Importante:</strong> Este asistente virtual te ayuda a preparar tu consulta
-              médica. No proporciona diagnósticos ni tratamientos. La información recopilada será útil
-              para el especialista durante tu videoconsulta.
-            </p>
-          </div>
+          <Alert tone="warning" title="Importante">
+            Este asistente virtual te ayuda a preparar tu consulta médica. No proporciona diagnósticos ni
+            tratamientos. La información recopilada será útil para el especialista durante tu videoconsulta.
+          </Alert>
 
           {consultation?.intake && (
             <StructuredIntakeCard intake={consultation.intake} title="Ficha estructurada para la videoconsulta" />
@@ -281,7 +287,7 @@ export default function ConsultationChatView({
                   className={`min-w-0 rounded-2xl px-4 py-3 ${
                     message.role === 'user'
                       ? 'bg-primary-600 text-white'
-                      : 'border border-gray-200 bg-white text-gray-800'
+                      : 'border border-slate-200 bg-white text-slate-800'
                   }`}
                 >
                   {message.role === 'user' ? (
@@ -291,7 +297,7 @@ export default function ConsultationChatView({
                   )}
                   <p
                     className={`mt-1 text-xs ${
-                      message.role === 'user' ? 'text-primary-200' : 'text-gray-400'
+                      message.role === 'user' ? 'text-primary-200' : 'text-slate-400'
                     }`}
                   >
                     {new Date(message.created_at).toLocaleTimeString('es-ES', {
@@ -305,16 +311,16 @@ export default function ConsultationChatView({
           ))}
 
           {sending && (
-            <div className="flex justify-start">
+            <div className="flex justify-start" role="status" aria-label="El asistente está escribiendo">
               <div className="flex items-start gap-3">
                 <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-teal-100 text-teal-600">
                   <Bot className="h-4 w-4" />
                 </div>
-                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <div className="flex space-x-1">
-                    <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: '0ms' }} />
-                    <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: '150ms' }} />
-                    <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" style={{ animationDelay: '300ms' }} />
+                    <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0ms' }} />
+                    <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '150ms' }} />
+                    <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '300ms' }} />
                   </div>
                 </div>
               </div>
@@ -326,41 +332,50 @@ export default function ConsultationChatView({
       </div>
 
       {error && (
-        <div className="mx-4 mb-2 flex items-center justify-between rounded-lg bg-red-500 px-4 py-2 text-white">
-          <span className="flex items-center gap-2 text-sm">
-            <AlertCircle className="h-4 w-4" />
+        <div className="mx-4 mb-2">
+          <Alert
+            tone="danger"
+            action={
+              <Button variant="ghost" size="sm" onClick={() => setError(null)}>
+                Descartar
+              </Button>
+            }
+          >
             {error}
-          </span>
-          <button onClick={() => setError(null)} className="text-white/80 hover:text-white">
-            ✕
-          </button>
+          </Alert>
         </div>
       )}
 
       {/* Input */}
       {isClosed ? (
-        <div className="border-t border-gray-200 bg-white p-4 text-center text-sm text-gray-500">
+        <div className="border-t border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
           Esta consulta finalizó. Puedes iniciar una nueva desde la página de la especialidad.
         </div>
       ) : (
-        <footer className="border-t border-gray-200 bg-white p-4">
+        <footer className="border-t border-slate-200 bg-white p-4">
           <form onSubmit={handleSendMessage} className="mx-auto max-w-3xl">
             <div className="flex items-center gap-3">
               <input
                 ref={inputRef}
                 type="text"
+                aria-label="Escribe tu mensaje para el asistente"
                 value={inputMessage}
                 onChange={(event) => setInputMessage(event.target.value)}
                 placeholder="Escribe tu mensaje..."
                 autoFocus={variant === 'panel'}
-                className="flex-1 rounded-full border border-gray-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-primary-500"
+                className="flex-1 rounded-full border border-slate-300 px-4 py-3 focus:border-transparent focus:ring-2 focus:ring-primary-500"
               />
               <button
                 type="submit"
+                aria-label="Enviar mensaje"
                 disabled={!inputMessage.trim() || sending}
-                className="rounded-full bg-primary-600 p-3 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full bg-primary-600 p-3 text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                {sending ? (
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Send className="h-5 w-5" aria-hidden="true" />
+                )}
               </button>
             </div>
           </form>

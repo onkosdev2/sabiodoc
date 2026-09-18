@@ -1,41 +1,45 @@
 import { useState } from 'react'
-import { Loader2, Send } from 'lucide-react'
+import { Send, Stethoscope } from 'lucide-react'
+
 import { submitTriage, TriageResult } from '../api/triage'
 import TriageResultCard from '../components/TriageResultCard'
 import BackButton from '../components/BackButton'
+import Alert from '../components/ui/Alert'
+import Button from '../components/ui/Button'
+import PageHeader from '../components/ui/PageHeader'
+import { Input, Select, Textarea } from '../components/ui/Field'
+import { getApiErrorMessage } from '../utils/apiError'
 
 export default function Triage() {
   const [symptomsText, setSymptomsText] = useState('')
-  const [age, setAge] = useState<string>('')
-  const [sex, setSex] = useState<string>('')
-
+  const [age, setAge] = useState('')
+  const [sex, setSex] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<TriageResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [symptomsError, setSymptomsError] = useState<string | undefined>()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
 
-    if (symptomsText.length < 10) {
-      setError('Por favor, describe tus síntomas con más detalle (mínimo 10 caracteres)')
+    if (symptomsText.trim().length < 10) {
+      setSymptomsError('Describe tus síntomas con al menos 10 caracteres.')
       return
     }
-
+    setSymptomsError(undefined)
     setLoading(true)
     setError(null)
     setResult(null)
 
     try {
       const response = await submitTriage({
-        symptoms_text: symptomsText,
-        age: age ? parseInt(age) : undefined,
+        symptoms_text: symptomsText.trim(),
+        age: age ? parseInt(age, 10) : undefined,
         sex: sex || undefined,
       })
-
       setResult(response.result)
     } catch (err) {
-      setError('Error al procesar tu solicitud. Por favor, intenta de nuevo.')
-      console.error('Triage error:', err)
+      setError(getApiErrorMessage(err, 'No pudimos procesar tu solicitud. Intenta de nuevo.'))
     } finally {
       setLoading(false)
     }
@@ -47,79 +51,67 @@ export default function Triage() {
     setSex('')
     setResult(null)
     setError(null)
+    setSymptomsError(undefined)
   }
 
   return (
-    <div className="max-w-3xl mx-auto pb-12">
+    <div className="mx-auto max-w-3xl pb-12">
       <BackButton />
 
-      <h1 className="text-3xl font-bold text-gray-800 mb-2">
-        🗣️ Describir Mi Caso
-      </h1>
-      <p className="text-gray-600 mb-6">
-        Describe tus síntomas y nuestra IA te orientará hacia la especialidad médica más adecuada.
-      </p>
+      <PageHeader
+        icon={Stethoscope}
+        title="Describir mi caso"
+        description="Describe tus síntomas y nuestra IA te orientará hacia la especialidad médica más adecuada."
+        className="mb-6"
+      />
 
       {!result ? (
-        <form onSubmit={handleSubmit} className="card mb-8">
-          <div className="mb-6">
-            <label className="block text-gray-700 font-medium mb-2">
-              ¿Qué síntomas tienes? *
-            </label>
-            <textarea
-              value={symptomsText}
-              onChange={(e) => setSymptomsText(e.target.value)}
-              placeholder="Describe tus síntomas..."
-              className="input-field min-h-[150px] resize-y"
-              required
-              minLength={10}
+        <form onSubmit={handleSubmit} noValidate className="card mb-8 space-y-6">
+          <Textarea
+            label="¿Qué síntomas tienes?"
+            required
+            value={symptomsText}
+            onChange={(event) => setSymptomsText(event.target.value)}
+            placeholder="Describe tus síntomas, desde cuándo los tienes y si algo los empeora..."
+            className="min-h-[150px] resize-y"
+            error={symptomsError}
+          />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input
+              label="Edad (opcional)"
+              type="number"
+              min={0}
+              max={150}
+              value={age}
+              onChange={(event) => setAge(event.target.value)}
             />
+            <Select label="Sexo (opcional)" value={sex} onChange={(event) => setSex(event.target.value)}>
+              <option value="">Sin especificar</option>
+              <option value="male">Masculino</option>
+              <option value="female">Femenino</option>
+            </Select>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-gray-700 font-medium mb-2">Edad (opcional)</label>
-              <input
-                type="number"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                className="input-field"
-                min="0"
-                max="150"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 font-medium mb-2">Sexo (opcional)</label>
-              <select
-                value={sex}
-                onChange={(e) => setSex(e.target.value)}
-                className="input-field"
-              >
-                <option value="">Seleccionar...</option>
-                <option value="male">Masculino</option>
-                <option value="female">Femenino</option>
-              </select>
-            </div>
-          </div>
+          {error && <Alert tone="danger">{error}</Alert>}
 
-          {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg mb-4">{error}</div>}
-
-          <button
+          <Button
             type="submit"
-            disabled={loading || symptomsText.length < 10}
-            className="btn-primary w-full flex items-center justify-center gap-2"
+            size="lg"
+            loading={loading}
+            leftIcon={<Send className="h-5 w-5" />}
+            className="w-full"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            {loading ? 'Analizando...' : 'Analizar Síntomas'}
-          </button>
+            {loading ? 'Analizando...' : 'Analizar síntomas'}
+          </Button>
         </form>
       ) : (
         <div className="mb-8">
           <TriageResultCard result={result} />
           <div className="mt-6 text-center">
-            <button onClick={handleReset} className="btn-secondary">
+            <Button variant="secondary" onClick={handleReset}>
               Hacer otra consulta
-            </button>
+            </Button>
           </div>
         </div>
       )}

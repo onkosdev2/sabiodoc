@@ -1,7 +1,10 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
 from app.core.deps import get_current_user, get_db, require_admin
 from app.core.security import get_password_hash
 from app.models.appointment import Appointment, AppointmentStatus
@@ -9,7 +12,7 @@ from app.models.audit_log import AuditLog
 from app.models.consultation import Consultation
 from app.models.consultation_review import ConsultationReview
 from app.models.doctor_availability_slot import DoctorAvailabilitySlot
-from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
+from app.models.doctor_presence import DoctorPresence
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
 from app.models.favorite import Favorite
@@ -23,6 +26,7 @@ from app.schemas.appointment import (
     AdminLiveVideoSessionListResponse,
     AdminLiveVideoSessionResponse,
     AdminMarketplaceOverviewResponse,
+    AppointmentListResponse,
 )
 from app.schemas.user import (
     AdminUserCreate,
@@ -33,16 +37,20 @@ from app.schemas.user import (
     ReviewerListResponse,
     ReviewerResponse,
 )
+from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
+from app.services.patient_profile_service import get_patient_display_name
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _serialize_admin_user(user: User) -> AdminUserResponse:
     profile = getattr(user, "doctor_profile", None)
+    full_name = profile.display_name if profile and profile.display_name else get_patient_display_name(user)
     return AdminUserResponse(
         id=user.id,
         email=user.email,
+        full_name=full_name,
         role=user.role,
         doctor_status=profile.status if profile else None,
         is_reviewer=bool(user.is_reviewer),
@@ -62,15 +70,41 @@ def get_marketplace_overview(
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores")
 
-    doctors_online = db.query(DoctorPresence).filter(DoctorPresence.status == DoctorPresenceStatus.online).count()
-    doctors_busy = db.query(DoctorPresence).filter(DoctorPresence.status == DoctorPresenceStatus.busy).count()
+    now = datetime.now(UTC)
+    online_threshold = now - timedelta(minutes=settings.DOCTOR_PRESENCE_ONLINE_MINUTES)
+    doctors_online = (
+        db.query(DoctorPresence).filter(DoctorPresence.last_seen_at >= online_threshold).count()
+    )
+    doctors_busy = (
+        db.query(VideoSession.doctor_id)
+        .filter(
+            VideoSession.status == VideoSessionStatus.active,
+            VideoSession.expires_at > now,
+        )
+        .distinct()
+        .count()
+    )
     pending_applications = db.query(DoctorProfile).filter(DoctorProfile.status == DoctorApprovalStatus.pending).count()
     scheduled_appointments = db.query(Appointment).filter(Appointment.status == AppointmentStatus.scheduled).count()
     completed_appointments = db.query(Appointment).filter(Appointment.status == AppointmentStatus.completed).count()
-    active_video_sessions = db.query(VideoSession).filter(VideoSession.status == VideoSessionStatus.active).count()
+    active_video_sessions = (
+        db.query(VideoSession)
+        .filter(
+            VideoSession.status == VideoSessionStatus.active,
+            VideoSession.expires_at > now,
+        )
+        .count()
+    )
     failed_video_sessions = db.query(VideoSession).filter(VideoSession.status.in_([VideoSessionStatus.failed, VideoSessionStatus.expired])).count()
     no_show_appointments = db.query(Appointment).filter(Appointment.status == AppointmentStatus.no_show).count()
-    unread_notifications = db.query(Notification).filter(Notification.status == NotificationStatus.unread).count()
+    unread_notifications = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.status == NotificationStatus.unread,
+        )
+        .count()
+    )
 
     return AdminMarketplaceOverviewResponse(
         doctors_online=doctors_online,
@@ -85,6 +119,24 @@ def get_marketplace_overview(
     )
 
 
+@router.get("/appointments", response_model=AppointmentListResponse)
+def list_appointments(
+    status_filter: AppointmentStatus | None = None,
+    limit: int = Query(default=200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Citas de todos los medicos, con filtro opcional por estado."""
+    query = db.query(Appointment).options(joinedload(Appointment.patient).joinedload(User.patient_profile))
+    if status_filter:
+        query = query.filter(Appointment.status == status_filter)
+    appointments = query.order_by(Appointment.scheduled_at.desc()).limit(limit).all()
+    return AppointmentListResponse(
+        appointments=[appointment_service.serialize_appointment(item) for item in appointments],
+        total=len(appointments),
+    )
+
+
 @router.get("/video-sessions/live", response_model=AdminLiveVideoSessionListResponse)
 def get_live_video_sessions(
     db: Session = Depends(get_db),
@@ -95,7 +147,11 @@ def get_live_video_sessions(
 
     sessions = (
         db.query(VideoSession)
-        .filter(VideoSession.status.in_([VideoSessionStatus.prepared, VideoSessionStatus.active]))
+        .options(joinedload(VideoSession.patient).joinedload(User.patient_profile))
+        .filter(
+            VideoSession.status.in_([VideoSessionStatus.prepared, VideoSessionStatus.active]),
+            VideoSession.expires_at > datetime.now(UTC),
+        )
         .order_by(VideoSession.created_at.desc())
         .limit(20)
         .all()
@@ -108,6 +164,7 @@ def get_live_video_sessions(
                 consultation_id=session.consultation_id,
                 doctor_name=session.doctor.display_name if session.doctor else "Medico",
                 patient_email=session.patient.email if session.patient else "",
+                patient_name=get_patient_display_name(session.patient),
                 status=session.status.value,
                 started_at=session.started_at,
                 expires_at=session.expires_at,
@@ -313,7 +370,8 @@ def list_users(
 
     total = query.count()
     users = (
-        query.order_by(User.created_at.desc(), User.id.desc())
+        query.options(joinedload(User.patient_profile), joinedload(User.doctor_profile))
+        .order_by(User.created_at.desc(), User.id.desc())
         .offset(offset)
         .limit(limit)
         .all()

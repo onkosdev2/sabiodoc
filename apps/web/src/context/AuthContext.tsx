@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User, getMe } from '../api/auth'
+import { heartbeatPresence } from '../api/doctors'
 
 interface AuthContextType {
   user: User | null
@@ -51,6 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('sabiodoc:unauthorized', handleUnauthorized)
     }
   }, [])
+
+  // Heartbeat de presencia: mantiene al medico como "Disponible" mientras usa la app.
+  useEffect(() => {
+    if (!token || !user?.doctor_status) return
+    const ping = () => {
+      heartbeatPresence().catch(() => {
+        /* silencioso: la presencia es best-effort */
+      })
+    }
+    ping()
+    const intervalId = window.setInterval(ping, 60000)
+    return () => window.clearInterval(intervalId)
+  }, [token, user?.doctor_status])
 
   const login = (newToken: string, userData: User) => {
     localStorage.setItem('token', newToken)

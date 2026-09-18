@@ -38,6 +38,7 @@ export interface Appointment {
   specialty_name: string
   patient_id: number
   patient_email: string
+  patient_name?: string | null
   doctor_id: number
   doctor_name: string
   status: AppointmentStatus
@@ -82,6 +83,7 @@ export interface DoctorDashboardResponse {
     consultation_id: number | null
     doctor_name: string
     patient_email: string
+    patient_name: string | null
     status: string
     started_at: string | null
     expires_at: string

@@ -21,6 +21,8 @@ export interface Consultation {
   room_id: string
   created_at: string
   closed_at: string | null
+  auto_closed: boolean
+  last_activity_at: string | null
   summary: string | null
   intake: ConsultationStructuredIntake | null
   specialty: Specialty | null
@@ -80,6 +82,10 @@ export const createConsultation = async (specialty_id: number): Promise<Consulta
 export const getMyConsultations = async (): Promise<ConsultationListResponse> => {
   const response = await client.get<ConsultationListResponse>('/consultations/my')
   return response.data
+}
+
+export const deleteConsultation = async (id: number): Promise<void> => {
+  await client.delete(`/consultations/${id}`)
 }
 
 export const getConsultation = async (consultationId: number): Promise<Consultation> => {

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="SabioDoc">
+  <rect width="64" height="64" rx="14" fill="#2563eb" />
+  <path
+    d="M27 14h10a3 3 0 0 1 3 3v7h7a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-7v7a3 3 0 0 1-3 3H27a3 3 0 0 1-3-3v-7h-7a3 3 0 0 1-3-3V27a3 3 0 0 1 3-3h7v-7a3 3 0 0 1 3-3z"
+    fill="#ffffff"
+  />
+</svg>

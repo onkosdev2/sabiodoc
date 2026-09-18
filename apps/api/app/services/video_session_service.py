@@ -10,12 +10,15 @@ from app.models.consultation import Consultation
 from app.models.doctor_presence import DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
+from app.models.patient_profile import PatientProfile
 from app.models.user import User, UserRole
 from app.models.video_session import PaymentStatus, VideoSession, VideoSessionStatus, VideoProvider
 from app.models.video_session_event import VideoSessionEvent
 from sqlalchemy import and_, or_
 from app.services.jitsi_service import jitsi_service
+from app.services.llm_client import llm_client
 from app.services.payment_service import payment_service
+from app.services.presence_service import resolve_presence
 from app.services.pricing_service import pricing_service
 
 logger = get_logger(__name__)
@@ -24,6 +27,152 @@ logger = get_logger(__name__)
 class VideoSessionService:
     APPOINTMENT_ROOM_OPEN_MINUTES_BEFORE = 60
     APPOINTMENT_ROOM_CLOSE_MINUTES_AFTER = 180
+
+    INTRO_SYSTEM_PROMPT = (
+        "Eres un asistente clinico que redacta el guion de apertura de una videoconsulta medica. "
+        "El medico leera el texto en voz alta al iniciar la sesion.\n\n"
+        "El guion debe cumplir estas reglas:\n"
+        "- Ser breve: entre 2 y 4 frases, en espanol neutro, tono profesional y calido.\n"
+        "- Presentar al medico por su nombre.\n"
+        "- Saludar al paciente por su nombre.\n"
+        "- Indicar que la videoconsulta comienza.\n"
+        "- Pedir al paciente que diga su nombre completo en voz alta (esto permite identificar "
+        "cada voz en la transcripcion de la consulta).\n"
+        "- Mencionar que la sesion puede ser transcrita para el historial clinico.\n\n"
+        "Devuelve UNICAMENTE el texto que dira el medico: sin comillas, sin acotaciones, sin listas "
+        "y sin el nombre del paciente entre corchetes."
+    )
+
+    def _resolve_patient_name(self, db: Session, patient: User | None) -> str:
+        if patient is None:
+            return "paciente"
+        profile = db.query(PatientProfile).filter(PatientProfile.user_id == patient.id).first()
+        if profile and (profile.first_name or profile.last_name):
+            full_name = " ".join(part for part in [profile.first_name, profile.last_name] if part).strip()
+            if full_name:
+                return full_name
+        return patient.email.split("@")[0]
+
+    def _resolve_specialty_name(self, video_session: VideoSession) -> str:
+        if video_session.appointment and video_session.appointment.specialty:
+            return video_session.appointment.specialty.name
+        if video_session.consultation and video_session.consultation.specialty:
+            return video_session.consultation.specialty.name
+        return "medicina general"
+
+    @staticmethod
+    def _intro_fallback(doctor_name: str, patient_name: str, specialty_name: str) -> str:
+        return (
+            f"Hola, soy {doctor_name}. Te doy la bienvenida a tu videoconsulta de {specialty_name}. "
+            f"Antes de comenzar, {patient_name}, ?podrias decir tu nombre completo en voz alta para "
+            "confirmar que el audio se registra correctamente? Esta sesion puede ser transcrita para tu "
+            "historial clinico. Comenzamos."
+        )
+
+    def generate_intro_script(self, db: Session, video_session: VideoSession) -> str:
+        """Genera (o devuelve) el guion de apertura de la videoconsulta.
+
+        El guion ayuda a que la transcripcion identifique cada voz y queda guardado
+        para no regenerarlo en cada visita.
+        """
+        if video_session.intro_script:
+            return video_session.intro_script
+
+        doctor_name = video_session.doctor.display_name if video_session.doctor else "el medico"
+        patient_name = self._resolve_patient_name(db, video_session.patient)
+        specialty_name = self._resolve_specialty_name(video_session)
+
+        summary = None
+        if video_session.appointment and video_session.appointment.ai_summary_snapshot:
+            summary = video_session.appointment.ai_summary_snapshot
+        elif video_session.consultation and video_session.consultation.summary:
+            summary = video_session.consultation.summary
+
+        user_message = (
+            f"Medico: {doctor_name}\n"
+            f"Paciente: {patient_name}\n"
+            f"Especialidad: {specialty_name}\n"
+        )
+        if summary:
+            user_message += f"Motivo de consulta (resumen previo): {summary[:500]}\n"
+
+        script = llm_client.chat_text(
+            messages=[
+                {"role": "system", "content": self.INTRO_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.4,
+            max_tokens=220,
+        )
+        script = (script or "").strip().strip('"').strip()
+        if not script:
+            script = self._intro_fallback(doctor_name, patient_name, specialty_name)
+
+        video_session.intro_script = script
+        video_session.intro_generated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(video_session)
+        logger.info(f"Video session intro generated: id={video_session.id}")
+        return script
+
+    def _apply_expiration(self, video_session: VideoSession, now: datetime) -> None:
+        """Marca una sesion vencida como expirada, acumulando el tiempo si estaba activa."""
+        if video_session.status == VideoSessionStatus.active and video_session.started_at is not None:
+            # El tiempo no puede superar la ventana de la sala: evita cobros absurdos
+            # si alguien dejo la sesion abierta.
+            reference = min(now, video_session.expires_at)
+            segment = max(0, int((reference - video_session.started_at).total_seconds()))
+            video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
+            video_session.started_at = None
+        video_session.status = VideoSessionStatus.expired
+        video_session.ended_at = video_session.ended_at or video_session.expires_at
+        if not video_session.closed_reason:
+            video_session.closed_reason = "expired_inactivity"
+
+    def expire_session_if_stale(self, db: Session, video_session: VideoSession) -> bool:
+        now = datetime.now(timezone.utc)
+        if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
+            return False
+        if video_session.expires_at > now:
+            return False
+        self._apply_expiration(video_session, now)
+        db.commit()
+        db.refresh(video_session)
+        return True
+
+    def expire_stale_sessions(self, db: Session, doctor_id: int | None = None) -> int:
+        """Expira sesiones preparadas/activas cuya ventana ya cerro.
+
+        Resuelve el caso de sesiones abandonadas que dejaban al medico marcado
+        como "En videoconsulta" de forma permanente.
+        """
+        now = datetime.now(timezone.utc)
+        query = db.query(VideoSession).filter(
+            VideoSession.status.in_([VideoSessionStatus.prepared, VideoSessionStatus.active]),
+            VideoSession.expires_at <= now,
+        )
+        if doctor_id is not None:
+            query = query.filter(VideoSession.doctor_id == doctor_id)
+        stale = query.all()
+        if not stale:
+            return 0
+        for video_session in stale:
+            self._apply_expiration(video_session, now)
+        db.commit()
+        logger.info(f"Expired {len(stale)} stale video session(s) (doctor_id={doctor_id})")
+        return len(stale)
+
+    def sync_doctor_presence(self, db: Session, doctor_profile_id: int) -> None:
+        """Persiste la presencia derivada (para mantenerla fresca tras eventos)."""
+        doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_profile_id).first()
+        if not doctor_profile or not doctor_profile.presence:
+            return
+        resolved = resolve_presence(db, doctor_profile)
+        presence = doctor_profile.presence
+        if presence.status != resolved.status or presence.status_message != resolved.status_message:
+            presence.status = resolved.status
+            presence.status_message = resolved.status_message
+            db.commit()
 
     def prepare_session(
         self,
@@ -67,13 +216,12 @@ class VideoSessionService:
                 detail="El medico no atiende la especialidad de esta consulta",
             )
 
-        presence = doctor_profile.presence
-        if not presence or presence.status != DoctorPresenceStatus.online:
+        resolved = resolve_presence(db, doctor_profile)
+        if resolved.status != DoctorPresenceStatus.online:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El medico no esta disponible ahora mismo",
             )
-
         active_session = (
             db.query(VideoSession)
             .filter(
@@ -177,7 +325,7 @@ class VideoSessionService:
         )
 
         doctor_profile.presence.status = DoctorPresenceStatus.busy
-        doctor_profile.presence.status_message = "En videoconsulta"
+        doctor_profile.presence.status_message = "En sesión"
         doctor_profile.presence.last_seen_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(video_session)

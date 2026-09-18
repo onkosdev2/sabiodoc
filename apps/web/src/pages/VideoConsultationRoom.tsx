@@ -1,16 +1,48 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, AlertTriangle, ArrowLeft, Clock3, FileText, Loader2, Timer, Video, VideoOff } from 'lucide-react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Copy,
+  ExternalLink,
+  FileText,
+  Loader2,
+  LogOut,
+  Mic,
+  Pause,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  Timer,
+  UserRound,
+  Video,
+  VideoOff,
+} from 'lucide-react'
 
 import {
   completeVideoSession,
+  generateVideoSessionIntro,
   getVideoSessionStatus,
   joinVideoSession,
+  leaveVideoSession,
+  pauseVideoSession,
+  startVideoSession,
   updateVideoSessionDoctorNote,
   VideoSessionStatus,
 } from '../api/videoSessions'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { DoctorPatientTimeline, getDoctorPatientTimeline } from '../api/doctors'
+import { formatMoney } from '../utils/format'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Button from '../components/ui/Button'
+import { Textarea } from '../components/ui/Field'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 
 type PreparedVideoSession = {
@@ -21,12 +53,14 @@ type PreparedVideoSession = {
   doctor_name: string
   provider: 'jitsi' | 'jitsi_mock'
   room_url: string | null
-  participant_token: string | null // <-- Añadir '| null'
+  participant_token: string | null
   participant_role: 'patient' | 'doctor'
   prepaid_amount_cents?: number
   estimated_minutes?: number
   expires_at: string
 }
+
+type DoctorTab = 'session' | 'history' | 'notes'
 
 const STORAGE_KEY = 'sabiodoc-video-session'
 const STATUS_POLL_MS = 5000
@@ -44,9 +78,16 @@ const formatDuration = (totalSeconds: number) => {
   return [minutes, seconds].map((value) => value.toString().padStart(2, '0')).join(':')
 }
 
+const formatClock = (value: string | null | undefined) => {
+  if (!value) return null
+  return new Date(value).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function VideoConsultationRoom() {
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+  const toast = useToast()
+  const [mediaStatus, setMediaStatus] = useState<'unknown' | 'checking' | 'ok' | 'denied' | 'unsupported'>('unknown')
   const [session, setSession] = useState<PreparedVideoSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
@@ -59,10 +100,19 @@ export default function VideoConsultationRoom() {
   const [followupInstructions, setFollowupInstructions] = useState('')
   const [savingDoctorNote, setSavingDoctorNote] = useState(false)
   const [completingSession, setCompletingSession] = useState(false)
+  const [timerBusy, setTimerBusy] = useState(false)
+  const [confirmComplete, setConfirmComplete] = useState(false)
+  const [confirmStart, setConfirmStart] = useState(false)
+  const [activeTab, setActiveTab] = useState<DoctorTab>('session')
+  const [introLoading, setIntroLoading] = useState(false)
+  const [introCopied, setIntroCopied] = useState(false)
   const [patientTimeline, setPatientTimeline] = useState<DoctorPatientTimeline | null>(null)
   const [timelineLoading, setTimelineLoading] = useState(false)
+  const introRequestedRef = useRef(false)
 
-  const backPath = session?.participant_role === 'doctor'
+  const isDoctor = session?.participant_role === 'doctor'
+
+  const backPath = isDoctor
     ? session?.appointment_id
       ? '/doctor'
       : '/doctor/video-sessions'
@@ -79,7 +129,7 @@ export default function VideoConsultationRoom() {
     const rawSession = sessionStorage.getItem(STORAGE_KEY)
     if (!rawSession) {
       setLoading(false)
-      setError('No hay una videoconsulta preparada en esta sesion.')
+      setError('No hay una videoconsulta preparada en esta sesión.')
       return
     }
 
@@ -88,7 +138,7 @@ export default function VideoConsultationRoom() {
       setSession(parsed)
     } catch {
       sessionStorage.removeItem(STORAGE_KEY)
-      setError('Los datos de la videoconsulta no son validos.')
+      setError('Los datos de la videoconsulta no son válidos.')
       setLoading(false)
     }
   }, [isAuthenticated, navigate])
@@ -130,6 +180,28 @@ export default function VideoConsultationRoom() {
     }
   }, [session])
 
+  // El médico recibe un guion de apertura generado por IA antes de iniciar.
+  useEffect(() => {
+    if (!session || session.participant_role !== 'doctor' || !statusData) {
+      return
+    }
+    if (introRequestedRef.current) {
+      return
+    }
+    if (statusData.intro_script || statusData.started_at || (statusData.billable_seconds ?? 0) > 0) {
+      introRequestedRef.current = true
+      return
+    }
+    introRequestedRef.current = true
+    setIntroLoading(true)
+    generateVideoSessionIntro(session.video_session_id)
+      .then((response) => setStatusData(response))
+      .catch(() => {
+        /* el texto de respaldo se genera en el backend; si falla, se reintenta al reabrir */
+      })
+      .finally(() => setIntroLoading(false))
+  }, [session, statusData])
+
   useEffect(() => {
     if (!session || session.participant_role !== 'doctor' || !statusData?.patient_id) {
       return
@@ -162,11 +234,10 @@ export default function VideoConsultationRoom() {
     }
   }, [session, statusData?.patient_id])
 
-  const handleJoin = async () => {
+  const handleJoin = async (options: { external?: boolean } = {}) => {
     if (!session) {
       return
     }
-    // Cambiamos el mensaje de error para que sea genérico
     if (session.provider !== 'jitsi_mock' && !session.room_url) {
       setError('La sala no incluye una URL válida.')
       return
@@ -178,8 +249,7 @@ export default function VideoConsultationRoom() {
       const joinedStatus = await joinVideoSession(session.video_session_id)
       setStatusData(joinedStatus)
 
-      if (session.room_url) {
-        // La URL de Jitsi ya incluye el JWT del participante cuando aplica.
+      if (!options.external && session.room_url) {
         setIframeUrl(session.room_url)
       }
       setJoined(true)
@@ -191,9 +261,51 @@ export default function VideoConsultationRoom() {
     }
   }
 
+  const handleOpenExternal = async () => {
+    if (!session?.room_url) {
+      setError('La sala no incluye una URL válida.')
+      return
+    }
+    window.open(session.room_url, '_blank', 'noopener,noreferrer')
+    await handleJoin({ external: true })
+  }
+
   const handleLeave = async () => {
+    if (statusData) {
+      try {
+        const updated = await leaveVideoSession(statusData.video_session_id)
+        setStatusData(updated)
+      } catch (leaveError: any) {
+        console.error('Error leaving video room:', leaveError)
+        setError(leaveError.response?.data?.detail || 'No se pudo registrar la salida de la sala.')
+      }
+    }
     setIframeUrl(null)
     setJoined(false)
+  }
+
+  const handleStartTimer = async () => {
+    if (!statusData) return
+    setTimerBusy(true)
+    try {
+      setStatusData(await startVideoSession(statusData.video_session_id))
+    } catch (requestError: any) {
+      setError(requestError.response?.data?.detail || 'No se pudo iniciar el cronómetro.')
+    } finally {
+      setTimerBusy(false)
+    }
+  }
+
+  const handlePauseTimer = async () => {
+    if (!statusData) return
+    setTimerBusy(true)
+    try {
+      setStatusData(await pauseVideoSession(statusData.video_session_id))
+    } catch (requestError: any) {
+      setError(requestError.response?.data?.detail || 'No se pudo pausar el cronómetro.')
+    } finally {
+      setTimerBusy(false)
+    }
   }
 
   const handleSaveDoctorNote = async () => {
@@ -225,6 +337,7 @@ export default function VideoConsultationRoom() {
       setStatusData(updated)
       setJoined(false)
       setIframeUrl(null)
+      setConfirmComplete(false)
     } catch (requestError: any) {
       setError(requestError.response?.data?.detail || 'No se pudo cerrar la videoconsulta.')
     } finally {
@@ -232,33 +345,63 @@ export default function VideoConsultationRoom() {
     }
   }
 
+  const handleCopyIntro = async () => {
+    if (!statusData?.intro_script) return
+    try {
+      await navigator.clipboard.writeText(statusData.intro_script)
+      setIntroCopied(true)
+      window.setTimeout(() => setIntroCopied(false), 2000)
+    } catch {
+      /* portapapeles no disponible */
+    }
+  }
+
+  // Comprueba (y solicita) acceso a cámara y micrófono antes de entrar.
+  const handleCheckDevices = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMediaStatus('unsupported')
+      toast.error('Tu navegador no permite comprobar los dispositivos desde aquí.')
+      return
+    }
+    setMediaStatus('checking')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      stream.getTracks().forEach((track) => track.stop())
+      setMediaStatus('ok')
+      toast.success('Cámara y micrófono listos.')
+    } catch {
+      setMediaStatus('denied')
+      toast.error('No pudimos acceder a tu cámara o micrófono. Revisa los permisos del navegador.')
+    }
+  }
+
   const timerView = useMemo(() => {
     const estimatedMinutes = statusData?.estimated_minutes ?? session?.estimated_minutes ?? 0
     const targetSeconds = Math.max(0, estimatedMinutes * 60)
+    const accumulated = statusData?.billable_seconds ?? 0
 
     if (!statusData?.started_at) {
       return {
-        elapsedSeconds: 0,
-        remainingSeconds: targetSeconds,
-        isOvertime: false,
+        elapsedSeconds: accumulated,
+        remainingSeconds: Math.max(0, targetSeconds - accumulated),
+        isOvertime: accumulated > targetSeconds && targetSeconds > 0,
       }
     }
 
     const startedAt = new Date(statusData.started_at).getTime()
     const endedAt = statusData.ended_at ? new Date(statusData.ended_at).getTime() : clockNow
-    const elapsedSeconds = Math.max(0, Math.floor((endedAt - startedAt) / 1000))
+    const elapsedSeconds = accumulated + Math.max(0, Math.floor((endedAt - startedAt) / 1000))
     const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds)
     const isOvertime = elapsedSeconds > targetSeconds && targetSeconds > 0
 
-    return {
-      elapsedSeconds,
-      remainingSeconds,
-      isOvertime,
-    }
+    return { elapsedSeconds, remainingSeconds, isOvertime }
   }, [clockNow, session?.estimated_minutes, statusData])
 
+  const hasStarted = Boolean(statusData?.started_at) || (statusData?.billable_seconds ?? 0) > 0
+  const isRunning = Boolean(statusData?.started_at)
+
   const alertLevel = useMemo(() => {
-    if (!statusData?.started_at || statusData.status !== 'active') {
+    if (!hasStarted || statusData?.status !== 'active') {
       return null
     }
     if (timerView.isOvertime) {
@@ -271,28 +414,56 @@ export default function VideoConsultationRoom() {
       return 'five-minutes'
     }
     return null
-  }, [statusData, timerView.isOvertime, timerView.remainingSeconds])
-
-  const formatMoney = (amountCents: number) =>
-    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'USD' }).format(amountCents / 100)
+  }, [hasStarted, statusData?.status, timerView.isOvertime, timerView.remainingSeconds])
 
   const recentClinicalItems = useMemo(() => patientTimeline?.items.slice(0, 3) ?? [], [patientTimeline])
+
+  const estimatedMinutes = statusData?.estimated_minutes ?? session?.estimated_minutes ?? 0
+  const targetSeconds = Math.max(0, estimatedMinutes * 60)
+
+  const doctorInRoom = Boolean(statusData?.joined_doctor_at)
+  const patientInRoom = Boolean(statusData?.joined_patient_at)
+  const counterpartJoinedAt = isDoctor ? statusData?.joined_patient_at : statusData?.joined_doctor_at
+  const counterpartLabel = isDoctor ? 'Paciente' : 'Médico'
+  const selfJoinedAt = isDoctor ? statusData?.joined_doctor_at : statusData?.joined_patient_at
+  const selfInRoom = (isDoctor ? doctorInRoom : patientInRoom) || joined
+  const counterpartInRoom = isDoctor ? patientInRoom : doctorInRoom
+  const counterpartArticle = isDoctor ? 'El paciente' : 'El médico'
+  const counterpartNoun = isDoctor ? 'el paciente' : 'el médico'
+  const waitingMessage = counterpartInRoom
+    ? `${counterpartArticle} ya está en la sala. Entra cuando quieras.`
+    : `La sala está lista. Entra y espera a que se conecte ${counterpartNoun}.`
+
   const statusPresentation = useMemo(() => {
     const status = statusData?.status ?? 'prepared'
     switch (status) {
       case 'active':
-        return { label: 'Sesión activa', tone: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+        return { label: 'Consulta en curso', tone: 'border-emerald-200 bg-emerald-100 text-emerald-800', Icon: Video }
       case 'completed':
-        return { label: 'Consulta cerrada', tone: 'bg-slate-100 text-slate-800 border-slate-200' }
+        return { label: 'Consulta finalizada', tone: 'border-slate-200 bg-slate-100 text-slate-700', Icon: CheckCircle2 }
       case 'expired':
-        return { label: 'Sesión expirada', tone: 'bg-amber-100 text-amber-800 border-amber-200' }
+        return { label: 'Sala expirada', tone: 'border-amber-200 bg-amber-100 text-amber-800', Icon: Clock3 }
       case 'cancelled':
       case 'failed':
-        return { label: 'Sesión no disponible', tone: 'bg-rose-100 text-rose-800 border-rose-200' }
-      default:
-        return { label: joined ? 'Conectado a la sala' : 'Listo para entrar', tone: 'bg-sky-100 text-sky-800 border-sky-200' }
+        return { label: 'Sala no disponible', tone: 'border-rose-200 bg-rose-100 text-rose-800', Icon: VideoOff }
+      default: {
+        if (selfInRoom && counterpartInRoom) {
+          return { label: 'Ambos conectados', tone: 'border-emerald-200 bg-emerald-100 text-emerald-800', Icon: Video }
+        }
+        if (counterpartInRoom) {
+          return { label: `${counterpartLabel} en la sala`, tone: 'border-emerald-200 bg-emerald-100 text-emerald-800', Icon: Video }
+        }
+        if (selfInRoom) {
+          return { label: `Esperando al ${counterpartLabel.toLowerCase()}`, tone: 'border-sky-200 bg-sky-100 text-sky-800', Icon: Video }
+        }
+        return { label: 'Sala preparada', tone: 'border-sky-200 bg-sky-100 text-sky-800', Icon: VideoOff }
+      }
     }
-  }, [joined, statusData?.status])
+  }, [statusData?.status, selfInRoom, counterpartInRoom, counterpartLabel])
+
+  const joinBlocked = ['completed', 'cancelled', 'expired', 'failed'].includes(statusData?.status || '')
+  const canJoin = !joined && !joinBlocked && (session?.provider === 'jitsi_mock' || Boolean(session?.room_url))
+  const showIframe = Boolean(iframeUrl) && session?.provider !== 'jitsi_mock'
 
   if (loading) {
     return (
@@ -302,35 +473,253 @@ export default function VideoConsultationRoom() {
     )
   }
 
-  return (
-    <div className="min-h-[calc(100vh-10rem)]">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+  const StatusIcon = statusPresentation.Icon
+
+  const doctorTabs: Array<{ key: DoctorTab; label: string; Icon: typeof Timer }> = [
+    { key: 'session', label: 'Sesión', Icon: Timer },
+    { key: 'history', label: 'Historial', Icon: FileText },
+    { key: 'notes', label: 'Notas', Icon: ClipboardList },
+  ]
+
+  const sessionContent = (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Estado</p>
+        {!hasStarted ? (
+          <div className="mt-2 flex items-start gap-3 rounded-xl bg-sky-50 p-3 text-sm text-sky-800">
+            <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              {isDoctor
+                ? 'Aún no has iniciado el cronómetro de la consulta.'
+                : 'La consulta aún no ha comenzado. El médico iniciará el cronómetro cuando empiece.'}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Transcurrido</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">{formatDuration(timerView.elapsedSeconds)}</p>
+            </div>
+            <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-sky-700">Restante</p>
+              <p className="mt-1 text-2xl font-semibold text-sky-900">
+                {timerView.isOvertime
+                  ? `+${formatDuration(timerView.elapsedSeconds - targetSeconds)}`
+                  : formatDuration(timerView.remainingSeconds)}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <dl className="space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <dt className="inline-flex items-center gap-2 text-slate-500">
+            <UserRound className="h-4 w-4" /> Tú
+          </dt>
+          <dd className="font-medium text-slate-800">
+            {selfJoinedAt ? `Conectado ${formatClock(selfJoinedAt)}` : 'Aún no entras'}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="inline-flex items-center gap-2 text-slate-500">
+            <Stethoscope className="h-4 w-4" /> {counterpartLabel}
+          </dt>
+          <dd className="font-medium text-slate-800">
+            {counterpartJoinedAt ? `En la sala ${formatClock(counterpartJoinedAt)}` : 'Aún no se conecta'}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="inline-flex items-center gap-2 text-slate-500">
+            <Timer className="h-4 w-4" /> Cronómetro
+          </dt>
+          <dd className="font-medium text-slate-800">
+            {statusData?.started_at ? `Inició ${formatClock(statusData.started_at)}` : 'Pendiente'}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Sala de videoconsulta</h1>
-          <p className="mt-1 text-gray-600">
-            {session ? `${session.specialty_name} con ${session.doctor_name}` : 'Preparando entorno de video'}
+          <p className="text-slate-500">Duración estimada</p>
+          <p className="font-medium text-slate-800">{estimatedMinutes} min</p>
+        </div>
+        <div>
+          <p className="text-slate-500">{session?.prepaid_amount_cents ? 'Prepago' : 'Tipo'}</p>
+          <p className="font-medium text-slate-800">
+            {session?.prepaid_amount_cents ? formatMoney(session.prepaid_amount_cents) : 'Cita programada'}
           </p>
         </div>
-        <button
-          onClick={() => navigate(backPath)}
-          className="btn-secondary inline-flex items-center gap-2"
-        >
+      </div>
+    </div>
+  )
+
+  const devicesContent = (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+      <p className="flex items-center gap-2 font-medium text-slate-800">
+        <Camera className="h-4 w-4 text-primary-600" aria-hidden="true" /> Cámara y micrófono
+      </p>
+      <p className="mt-2 text-slate-600">
+        {mediaStatus === 'ok'
+          ? 'Todo listo: tu cámara y micrófono funcionan.'
+          : mediaStatus === 'denied'
+            ? 'No pudimos acceder. Revisa los permisos del navegador y vuelve a comprobar.'
+            : mediaStatus === 'unsupported'
+              ? 'Tu navegador no permite comprobar los dispositivos; la sala los pedirá al entrar.'
+              : 'Comprueba tus dispositivos antes de entrar a la consulta.'}
+      </p>
+      <Button
+        variant={mediaStatus === 'ok' ? 'secondary' : 'primary'}
+        size="sm"
+        className="mt-3"
+        onClick={handleCheckDevices}
+        loading={mediaStatus === 'checking'}
+        leftIcon={<Camera className="h-4 w-4" />}
+      >
+        {mediaStatus === 'ok' ? 'Volver a comprobar' : 'Comprobar cámara y micrófono'}
+      </Button>
+    </div>
+  )
+
+  const introContent = isDoctor && !hasStarted && (
+    <div className="rounded-xl border border-primary-100 bg-primary-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="inline-flex items-center gap-2 text-sm font-semibold text-primary-900">
+          <Sparkles className="h-4 w-4" /> Introducción para iniciar
+        </p>
+        {introLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-primary-600" />
+        ) : (
+          statusData?.intro_script && (
+            <button
+              type="button"
+              onClick={handleCopyIntro}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 hover:text-primary-900"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {introCopied ? 'Copiado' : 'Copiar'}
+            </button>
+          )
+        )}
+      </div>
+      <p className="mt-1 text-xs text-primary-700">
+        Léela en voz alta antes de iniciar. Ayuda a identificar cada voz en la transcripción de la consulta.
+      </p>
+      <blockquote className="mt-2 rounded-lg bg-white p-3 text-sm text-slate-800">
+        {statusData?.intro_script || (introLoading ? 'Generando introducción…' : 'Introducción no disponible.')}
+      </blockquote>
+    </div>
+  )
+
+  const historyContent = isDoctor && (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Antecedentes recientes</p>
+      {timelineLoading ? (
+        <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Cargando antecedentes...
+        </div>
+      ) : recentClinicalItems.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">No hay eventos previos visibles para este paciente.</p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {recentClinicalItems.map((item) => (
+            <div key={`${item.item_type}-${item.consultation_id ?? item.appointment_id}`} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  {item.item_type === 'consultation' ? 'Preconsulta IA' : 'Videoconsulta'} · {item.specialty_name}
+                </p>
+                <span className="text-xs text-slate-500">{new Date(item.sort_at).toLocaleDateString('es-ES')}</span>
+              </div>
+              {item.summary && (
+                <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-slate-700">{item.summary}</p>
+              )}
+              {item.intake && (
+                <div className="mt-3">
+                  <StructuredIntakeCard intake={item.intake} title="Intake reciente" />
+                </div>
+              )}
+              {item.doctor_note && (
+                <p className="mt-2 text-sm text-slate-700">
+                  <span className="font-medium">Nota médica:</span> {item.doctor_note}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const notesContent = isDoctor && (
+    <div className="space-y-4">
+      <Textarea
+        label="Notas clínicas"
+        value={doctorNote}
+        onChange={(event) => setDoctorNote(event.target.value)}
+        className="min-h-32"
+        placeholder="Hallazgos clínicos, indicaciones verbales o seguimiento."
+      />
+      <Textarea
+        label="Indicaciones postconsulta"
+        value={followupInstructions}
+        onChange={(event) => setFollowupInstructions(event.target.value)}
+        className="min-h-32"
+        placeholder="Indicaciones para el paciente, signos de alarma y próximos pasos."
+      />
+      <button type="button"
+        onClick={handleSaveDoctorNote}
+        disabled={savingDoctorNote}
+        className="btn-secondary inline-flex w-full items-center justify-center gap-2 disabled:opacity-50"
+      >
+        {savingDoctorNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+        {savingDoctorNote ? 'Guardando...' : 'Guardar nota'}
+      </button>
+    </div>
+  )
+
+  return (
+    <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-4 sm:px-6 sm:py-6 lg:h-[100dvh] lg:overflow-hidden">
+      <header className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl bg-primary-100 p-2.5">
+            <Stethoscope className="h-6 w-6 text-primary-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Sala de videoconsulta</h1>
+            <p className="mt-0.5 text-sm text-slate-600">
+              {session
+                ? isDoctor
+                  ? `Paciente: ${statusData?.patient_name || statusData?.patient_email || '—'}`
+                  : `${session.specialty_name} · ${session.doctor_name}`
+                : 'Preparando entorno de video'}
+            </p>
+          </div>
+        </div>
+        <button type="button" onClick={() => navigate(backPath)} className="btn-secondary inline-flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           Volver
         </button>
+      </header>
+
+      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2" aria-live="polite">
+        <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium ${statusPresentation.tone}`}>
+          <StatusIcon className="h-4 w-4" />
+          {statusPresentation.label}
+        </span>
       </div>
 
       {alertLevel && (
         <div
-          className={`mb-6 rounded-2xl border p-4 ${
+          className={`mb-3 shrink-0 rounded-2xl border p-3 ${
             alertLevel === 'overtime'
               ? 'border-amber-300 bg-amber-50 text-amber-800'
               : 'border-rose-200 bg-rose-50 text-rose-700'
           }`}
         >
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5" />
-            <div>
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div className="text-sm">
               {alertLevel === 'five-minutes' && 'Quedan menos de 5 minutos del tiempo estimado de la videoconsulta.'}
               {alertLevel === 'one-minute' && 'Queda menos de 1 minuto del tiempo estimado. Prepárense para cerrar la consulta.'}
               {alertLevel === 'overtime' && 'La videoconsulta ya superó el tiempo estimado.'}
@@ -340,248 +729,256 @@ export default function VideoConsultationRoom() {
       )}
 
       {error && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
+        <div className="mb-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <div className="flex items-start gap-3">
-            <AlertCircle className="mt-0.5 h-5 w-5" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>{error}</div>
           </div>
         </div>
       )}
 
       {statusData?.status === 'completed' && (
-        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+        <div className="mb-3 shrink-0 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           La videoconsulta ya fue cerrada. Puedes revisar notas e indicaciones antes de salir.
         </div>
       )}
 
       {statusData?.status === 'expired' && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
+        <div className="mb-3 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           La sala expiró antes de iniciar. Regresa al flujo anterior para preparar una nueva sesión.
         </div>
       )}
 
       {session && (
-        <div className="grid gap-6 xl:grid-cols-[380px,1fr]">
-          <aside className="rounded-[32px] border border-stone-200 bg-[linear-gradient(180deg,#ffffff_0%,#f7fafc_100%)] p-6 shadow-sm">
-            <div className="space-y-5">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Estado</p>
-                <div className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${statusPresentation.tone}`}>
-                  {statusData?.status === 'active' || joined ? (
-                    <Video className="h-4 w-4 text-emerald-600" />
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+          {/* Video protagonista */}
+          <section className="flex min-h-0 flex-col">
+            <div className="aspect-video w-full overflow-hidden rounded-3xl border border-slate-900/10 bg-slate-950 shadow-xl lg:aspect-auto lg:min-h-0 lg:flex-1">
+              {showIframe ? (
+                <iframe
+                  src={iframeUrl ?? undefined}
+                  title="Sala de videoconsulta"
+                  allow="camera; microphone; fullscreen; display-capture; autoplay"
+                  className="h-full w-full border-0"
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8 text-center text-white">
+                  {session.provider === 'jitsi_mock' ? (
+                    <Video className="h-14 w-14 text-emerald-400" />
+                  ) : joined ? (
+                    <ExternalLink className="h-14 w-14 text-emerald-400" />
                   ) : (
-                    <VideoOff className="h-4 w-4 text-slate-500" />
+                    <VideoOff className="h-14 w-14 text-slate-400" />
                   )}
-                  {statusPresentation.label}
-                </div>
-              </div>
 
-              <div className="grid gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Tiempo transcurrido</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-950">{formatDuration(timerView.elapsedSeconds)}</p>
-                </div>
-                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.24em] text-sky-700">Tiempo restante</p>
-                  <p className="mt-2 text-3xl font-semibold text-sky-950">
-                    {timerView.isOvertime ? `+${formatDuration(timerView.elapsedSeconds - ((statusData?.estimated_minutes ?? session.estimated_minutes ?? 0) * 60))}` : formatDuration(timerView.remainingSeconds)}
-                  </p>
-                </div>
-              </div>
+                  <div>
+                    <h2 className="text-xl font-semibold sm:text-2xl">
+                      {session.provider === 'jitsi_mock'
+                        ? 'Sala simulada'
+                        : joined
+                          ? 'Sala abierta en otra pestaña'
+                          : 'Tu videoconsulta está lista'}
+                    </h2>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
+                      {session.provider === 'jitsi_mock'
+                        ? 'Esta sesión usa el proveedor simulado. El estado y el tiempo se sincronizan con el backend.'
+                        : joined
+                          ? 'Si cierras la otra pestaña, puedes volver a abrir la sala aquí.'
+                          : waitingMessage}
+                    </p>
+                  </div>
 
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-gray-500">
-                  {session.prepaid_amount_cents ? 'Prepago' : 'Sesión'}
-                </p>
-                {session.prepaid_amount_cents ? (
-                  <>
-                    <p className="mt-2 text-2xl font-semibold text-gray-900">{formatMoney(session.prepaid_amount_cents)}</p>
-                    <p className="mt-1 text-sm text-gray-500">{statusData?.estimated_minutes ?? session.estimated_minutes ?? 0} minutos estimados</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-2 text-2xl font-semibold text-gray-900">Cita programada</p>
-                    <p className="mt-1 text-sm text-gray-500">{statusData?.estimated_minutes ?? session.estimated_minutes ?? 0} minutos reservados</p>
-                  </>
-                )}
-              </div>
-
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Reloj de sesión</p>
-                <div className="mt-2 space-y-2 text-sm text-gray-700">
-                  <p className="inline-flex items-center gap-2">
-                    <Timer className="h-4 w-4 text-emerald-600" />
-                    {statusData?.started_at ? `Inició ${new Date(statusData.started_at).toLocaleTimeString('es-ES')}` : 'Aún no inicia'}
-                  </p>
-                  <p className="inline-flex items-center gap-2">
-                    <Clock3 className="h-4 w-4 text-sky-600" />
-                    Vence {new Date(session.expires_at).toLocaleString('es-ES')}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-                En móvil, si cámara o micrófono fallan, abre la sala en una pestaña nueva. El cronómetro y el estado siguen sincronizados desde el backend.
-              </div>
-
-              {session.participant_role === 'doctor' && statusData?.patient_id && (
-                <button
-                  onClick={() => navigate(`/doctor/patients/${statusData.patient_id}`)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                >
-                  <FileText className="h-4 w-4" />
-                  Ver historial de {statusData.patient_email}
-                </button>
-              )}
-
-              {session.participant_role === 'doctor' && (
-                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-[0.24em] text-violet-700">Resumen longitudinal</p>
-                  {timelineLoading ? (
-                    <div className="mt-3 flex items-center gap-2 text-sm text-violet-800">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Cargando antecedentes recientes...
-                    </div>
-                  ) : recentClinicalItems.length === 0 ? (
-                    <p className="mt-3 text-sm text-violet-900">No hay eventos previos visibles para este paciente.</p>
-                  ) : (
-                    <div className="mt-3 space-y-3">
-                      {recentClinicalItems.map((item) => (
-                        <div key={`${item.item_type}-${item.consultation_id ?? item.appointment_id}`} className="rounded-2xl border border-violet-100 bg-white/90 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-violet-950">
-                              {item.item_type === 'consultation' ? 'Preconsulta IA' : 'Videoconsulta'} · {item.specialty_name}
-                            </p>
-                            <span className="text-xs text-violet-700">
-                              {new Date(item.sort_at).toLocaleDateString('es-ES')}
-                            </span>
-                          </div>
-                          {item.summary && (
-                            <p className="mt-2 text-sm text-violet-900 line-clamp-4 whitespace-pre-wrap">{item.summary}</p>
-                          )}
-                          {item.intake && (
-                            <div className="mt-3">
-                              <StructuredIntakeCard intake={item.intake} title="Intake reciente" className="border-violet-200 bg-violet-100" />
-                            </div>
-                          )}
-                          {item.doctor_note && (
-                            <p className="mt-2 text-sm text-violet-900">
-                              <span className="font-medium">Nota médica:</span> {item.doctor_note}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                  {!joined && canJoin && (
+                    <button type="button"
+                      onClick={() => handleJoin()}
+                      disabled={joining}
+                      className="btn-primary inline-flex items-center gap-2 px-6 py-3 text-base disabled:opacity-60"
+                    >
+                      {joining ? <Loader2 className="h-5 w-5 animate-spin" /> : <Video className="h-5 w-5" />}
+                      {joining ? 'Conectando...' : 'Entrar a la sala'}
+                    </button>
                   )}
+
+                  {joined && !showIframe && session.room_url && session.provider !== 'jitsi_mock' && (
+                    <button type="button"
+                      onClick={handleOpenExternal}
+                      className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Volver a abrir la sala
+                    </button>
+                  )}
+
+                  {joinBlocked && <p className="text-sm text-amber-300">Esta sala ya no está disponible.</p>}
                 </div>
               )}
-
-              {session.participant_role === 'doctor' && (
-                <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.24em] text-emerald-700">Notas rápidas</p>
-                    <textarea
-                      value={doctorNote}
-                      onChange={(event) => setDoctorNote(event.target.value)}
-                      className="input-field mt-3 min-h-28"
-                      placeholder="Hallazgos clínicos, indicaciones verbales o seguimiento."
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.24em] text-emerald-700">Indicaciones postconsulta</p>
-                    <textarea
-                      value={followupInstructions}
-                      onChange={(event) => setFollowupInstructions(event.target.value)}
-                      className="input-field mt-3 min-h-28"
-                      placeholder="Indicaciones para el paciente, red flags y próximos pasos."
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={handleSaveDoctorNote}
-                      disabled={savingDoctorNote}
-                      className="inline-flex items-center justify-center rounded-full border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50"
-                    >
-                      {savingDoctorNote ? 'Guardando...' : 'Guardar nota'}
-                    </button>
-                    <button
-                      onClick={handleCompleteSession}
-                      disabled={completingSession || statusData?.status === 'completed'}
-                      className="inline-flex items-center justify-center rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                    >
-                      {completingSession ? 'Cerrando...' : 'Cerrar videoconsulta'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3 pt-2">
-                <button
-                  onClick={handleJoin}
-                  disabled={joining || joined || ['completed', 'cancelled', 'expired', 'failed'].includes(statusData?.status || '')}
-                  className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-                  {joining ? 'Conectando...' : 'Entrar a la sala'}
-                </button>
-
-                <button
-                  onClick={handleLeave}
-                  disabled={!joined}
-                  className="btn-secondary w-full disabled:opacity-50"
-                >
-                  Salir de la sala
-                </button>
-
-                {session.room_url && (
-                  <a
-                    href={session.room_url} // <-- URL limpia
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block text-center text-sm text-primary-600 hover:text-primary-700"
-                  >
-                    Abrir sala en una pestaña nueva
-                  </a>
-                )}
-              </div>
             </div>
-          </aside>
 
-          <section className="rounded-[28px] border border-slate-900/10 bg-slate-950 p-3 shadow-xl">
-            {session.provider === 'jitsi_mock' ? (
-              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-[20px] border border-dashed border-white/20 bg-slate-900 p-8 text-center text-white">
-                <Video className="h-14 w-14 text-emerald-400" />
-                <h2 className="mt-4 text-2xl font-semibold">Sala mock</h2>
-                <p className="mt-3 max-w-xl text-sm text-slate-300">
-                  Esta sesión usa el proveedor simulado. El cronómetro y las alertas siguen funcionando con el reloj compartido del backend.
-                </p>
-                <p className="mt-2 text-xs uppercase tracking-[0.3em] text-slate-400">Rol: {session.participant_role}</p>
-              </div>
-            ) : (
-              <div className="min-h-[560px] overflow-hidden rounded-[20px] bg-slate-900">
-                {iframeUrl ? (
-                  <iframe
-                    src={iframeUrl}
-                    title="Sala de videoconsulta"
-                    allow="camera; microphone; fullscreen; display-capture; autoplay"
-                    className="h-[560px] w-full border-0"
-                  />
-                ) : (
-                  <div className="flex h-[560px] items-center justify-center text-center text-white">
-                    <div>
-                      <Video className="mx-auto h-14 w-14 text-emerald-400" />
-                      <p className="mt-4 text-lg font-medium">La sala está lista.</p>
-                      <p className="mt-2 max-w-md text-sm text-slate-300">
-                        Pulsa &quot;Entrar a la sala&quot; para fijar el inicio compartido y abrir la sala dentro de SabioDoc.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {session.provider !== 'jitsi_mock' && session.room_url && !joined && (
+              <button
+                type="button"
+                onClick={handleOpenExternal}
+                className="mt-2 shrink-0 text-center text-sm text-primary-600 hover:text-primary-700"
+              >
+                ¿Problemas con cámara o micrófono? Abrir la sala en una pestaña nueva
+              </button>
             )}
           </section>
+
+          {/* Panel lateral con tabs y scroll propio */}
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {isDoctor && (
+              <div role="tablist" aria-label="Panel de la consulta" className="flex shrink-0 gap-1 border-b border-slate-100 p-2">
+                {doctorTabs.map(({ key, label, Icon }) => {
+                  const selected = activeTab === key
+                  return (
+                    <button type="button"
+                      key={key}
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setActiveTab(key)}
+                      className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                        selected ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <div role="tabpanel" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+              {!isDoctor && (
+                <>
+                  {introContent}
+                  {sessionContent}
+                  {devicesContent}
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                    <p className="flex items-center gap-2 font-medium text-slate-800">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> Antes de empezar
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      <li className="flex items-start gap-2">
+                        <Mic className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        Permite el acceso a tu cámara y micrófono cuando el navegador lo solicite.
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        Si algo falla, abre la sala en una pestaña nueva; el estado seguirá sincronizado.
+                      </li>
+                    </ul>
+                  </div>
+                </>
+              )}
+
+              {isDoctor && activeTab === 'session' && (
+                <>
+                  {introContent}
+                  {sessionContent}
+                  {devicesContent}
+                </>
+              )}
+              {isDoctor && activeTab === 'history' && historyContent}
+              {isDoctor && activeTab === 'notes' && notesContent}
+            </div>
+
+            {/* Barra de acciones fija */}
+            <div className="shrink-0 space-y-2 border-t border-slate-100 p-4">
+              {!isDoctor && (
+                <>
+                  {joined ? (
+                    <button type="button" onClick={handleLeave} className="btn-secondary inline-flex w-full items-center justify-center gap-2">
+                      <LogOut className="h-4 w-4" />
+                      Salir de la sala
+                    </button>
+                  ) : (
+                    canJoin && (
+                      <button type="button"
+                        onClick={() => handleJoin()}
+                        disabled={joining}
+                        className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:opacity-60"
+                      >
+                        {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                        {joining ? 'Conectando...' : 'Entrar a la sala'}
+                      </button>
+                    )
+                  )}
+                </>
+              )}
+
+              {isDoctor && (
+                <>
+                  <div className="flex gap-2">
+                    {isRunning ? (
+                      <button type="button"
+                        onClick={handlePauseTimer}
+                        disabled={timerBusy}
+                        className="btn-secondary inline-flex flex-1 items-center justify-center gap-2 disabled:opacity-60"
+                      >
+                        {timerBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                        Pausar
+                      </button>
+                    ) : (
+                      <button type="button"
+                        onClick={() => (hasStarted ? handleStartTimer() : setConfirmStart(true))}
+                        disabled={timerBusy || joinBlocked || (!hasStarted && introLoading)}
+                        className="btn-primary inline-flex flex-1 items-center justify-center gap-2 disabled:opacity-60"
+                      >
+                        {timerBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                        {hasStarted ? 'Reanudar consulta' : 'Iniciar consulta'}
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => setConfirmComplete(true)}
+                      disabled={joinBlocked || statusData?.status === 'completed'}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Finalizar
+                    </button>
+                  </div>
+                  {statusData?.patient_id && (
+                    <button type="button"
+                      onClick={() => navigate(`/doctor/patients/${statusData.patient_id}`)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Ver historial del paciente
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmStart}
+        tone="default"
+        title="¿Iniciar la videoconsulta?"
+        description="Antes de iniciar, confirma que ya leíste en voz alta la introducción y que ambos se identificaron con su nombre. Una vez iniciado, el conteo no se puede reiniciar: solo se puede pausar y reanudar."
+        confirmLabel="Iniciar consulta"
+        busy={timerBusy}
+        onConfirm={async () => {
+          await handleStartTimer()
+          setConfirmStart(false)
+        }}
+        onCancel={() => setConfirmStart(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmComplete}
+        tone="danger"
+        title="¿Finalizar la videoconsulta?"
+        description="Se guardarán tus notas e indicaciones y la cita se marcará como completada. Esta acción no se puede deshacer."
+        confirmLabel="Finalizar"
+        busy={completingSession}
+        onConfirm={handleCompleteSession}
+        onCancel={() => setConfirmComplete(false)}
+      />
     </div>
   )
 }

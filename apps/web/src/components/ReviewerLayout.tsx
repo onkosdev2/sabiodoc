@@ -1,23 +1,17 @@
-import { ReactNode } from 'react'
+import { Outlet } from 'react-router-dom'
 import { ClipboardCheck, ShieldCheck } from 'lucide-react'
 
 import PanelLayout from './PanelLayout'
 
-interface ReviewerLayoutProps {
-  children: ReactNode
-}
-
-export default function ReviewerLayout({ children }: ReviewerLayoutProps) {
+export default function ReviewerLayout() {
   return (
     <PanelLayout
       panelName="Panel de Revisión"
       brandIcon={ShieldCheck}
       accent="violet"
-      navItems={[
-        { to: '/reviewer/doctor-applications', label: 'Postulaciones médicas', icon: ClipboardCheck },
-      ]}
+      navItems={[{ to: '/reviewer/doctor-applications', label: 'Postulaciones médicas', icon: ClipboardCheck }]}
     >
-      {children}
+      <Outlet />
     </PanelLayout>
   )
 }

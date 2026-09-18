@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -22,6 +22,8 @@ class Consultation(Base):
     room_id = Column(String(100), unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    # True cuando el sistema la cerró por inactividad (no el usuario).
+    auto_closed = Column(Boolean, nullable=False, server_default="false")
     summary = Column(Text, nullable=True)
     intake_json = Column(JSONB, nullable=True)
     

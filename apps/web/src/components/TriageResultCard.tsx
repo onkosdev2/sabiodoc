@@ -64,7 +64,7 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
       )}
 
       <div className="mb-4">
-        <h4 className="font-semibold text-gray-800 mb-2">Especialidad recomendada:</h4>
+        <h4 className="font-semibold text-slate-800 mb-2">Especialidad recomendada:</h4>
         <Link 
           to={`/specialties/${result.recommended_specialty_slug}`}
           className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
@@ -75,8 +75,8 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
       </div>
 
       <div className="mb-4">
-        <h4 className="font-semibold text-gray-800 mb-2">Razones:</h4>
-        <ul className="list-disc list-inside space-y-1 text-gray-700">
+        <h4 className="font-semibold text-slate-800 mb-2">Razones:</h4>
+        <ul className="list-disc list-inside space-y-1 text-slate-700">
           {result.rationale_bullets.map((bullet, index) => (
             <li key={index}>{bullet}</li>
           ))}
@@ -85,8 +85,8 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
 
       {result.clarifying_questions.length > 0 && (
         <div className="mb-4">
-          <h4 className="font-semibold text-gray-800 mb-2">Preguntas para aclarar:</h4>
-          <ul className="list-disc list-inside space-y-1 text-gray-700">
+          <h4 className="font-semibold text-slate-800 mb-2">Preguntas para aclarar:</h4>
+          <ul className="list-disc list-inside space-y-1 text-slate-700">
             {result.clarifying_questions.map((question, index) => (
               <li key={index}>{question}</li>
             ))}
@@ -96,7 +96,7 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
 
       {result.alternatives.length > 0 && (
         <div className="mb-4">
-          <h4 className="font-semibold text-gray-800 mb-2">Alternativas:</h4>
+          <h4 className="font-semibold text-slate-800 mb-2">Alternativas:</h4>
           <div className="space-y-2">
             {result.alternatives.map((alt, index) => (
               <div key={index} className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
                 >
                   {alt.specialty_slug.replace(/-/g, ' ')}
                 </Link>
-                <span className="text-gray-500">- {alt.reason}</span>
+                <span className="text-slate-500">- {alt.reason}</span>
               </div>
             ))}
           </div>
@@ -124,8 +124,8 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
         </div>
       )}
 
-      <div className="mt-4 p-3 bg-gray-100 rounded-lg">
-        <p className="text-sm text-gray-600 italic">{result.disclaimer}</p>
+      <div className="mt-4 p-3 bg-slate-100 rounded-lg">
+        <p className="text-sm text-slate-600 italic">{result.disclaimer}</p>
       </div>
     </div>
   )

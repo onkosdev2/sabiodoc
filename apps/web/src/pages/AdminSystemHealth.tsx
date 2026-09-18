@@ -1,34 +1,41 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Cpu, Loader2, RefreshCcw, ServerOff } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, Cpu, RefreshCcw, ServerOff } from 'lucide-react'
 
 import { LlmHealthResponse, getLlmHealth } from '../api/admin'
+import { useToast } from '../context/ToastContext'
+import { getApiErrorMessage } from '../utils/apiError'
+import Alert from '../components/ui/Alert'
+import Badge from '../components/ui/Badge'
+import type { BadgeTone } from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
 
 export default function AdminSystemHealth() {
+  const toast = useToast()
   const [health, setHealth] = useState<LlmHealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const loadHealth = useCallback(async () => {
     setLoading(true)
-    setError(null)
     try {
       const data = await getLlmHealth()
       setHealth(data)
       setLastUpdated(new Date())
-    } catch (err: unknown) {
-      const requestError = err as { response?: { data?: { detail?: string } } }
-      setError(requestError.response?.data?.detail || 'No se pudo consultar el estado de la IA')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo consultar el estado de la IA'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [toast])
 
   useEffect(() => {
     loadHealth()
   }, [loadHealth])
 
-  // Refresco automático cada 30 segundos
+  // Refresco automático cada 30 segundos.
   useEffect(() => {
     const interval = window.setInterval(loadHealth, 30000)
     return () => window.clearInterval(interval)
@@ -37,65 +44,56 @@ export default function AdminSystemHealth() {
   const overall = (() => {
     if (!health) return null
     if (health.mode === 'mock') {
-      return { label: 'Modo mock (sin API keys)', tone: 'bg-stone-100 text-stone-700 border-stone-200', dot: 'bg-stone-400' }
+      return { label: 'Modo mock (sin API keys)', tone: 'neutral' as BadgeTone, dot: 'bg-slate-400' }
     }
     if (health.healthy) {
-      return { label: 'Operativo', tone: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' }
+      return { label: 'Operativo', tone: 'success' as BadgeTone, dot: 'bg-emerald-500' }
     }
-    return { label: 'Degradado: ningún proveedor responde', tone: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' }
+    return { label: 'Degradado: ningún proveedor responde', tone: 'danger' as BadgeTone, dot: 'bg-red-500' }
   })()
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[32px] border border-stone-200 bg-white p-8 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Admin</p>
-            <h1 className="mt-2 text-3xl font-bold text-stone-950">Estado de la IA</h1>
-            <p className="mt-2 max-w-3xl text-stone-600">
-              Disponibilidad de los proveedores de IA. DeepSeek es el principal y Groq el respaldo
-              automático; si uno falla, el sistema sigue respondiendo con el otro.
-            </p>
-          </div>
-          <button
+      <PageHeader
+        title="Estado de la IA"
+        description="Disponibilidad de los proveedores de IA. DeepSeek es el principal y Groq el respaldo automático; si uno falla, el sistema sigue respondiendo con el otro."
+        actions={
+          <Button
+            variant="secondary"
             onClick={loadHealth}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:border-stone-900 disabled:cursor-not-allowed disabled:opacity-60"
+            leftIcon={<RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />}
           >
-            <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             {loading ? 'Consultando...' : 'Actualizar'}
-          </button>
-        </div>
+          </Button>
+        }
+      />
 
-        {overall && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <span className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium ${overall.tone}`}>
-              <span className={`h-2.5 w-2.5 rounded-full ${overall.dot}`} />
-              {overall.label}
+      {overall && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Badge tone={overall.tone} icon={<span className={`h-2.5 w-2.5 rounded-full ${overall.dot}`} />}>
+            {overall.label}
+          </Badge>
+          {lastUpdated && (
+            <span className="text-xs uppercase tracking-[0.18em] text-slate-400">
+              Última consulta: {lastUpdated.toLocaleTimeString('es-ES')}
             </span>
-            {lastUpdated && (
-              <span className="text-xs uppercase tracking-[0.18em] text-stone-400">
-                Última consulta: {lastUpdated.toLocaleTimeString('es-ES')}
-              </span>
-            )}
-          </div>
-        )}
-      </section>
-
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>
+          )}
+        </div>
       )}
 
       {loading && !health ? (
-        <div className="flex min-h-[200px] items-center justify-center text-stone-500">
-          <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-          Consultando proveedores de IA...
+        <div className="grid gap-4 md:grid-cols-2">
+          {[0, 1].map((index) => (
+            <Skeleton key={index} className="h-44 w-full rounded-2xl" />
+          ))}
         </div>
       ) : health && health.providers.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center text-stone-500">
-          <ServerOff className="mx-auto mb-3 h-8 w-8 text-stone-400" />
-          No hay proveedores de IA configurados. El sistema usa respuestas locales (modo mock).
-        </div>
+        <EmptyState
+          icon={ServerOff}
+          title="Sin proveedores de IA configurados"
+          description="El sistema usa respuestas locales (modo mock) hasta que configures una API key."
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {health?.providers.map((provider, index) => {
@@ -104,37 +102,35 @@ export default function AdminSystemHealth() {
             return (
               <section
                 key={provider.name}
-                className={`rounded-[32px] border bg-white p-6 shadow-sm ${ok ? 'border-stone-200' : 'border-red-200'}`}
+                className={`rounded-2xl border bg-white p-6 shadow-sm ${ok ? 'border-slate-200' : 'border-red-200'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className={`rounded-2xl p-2 ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                      {ok ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                      {ok ? (
+                        <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                      )}
                     </div>
                     <div>
-                      <p className="text-lg font-semibold capitalize text-stone-950">{provider.name}</p>
-                      <p className="text-xs uppercase tracking-[0.18em] text-stone-400">
+                      <p className="text-lg font-semibold capitalize text-slate-950">{provider.name}</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                         {isPrimary ? 'Principal' : 'Respaldo (fallback)'}
                       </p>
                     </div>
                   </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
-                      ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {ok ? 'Operativo' : 'Con fallas'}
-                  </span>
+                  <Badge tone={ok ? 'success' : 'danger'}>{ok ? 'Operativo' : 'Con fallas'}</Badge>
                 </div>
 
                 <dl className="mt-5 space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <dt className="text-stone-500">Modelo</dt>
-                    <dd className="font-medium text-stone-900">{provider.model}</dd>
+                    <dt className="text-slate-500">Modelo</dt>
+                    <dd className="font-medium text-slate-900">{provider.model}</dd>
                   </div>
                   <div className="flex items-center justify-between">
-                    <dt className="text-stone-500">Latencia</dt>
-                    <dd className="font-medium text-stone-900">
+                    <dt className="text-slate-500">Latencia</dt>
+                    <dd className="font-medium text-slate-900">
                       {provider.latency_ms != null ? `${provider.latency_ms} ms` : '-'}
                     </dd>
                   </div>
@@ -151,17 +147,32 @@ export default function AdminSystemHealth() {
         </div>
       )}
 
-      <section className="rounded-[32px] border border-stone-200 bg-white p-6 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <Cpu className="h-5 w-5 text-sky-600" />
-          <h2 className="text-lg font-semibold text-stone-950">¿Cómo funciona el respaldo?</h2>
+          <Cpu className="h-5 w-5 text-sky-600" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-slate-950">¿Cómo funciona el respaldo?</h2>
         </div>
-        <ul className="mt-4 space-y-2 text-sm text-stone-600">
-          <li>• Si DeepSeek falla, no responde o supera el timeout, la petición se reintenta automáticamente con Groq.</li>
-          <li>• También se usa Groq si DeepSeek devuelve una respuesta con formato inválido.</li>
-          <li>• Si ninguno responde, el sistema usa respuestas locales para no dejar de funcionar.</li>
+        <ul className="mt-4 space-y-2 text-sm text-slate-600">
+          <li className="flex gap-2">
+            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            Si DeepSeek falla, no responde o supera el timeout, la petición se reintenta automáticamente con Groq.
+          </li>
+          <li className="flex gap-2">
+            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            También se usa Groq si DeepSeek devuelve una respuesta con formato inválido.
+          </li>
+          <li className="flex gap-2">
+            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            Si ninguno responde, el sistema usa respuestas locales para no dejar de funcionar.
+          </li>
         </ul>
       </section>
+
+      {!loading && !health && (
+        <Alert tone="danger" title="No se pudo consultar el estado">
+          Vuelve a intentarlo en unos segundos.
+        </Alert>
+      )}
     </div>
   )
 }

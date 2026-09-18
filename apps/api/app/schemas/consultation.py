@@ -29,6 +29,8 @@ class ConsultationResponse(BaseModel):
     room_id: str
     created_at: datetime
     closed_at: Optional[datetime] = None
+    auto_closed: bool = False
+    last_activity_at: Optional[datetime] = None
     summary: Optional[str] = None
     intake: Optional[ConsultationStructuredIntake] = None
     specialty: Optional[SpecialtyResponse] = None

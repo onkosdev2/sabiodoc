@@ -15,7 +15,9 @@ from app.models.doctor_presence import DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
 from app.models.notification import Notification, NotificationStatus
+from app.models.patient_profile import PatientProfile  # noqa: F401  (registra la relacion User.patient_profile)
 from app.models.user import User
+from app.services.patient_profile_service import get_patient_display_name
 from app.services.specialist_assistant import specialist_assistant
 
 
@@ -145,6 +147,10 @@ class AppointmentService:
         db.flush()
         return intake
 
+    def _patient_display_name(self, appointment: Appointment) -> str | None:
+        """Nombre del paciente desde su perfil, si lo completo."""
+        return get_patient_display_name(appointment.patient)
+
     def serialize_appointment(self, appointment: Appointment):
         review = appointment.review[0] if appointment.review else None
         from app.schemas.appointment import AppointmentResponse
@@ -156,6 +162,7 @@ class AppointmentService:
             specialty_name=appointment.specialty.name if appointment.specialty else "Especialidad",
             patient_id=appointment.patient_id,
             patient_email=appointment.patient.email if appointment.patient else "",
+            patient_name=self._patient_display_name(appointment),
             doctor_id=appointment.doctor_id,
             doctor_name=appointment.doctor.display_name if appointment.doctor else "Medico",
             status=appointment.status,

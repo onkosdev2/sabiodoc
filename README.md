@@ -171,6 +171,47 @@ cd apps/api
 pytest app/tests/ -v
 ```
 
+## Tests de videoconferencia
+
+Uso                                                                           
+ ```bash                                                                     
+   cd apps/api                                                                                                                                                                        
+   ./venv/bin/python scripts/create_test_appointment.py         
+ ```                    
+
+ Opciones                                                                      
+ ```bash                                                                     
+   # agendarla exactamente para ahora (sin desfase)                             
+   ./venv/bin/python scripts/create_test_appointment.py --minutes-ago 0                                                                          
+   
+   # otro paciente / otro médico                                               
+   ./venv/bin/python scripts/create_test_appointment.py \                      
+     --patient paciente.demo@sabiodoc.app --doctor cardio.demo@sabiodoc.app                                                                                                                                                                       
+   # duración distinta                                                          
+   ./venv/bin/python scripts/create_test_appointment.py --duration 45                                                                                                                                                                                  
+   # especialidad específica (si el médico tiene varias)                     
+   ./venv/bin/python scripts/create_test_appointment.py --specialty cardiologia
+                                                                      
+   # Borra las citas de prueba previas y crea una nueva                       
+   ./venv/bin/python scripts/create_test_appointment.py --clean                                                                                                                                                                           
+   # Solo borra las citas de prueba previas (no crea nada)                     
+   ./venv/bin/python scripts/create_test_appointment.py --clean-only           
+ ```            
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┬──────────────────┬──────────────────┐                                                        
+ │ Email                                                                               │ Contraseña       │ Rol              │                                                        
+ ├─────────────────────────────────────────────────────────────────────────────────────┼──────────────────┼──────────────────┤                                                        
+ │ admin.demo@sabiodoc.app                                                             │ AdminDemo123!    │ admin            │                                                        
+ ├─────────────────────────────────────────────────────────────────────────────────────┼──────────────────┼──────────────────┤                                                        
+ │ paciente.demo@sabiodoc.app                                                          │ PatientDemo123!  │ patient          │                                                        
+ ├─────────────────────────────────────────────────────────────────────────────────────┼──────────────────┼──────────────────┤                                                        
+ │ revisor.demo@sabiodoc.app                                                           │ ReviewerDemo123! │ reviewer         │                                                        
+ ├─────────────────────────────────────────────────────────────────────────────────────┼──────────────────┼──────────────────┤                                                        
+ │ medico.revisor.demo@sabiodoc.app                                                    │ MedRevDemo123!   │ doctor + revisor │                                                        
+ ├─────────────────────────────────────────────────────────────────────────────────────┼──────────────────┼──────────────────┤                                                        
+ │ cardio.demo@sabiodoc.app, derma.demo@sabiodoc.app, neuro.demo@sabiodoc.app, dummy.* │ DemoDoctor123!   │ doctor           │                                                        
+ └─────────────────────────────────────────────────────────────────────────────────────┴──────────────────┴──────────────────┘                                                                                     
+
 ## 📝 Licencia
 
 Proyecto MVP - Uso interno.

@@ -32,7 +32,7 @@ class DoctorProfileUpsertRequest(BaseModel):
 class DoctorPresenceResponse(BaseModel):
     status: DoctorPresenceStatus
     status_message: Optional[str] = None
-    last_seen_at: datetime
+    last_seen_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,6 +70,13 @@ class DoctorReviewResponse(BaseModel):
     comment: Optional[str] = None
     patient_label: str = "Paciente verificado"
     created_at: datetime
+
+
+class DoctorReviewsResponse(BaseModel):
+    reviews: list[DoctorReviewResponse]
+    total: int
+    rating_avg: float
+    rating_count: int
 
 
 class DoctorDetailResponse(BaseModel):
@@ -131,8 +138,10 @@ class DoctorPatientTimelineItemResponse(BaseModel):
     specialty_name: str
     consultation_id: int | None = None
     appointment_id: int | None = None
+    video_session_id: int | None = None
     consultation_status: ConsultationStatus | None = None
     appointment_status: AppointmentStatus | None = None
+    video_session_status: str | None = None
     summary: str | None = None
     intake: ConsultationStructuredIntake | None = None
     patient_note: str | None = None
@@ -151,4 +160,21 @@ class DoctorPatientTimelineResponse(BaseModel):
     doctor_id: int
     can_view_history: bool
     items: list[DoctorPatientTimelineItemResponse]
+    total: int
+
+
+class DoctorPatientSummary(BaseModel):
+    patient_id: int
+    email: str
+    full_name: Optional[str] = None
+    appointments_count: int = 0
+    completed_appointments: int = 0
+    upcoming_appointments: int = 0
+    video_sessions_count: int = 0
+    last_activity_at: Optional[datetime] = None
+    last_review_rating: Optional[int] = None
+
+
+class DoctorPatientListResponse(BaseModel):
+    patients: list[DoctorPatientSummary]
     total: int
