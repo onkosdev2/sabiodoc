@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { NotificationsProvider } from './context/NotificationsContext'
 import GeneralLayout from './components/GeneralLayout'
+import RouteChangeHandler from './components/RouteChangeHandler'
+import ServiceWorkerUpdater from './components/ServiceWorkerUpdater'
 import DoctorLayout from './components/DoctorLayout'
 import AdminLayout from './components/AdminLayout'
 import ReviewerLayout from './components/ReviewerLayout'
@@ -26,6 +28,8 @@ const MyFavorites = lazy(() => import('./pages/MyFavorites'))
 const Emergency = lazy(() => import('./pages/Emergency'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const DoctorOnboarding = lazy(() => import('./pages/DoctorOnboarding'))
 const AdminDoctorApplications = lazy(() => import('./pages/AdminDoctorApplications'))
 const AdminOverview = lazy(() => import('./pages/AdminOverview'))
@@ -48,11 +52,15 @@ const MyAppointments = lazy(() => import('./pages/MyAppointments'))
 const RescheduleAppointment = lazy(() => import('./pages/RescheduleAppointment'))
 const ConsultationHistory = lazy(() => import('./pages/ConsultationHistory'))
 const PatientProfilePage = lazy(() => import('./pages/PatientProfile'))
+const WalletPage = lazy(() => import('./pages/Wallet'))
+const AdminWithdrawals = lazy(() => import('./pages/AdminWithdrawals'))
 
 function App() {
   return (
     <AuthProvider>
       <NotificationsProvider>
+        <RouteChangeHandler />
+        <ServiceWorkerUpdater />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Portal general (paciente + páginas públicas) */}
@@ -66,12 +74,15 @@ function App() {
               <Route path="/emergency" element={<Emergency />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/doctor/apply" element={<DoctorOnboarding />} />
 
               <Route element={<PatientRoute />}>
                 <Route path="/me/consultations" element={<MyConsultations />} />
                 <Route path="/me/favorites" element={<MyFavorites />} />
                 <Route path="/me/appointments" element={<MyAppointments />} />
+                <Route path="/me/wallet" element={<WalletPage audience="patient" />} />
                 <Route path="/me/appointments/:appointmentId/reschedule" element={<RescheduleAppointment />} />
                 <Route path="/consultation/:id/chat" element={<ConsultationChat />} />
               </Route>
@@ -97,6 +108,7 @@ function App() {
                 <Route path="/doctor" element={<DoctorDashboard />} />
                 <Route path="/doctor/appointments" element={<DoctorAppointments />} />
                 <Route path="/doctor/reviews" element={<DoctorReviews />} />
+                <Route path="/doctor/wallet" element={<WalletPage audience="professional" />} />
                 <Route path="/doctor/availability" element={<DoctorAvailability />} />
                 <Route path="/doctor/video-sessions" element={<DoctorVideoSessions />} />
                 <Route path="/doctor/patients" element={<DoctorPatients />} />
@@ -115,6 +127,7 @@ function App() {
                 <Route path="/admin/doctor-applications" element={<AdminDoctorApplications />} />
                 <Route path="/admin/reviewers" element={<AdminUsers />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
                 <Route path="/admin/system" element={<AdminSystemHealth />} />
                 <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>

@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#2563eb" />
     <meta name="color-scheme" content="light" />
@@ -12,22 +14,35 @@
       content="SabioDoc te ayuda a encontrar la especialidad médica adecuada y a agendar videoconsultas con médicos verificados."
     />
     <meta name="robots" content="index,follow" />
+    <meta name="application-name" content="SabioDoc" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SabioDoc" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!-- Open Graph / redes sociales -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="SabioDoc" />
+    <meta property="og:locale" content="es_ES" />
+    <meta property="og:url" content="%SITE_URL%/" />
     <meta property="og:title" content="SabioDoc - Orientación Médica Inteligente" />
     <meta
       property="og:description"
       content="Encuentra la especialidad médica adecuada y agenda videoconsultas con médicos verificados."
     />
-    <meta property="og:image" content="/favicon.svg" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="%SITE_URL%/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SabioDoc - Orientación médica inteligente con IA" />
+
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="SabioDoc - Orientación Médica Inteligente" />
     <meta
       name="twitter:description"
       content="Encuentra la especialidad médica adecuada y agenda videoconsultas con médicos verificados."
     />
+    <meta name="twitter:image" content="%SITE_URL%/og-image.png" />
+    <meta name="twitter:image:alt" content="SabioDoc - Orientación médica inteligente con IA" />
   </head>
   <body>
     <div id="root"></div>

@@ -8,7 +8,7 @@ class VideoSessionEvent(Base):
     __tablename__ = "video_session_events"
 
     id = Column(Integer, primary_key=True, index=True)
-    video_session_id = Column(Integer, ForeignKey("video_sessions.id"), nullable=False)
+    video_session_id = Column(Integer, ForeignKey("video_sessions.id"), nullable=False, index=True)
     event_type = Column(String(100), nullable=False)
     source = Column(String(50), nullable=False)
     payload_json = Column(Text, nullable=True)

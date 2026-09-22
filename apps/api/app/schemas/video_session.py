@@ -87,6 +87,18 @@ class VideoSessionStatusResponse(BaseModel):
     elapsed_seconds: int
     remaining_seconds: int
     is_overtime: bool
+    # Facturacion por tiempo real.
+    price_per_min_cents: int = 0
+    held_amount_cents: int = 0
+    current_cost_cents: int = 0
+    overtime_amount_cents: int = 0
+    patient_balance_cents: int = 0
+    can_afford_overtime: bool = False
+    billing_mode: str = "scheduled"
+    # Presencia en la sala (el cronometro solo corre con ambos).
+    patient_present: bool = False
+    doctor_present: bool = False
+    both_present: bool = False
     doctor_note: str | None = None
     followup_instructions: str | None = None
     intro_script: str | None = None

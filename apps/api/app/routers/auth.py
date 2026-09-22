@@ -1,18 +1,49 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import UTC, datetime, timedelta
+import hashlib
+import secrets
+
+from app.core.config import settings
 from app.core.deps import get_db, get_current_user
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
+from app.models.password_reset_token import PasswordResetToken
 from app.models.user import UserRole
 from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
 from app.models.doctor_specialty import DoctorSpecialty
 from app.models.user import User
-from app.schemas.user import DoctorRegistrationCreate, UserCreate, UserLogin, UserResponse, TokenResponse
+from app.schemas.user import (
+    DoctorRegistrationCreate,
+    ForgotPasswordRequest,
+    MessageResponse,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 from app.core.logging import get_logger
+from app.core.rate_limit import enforce_rate_limit, rate_limit_dependency
 from app.services.doctor_onboarding_service import doctor_onboarding_service
+from app.services.email_service import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger(__name__)
+
+# Límites anti fuerza bruta (por IP).
+register_rate_limit = rate_limit_dependency("auth:register", max_requests=10, window_seconds=3600)
+login_rate_limit = rate_limit_dependency("auth:login", max_requests=10, window_seconds=300)
+forgot_password_rate_limit = rate_limit_dependency("auth:forgot-password", max_requests=5, window_seconds=3600)
+reset_password_rate_limit = rate_limit_dependency("auth:reset-password", max_requests=10, window_seconds=3600)
+# Además del límite por IP, limitamos por cuenta para frenar ataques dirigidos.
+LOGIN_MAX_ATTEMPTS_PER_EMAIL = 5
+LOGIN_EMAIL_WINDOW_SECONDS = 300
+
+
+def _issue_access_token(user: User) -> str:
+    """Token con el id del usuario y su versión de sesión (para revocación)."""
+    return create_access_token(data={"sub": str(user.id), "ver": user.session_version or 1})
 
 
 def build_user_response(user: User) -> UserResponse:
@@ -38,17 +69,12 @@ def build_user_response(user: User) -> UserResponse:
         created_at=user.created_at,
     )
 
-@router.get("/check-email")
-def check_email_exists(email: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == email).first()
-    if user:
-        # Extraemos el valor del Enum (ej. "doctor" o "patient")
-        role_value = user.role.value if hasattr(user.role, 'value') else str(user.role)
-        return {"exists": True, "role": role_value}
-    
-    return {"exists": False, "role": None}
-
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(register_rate_limit)],
+)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -65,9 +91,9 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     
-    logger.info(f"New user registered: {user.email}")
+    logger.info("New user registered: id=%s", user.id)
     
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = _issue_access_token(user)
     
     return TokenResponse(
         access_token=access_token,
@@ -75,7 +101,12 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/register/doctor", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register/doctor",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(register_rate_limit)],
+)
 def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends(get_db)):
     
     # 1. Buscamos si el usuario ya existe
@@ -164,7 +195,7 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
 
     logger.info(f"New doctor application registered/upgraded: {user.email}")
 
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = _issue_access_token(user)
 
     return TokenResponse(
         access_token=access_token,
@@ -172,8 +203,14 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(login_rate_limit)])
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    enforce_rate_limit(
+        f"auth:login-email:{credentials.email.lower()}",
+        max_requests=LOGIN_MAX_ATTEMPTS_PER_EMAIL,
+        window_seconds=LOGIN_EMAIL_WINDOW_SECONDS,
+    )
+
     user = db.query(User).filter(User.email == credentials.email).first()
     
     if not user or not verify_password(credentials.password, user.password_hash):
@@ -182,9 +219,9 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
             detail="Email o contraseña incorrectos"
         )
     
-    logger.info(f"User logged in: {user.email}")
+    logger.info("User logged in: id=%s", user.id)
     
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = _issue_access_token(user)
     
     return TokenResponse(
         access_token=access_token,
@@ -195,3 +232,81 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return build_user_response(current_user)
+
+
+PASSWORD_RESET_MESSAGE = (
+    "Si el correo está registrado, te enviaremos instrucciones para restablecer tu contraseña."
+)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@router.post(
+    "/forgot-password",
+    response_model=MessageResponse,
+    dependencies=[Depends(forgot_password_rate_limit)],
+)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Solicita el restablecimiento. Responde igual exista o no el correo."""
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user:
+        token = secrets.token_urlsafe(32)
+        db.add(
+            PasswordResetToken(
+                user_id=user.id,
+                token_hash=_hash_reset_token(token),
+                expires_at=datetime.now(UTC)
+                + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_MINUTES),
+            )
+        )
+        db.commit()
+
+        reset_url = f"{settings.primary_frontend_origin}/reset-password?token={token}"
+        try:
+            send_password_reset_email(user.email, reset_url)
+        except Exception:
+            logger.exception("No se pudo enviar el correo de restablecimiento")
+
+    return MessageResponse(message=PASSWORD_RESET_MESSAGE)
+
+
+@router.post(
+    "/reset-password",
+    response_model=MessageResponse,
+    dependencies=[Depends(reset_password_rate_limit)],
+)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    token_hash = _hash_reset_token(payload.token)
+    record = (
+        db.query(PasswordResetToken)
+        .filter(PasswordResetToken.token_hash == token_hash)
+        .with_for_update()
+        .first()
+    )
+    now = datetime.now(UTC)
+    if not record or record.used_at is not None or record.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de restablecimiento es inválido o expiró.",
+        )
+
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de restablecimiento es inválido o expiró.",
+        )
+
+    user.password_hash = get_password_hash(payload.new_password)
+    # Invalida los tokens emitidos antes del cambio de contraseña.
+    user.session_version = (user.session_version or 1) + 1
+    # Marca este token y cualquier otro pendiente del usuario como usados.
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id,
+        PasswordResetToken.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
+    db.commit()
+    logger.info("Password reset completed: id=%s", user.id)
+    return MessageResponse(message="Contraseña actualizada. Ya puedes iniciar sesión.")

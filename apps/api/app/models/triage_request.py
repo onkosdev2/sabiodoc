@@ -9,7 +9,7 @@ class TriageRequest(Base):
     __tablename__ = "triage_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # "triage" = Describir Mi Caso, "guide" = Guía IA de Especialidades
     source = Column(String(20), nullable=False, server_default="triage", default="triage")
     symptoms_text = Column(Text, nullable=True)

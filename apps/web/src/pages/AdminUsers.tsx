@@ -13,10 +13,12 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Pagination from '../components/Pagination'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { Input, PasswordInput, Select } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { usePagination } from '../hooks/usePagination'
 
 const ROLE_OPTIONS: AdminUserRole[] = ['patient', 'doctor', 'admin']
 // Opciones del filtro: los roles y, además, la capacidad de revisor.
@@ -76,6 +78,11 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<AdminUser | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(
+    users,
+    10,
+    `${roleFilter}-${search}`,
+  )
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -306,14 +313,15 @@ export default function AdminUsers() {
                 Cargando usuarios...
               </div>
             ) : users.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 px-6 py-12 text-center text-slate-500">
+              <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center text-slate-500">
                 No hay usuarios para este filtro.
               </div>
             ) : (
-              users.map((item) => (
+              <>
+                {pageItems.map((item) => (
                 <div
                   key={item.id}
-                  className={`flex flex-col gap-3 rounded-3xl border p-4 transition-colors md:flex-row md:items-center md:justify-between ${
+                  className={`flex flex-col gap-3 rounded-2xl border p-4 transition-colors md:flex-row md:items-center md:justify-between ${
                     selected?.id === item.id ? 'border-sky-500 bg-sky-50' : 'border-slate-200 bg-white'
                   }`}
                 >
@@ -358,7 +366,7 @@ export default function AdminUsers() {
                           }}
                           className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
                         >
-                          <Pencil className="h-4 w-4 text-slate-400" />
+                          <Pencil className="h-4 w-4 text-slate-500" />
                           Editar
                         </button>
 
@@ -379,7 +387,15 @@ export default function AdminUsers() {
                     )}
                   </div>
                 </div>
-              ))
+              ))}
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                />
+              </>
             )}
           </div>
         </section>

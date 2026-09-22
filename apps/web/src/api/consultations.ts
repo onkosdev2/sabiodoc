@@ -44,6 +44,8 @@ export interface ChatMessage {
 export interface ChatResponse {
   user_message: ChatMessage
   assistant_message: ChatMessage
+  // True cuando la respuesta finaliza la pre-consulta con el resumen generado.
+  summary_generated?: boolean
 }
 
 export interface ChatHistoryResponse {

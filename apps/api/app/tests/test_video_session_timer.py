@@ -89,7 +89,12 @@ def test_doctor_controls_timer_and_patient_cannot():
     patient_id, doctor_id = _ids()
     video_session_id = _create_session(patient_id, doctor_id)
     try:
+        patient_headers = _auth(PATIENT_EMAIL, PATIENT_PASSWORD)
         doctor_headers = _auth(DOCTOR_EMAIL, DOCTOR_PASSWORD)
+
+        # Ambos deben estar en la sala para que el cronometro pueda correr.
+        assert client.post(f"/video-sessions/{video_session_id}/join", headers=patient_headers).status_code == 200
+        assert client.post(f"/video-sessions/{video_session_id}/join", headers=doctor_headers).status_code == 200
 
         start = client.post(f"/video-sessions/{video_session_id}/start", headers=doctor_headers)
         assert start.status_code == 200, start.text
@@ -104,8 +109,43 @@ def test_doctor_controls_timer_and_patient_cannot():
         assert paused["billable_seconds"] >= 0
 
         # El paciente no puede controlar el cronometro.
-        forbidden = client.post(f"/video-sessions/{video_session_id}/start", headers=_auth(PATIENT_EMAIL, PATIENT_PASSWORD))
+        forbidden = client.post(f"/video-sessions/{video_session_id}/start", headers=patient_headers)
         assert forbidden.status_code == 403, forbidden.text
+    finally:
+        _delete_session(video_session_id)
+
+
+def test_doctor_cannot_start_timer_alone():
+    """El medico no puede hacer correr el reloj sin el paciente en la sala."""
+    patient_id, doctor_id = _ids()
+    video_session_id = _create_session(patient_id, doctor_id)
+    try:
+        doctor_headers = _auth(DOCTOR_EMAIL, DOCTOR_PASSWORD)
+        assert client.post(f"/video-sessions/{video_session_id}/join", headers=doctor_headers).status_code == 200
+
+        start = client.post(f"/video-sessions/{video_session_id}/start", headers=doctor_headers)
+        assert start.status_code == 409, start.text
+        assert client.get(f"/video-sessions/{video_session_id}", headers=doctor_headers).json()["started_at"] is None
+    finally:
+        _delete_session(video_session_id)
+
+
+def test_patient_leaving_pauses_timer():
+    """Si un participante sale, el cronometro se pausa (no se cobra tiempo en solitario)."""
+    patient_id, doctor_id = _ids()
+    video_session_id = _create_session(patient_id, doctor_id)
+    try:
+        patient_headers = _auth(PATIENT_EMAIL, PATIENT_PASSWORD)
+        doctor_headers = _auth(DOCTOR_EMAIL, DOCTOR_PASSWORD)
+        client.post(f"/video-sessions/{video_session_id}/join", headers=patient_headers)
+        client.post(f"/video-sessions/{video_session_id}/join", headers=doctor_headers)
+        assert client.post(f"/video-sessions/{video_session_id}/start", headers=doctor_headers).status_code == 200
+
+        left = client.post(f"/video-sessions/{video_session_id}/leave", headers=patient_headers)
+        assert left.status_code == 200, left.text
+        body = left.json()
+        assert body["started_at"] is None
+        assert body["both_present"] is False
     finally:
         _delete_session(video_session_id)
 

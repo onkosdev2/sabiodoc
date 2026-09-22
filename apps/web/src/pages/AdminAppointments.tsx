@@ -11,7 +11,9 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
+import Pagination from '../components/Pagination'
 import Skeleton from '../components/ui/Skeleton'
+import { usePagination } from '../hooks/usePagination'
 
 type FilterValue = 'all' | AppointmentStatus
 
@@ -32,6 +34,7 @@ export default function AdminAppointments() {
   const [filter, setFilter] = useState<FilterValue>(STATUS_VALUES.includes(initialFilter) ? initialFilter : 'all')
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(appointments, 10, filter)
 
   const loadAppointments = useCallback(
     async (nextFilter: FilterValue) => {
@@ -104,7 +107,7 @@ export default function AdminAppointments() {
         <EmptyState icon={CalendarDays} title="Sin citas para este filtro" description="Cambia el filtro para ver otras citas." />
       ) : (
         <div className="space-y-4">
-          {appointments.map((appointment) => (
+          {pageItems.map((appointment) => (
             <div key={appointment.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
@@ -132,6 +135,13 @@ export default function AdminAppointments() {
               </div>
             </div>
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

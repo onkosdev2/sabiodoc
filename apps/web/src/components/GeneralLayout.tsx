@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, UserRound,
+  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, History, UserRound, Wallet,
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
@@ -8,7 +8,7 @@ import { useNotifications } from '../context/NotificationsContext'
 import UserMenu, { UserMenuItem } from './UserMenu'
 
 // Páginas de autenticación: al navegar entre ellas no deben apilarse en el historial.
-const AUTH_PATHS = ['/login', '/register', '/doctor/apply']
+const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/doctor/apply']
 
 export default function GeneralLayout() {
   const { isAuthenticated, user } = useAuth()
@@ -19,13 +19,18 @@ export default function GeneralLayout() {
   const isChatRoute =
     location.pathname.startsWith('/consultation/') && location.pathname.endsWith('/chat')
 
-  // Enlaces generales del paciente
+  // Menú del paciente ordenado por utilidad: primero la actividad clínica
+  // diaria, luego las preferencias y al final los paneles por rol.
   const menuGroups: UserMenuItem[][] = [
     [
-      { to: '/me/profile', label: 'Mi perfil de paciente', icon: UserRound },
-      { to: '/me/favorites', label: 'Favoritos', icon: Heart },
-      { to: '/me/consultations', label: 'Consultas', icon: FileText },
+      { to: '/me/consultations', label: 'Consultas IA', icon: FileText },
       { to: '/me/appointments', label: 'Citas', icon: CalendarDays },
+      { to: '/me/history', label: 'Historial de orientaciones', icon: History },
+    ],
+    [{ to: '/me/wallet', label: 'Créditos', icon: Wallet }],
+    [
+      { to: '/me/favorites', label: 'Favoritos', icon: Heart },
+      { to: '/me/profile', label: 'Mi perfil de paciente', icon: UserRound },
     ],
   ]
 
@@ -45,7 +50,11 @@ export default function GeneralLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div
+      className={`flex flex-col bg-slate-50 ${
+        isChatRoute ? 'h-dvh overflow-hidden' : 'min-h-screen'
+      }`}
+    >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:font-medium focus:text-slate-900 focus:shadow-lg focus:ring-2 focus:ring-primary-500"
@@ -115,7 +124,12 @@ export default function GeneralLayout() {
         </div>
       </header>
 
-      <main id="main-content" className={`mx-auto w-full max-w-6xl flex-1 px-4 ${isChatRoute ? 'py-0' : 'py-8'}`}>
+      <main
+        id="main-content"
+        className={`mx-auto w-full max-w-6xl flex-1 px-4 ${
+          isChatRoute ? 'min-h-0 overflow-hidden py-0' : 'py-8'
+        }`}
+      >
         <Outlet />
       </main>
 

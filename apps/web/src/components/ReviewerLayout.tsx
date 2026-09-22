@@ -9,7 +9,7 @@ export default function ReviewerLayout() {
       panelName="Panel de Revisión"
       brandIcon={ShieldCheck}
       accent="violet"
-      navItems={[{ to: '/reviewer/doctor-applications', label: 'Postulaciones médicas', icon: ClipboardCheck }]}
+      menuGroups={[[{ to: '/reviewer/doctor-applications', label: 'Postulaciones médicas', icon: ClipboardCheck }]]}
     >
       <Outlet />
     </PanelLayout>

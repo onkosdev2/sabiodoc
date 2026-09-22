@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Bot, User, Loader2, FileText, AlertCircle, CheckCircle, X, ArrowLeft } from 'lucide-react'
+import { Send, Bot, User, Loader2, FileText, AlertCircle, CheckCircle, X, ArrowLeft, Trash2 } from 'lucide-react'
 
 import {
   getConsultation,
@@ -9,6 +9,7 @@ import {
   sendChatMessage,
   generateSummary,
   closeConsultation,
+  deleteConsultation,
   Consultation,
   ChatMessage,
 } from '../api/consultations'
@@ -17,6 +18,7 @@ import RichText from './RichText'
 import Alert from './ui/Alert'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
+import ConfirmDialog from './ConfirmDialog'
 
 interface ConsultationChatViewProps {
   consultationId: number
@@ -37,6 +39,8 @@ export default function ConsultationChatView({
   const [sending, setSending] = useState(false)
   const [generatingSummary, setGeneratingSummary] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<'cancel' | 'summary' | 'close' | null>(null)
   const [summaryGenerated, setSummaryGenerated] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -106,6 +110,19 @@ export default function ConsultationChatView({
         response.user_message,
         response.assistant_message,
       ])
+      // Al enviar el primer mensaje la consulta deja de ser un borrador.
+      setConsultation((current) =>
+        current && current.status === 'created' ? { ...current, status: 'active' } : current,
+      )
+
+      // Si el paciente confirmó el resumen en el chat, el backend lo generó y
+      // cerró la pre-consulta: reflejamos ese estado para ocultar el input.
+      if (response.summary_generated) {
+        setSummaryGenerated(true)
+        setConsultation((current) =>
+          current ? { ...current, status: 'closed', closed_at: new Date().toISOString() } : current,
+        )
+      }
     } catch (err: unknown) {
       console.error('Error sending message:', err)
       setMessages((prev) => prev.filter((message) => message.id !== tempId))
@@ -145,6 +162,7 @@ export default function ConsultationChatView({
       setError(requestError.response?.data?.detail || 'Error al generar el resumen')
     } finally {
       setGeneratingSummary(false)
+      setConfirmAction(null)
     }
   }
 
@@ -160,12 +178,73 @@ export default function ConsultationChatView({
       setError(requestError.response?.data?.detail || 'No se pudo finalizar la consulta')
     } finally {
       setClosing(false)
+      setConfirmAction(null)
+    }
+  }
+
+  // Un borrador sin mensajes del usuario puede cancelarse y borrarse por completo:
+  // así un clic equivocado no deja registro clínico alguno.
+  const handleCancel = async () => {
+    if (cancelling) return
+    setCancelling(true)
+    setError(null)
+    try {
+      await deleteConsultation(consultationId)
+      setConfirmAction(null)
+      if (onClose) {
+        onClose()
+      } else {
+        navigate(-1)
+      }
+    } catch (err: unknown) {
+      const requestError = err as { response?: { data?: { detail?: string } } }
+      setError(
+        requestError.response?.data?.detail ||
+          'No se pudo cancelar la consulta. Intenta de nuevo.',
+      )
+      setConfirmAction(null)
+    } finally {
+      setCancelling(false)
     }
   }
 
   const isClosed = consultation?.status === 'closed'
+  const hasUserMessages = messages.some((message) => message.role === 'user')
+  const canCancel = !isClosed && !hasUserMessages
 
-  const heightClass = variant === 'panel' ? 'h-full' : 'h-full min-h-[420px]'
+  // Configuración de los diálogos de confirmación de acciones destructivas/irreversibles.
+  const confirmConfig = {
+    cancel: {
+      tone: 'danger' as const,
+      title: '¿Cancelar esta consulta?',
+      description:
+        'Se eliminará por completo y no quedará ningún registro. Úsalo si la iniciaste por error o no corresponde a tu caso.',
+      confirmLabel: 'Sí, cancelar',
+      busy: cancelling,
+      onConfirm: handleCancel,
+    },
+    summary: {
+      tone: 'default' as const,
+      title: '¿Generar el resumen?',
+      description:
+        'La IA resumirá la conversación para el médico y la consulta se dará por finalizada. Después podrás agendar tu videoconsulta.',
+      confirmLabel: 'Generar resumen',
+      busy: generatingSummary,
+      onConfirm: handleGenerateSummary,
+    },
+    close: {
+      tone: 'default' as const,
+      title: '¿Finalizar esta consulta?',
+      description:
+        'Se guardará en tu historial y no podrás seguir conversando con la IA en esta consulta. Podrás iniciar una nueva cuando quieras.',
+      confirmLabel: 'Finalizar',
+      busy: closing,
+      onConfirm: handleClose,
+    },
+  }
+  const activeConfirm = confirmAction ? confirmConfig[confirmAction] : null
+
+  const heightClass = 'h-full min-h-0'
 
   if (loading) {
     return (
@@ -212,11 +291,25 @@ export default function ConsultationChatView({
         </div>
 
         <div className="flex flex-none items-center gap-2">
+          {canCancel && (
+            <button
+              type="button"
+              onClick={() => setConfirmAction('cancel')}
+              disabled={cancelling}
+              aria-label="Cancelar consulta"
+              title="Cancelar consulta"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Cancelar</span>
+            </button>
+          )}
+
           {!isClosed && messages.length >= 4 && !summaryGenerated && (
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleGenerateSummary}
+              onClick={() => setConfirmAction('summary')}
               loading={generatingSummary}
               aria-label="Generar resumen"
               leftIcon={<FileText className="h-4 w-4" />}
@@ -229,7 +322,7 @@ export default function ConsultationChatView({
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleClose}
+              onClick={() => setConfirmAction('close')}
               loading={closing}
               aria-label="Finalizar consulta"
               leftIcon={<CheckCircle className="h-4 w-4" />}
@@ -257,7 +350,12 @@ export default function ConsultationChatView({
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4" role="log" aria-live="polite" aria-label="Conversación con el asistente">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto p-4"
+        role="log"
+        aria-live="polite"
+        aria-label="Conversación con el asistente"
+      >
         <div className="mx-auto max-w-3xl space-y-4">
           <Alert tone="warning" title="Importante">
             Este asistente virtual te ayuda a preparar tu consulta médica. No proporciona diagnósticos ni
@@ -297,7 +395,7 @@ export default function ConsultationChatView({
                   )}
                   <p
                     className={`mt-1 text-xs ${
-                      message.role === 'user' ? 'text-primary-200' : 'text-slate-400'
+                      message.role === 'user' ? 'text-primary-200' : 'text-slate-500'
                     }`}
                   >
                     {new Date(message.created_at).toLocaleTimeString('es-ES', {
@@ -381,6 +479,18 @@ export default function ConsultationChatView({
           </form>
         </footer>
       )}
+
+      <ConfirmDialog
+        open={activeConfirm !== null}
+        tone={activeConfirm?.tone}
+        title={activeConfirm?.title ?? ''}
+        description={activeConfirm?.description}
+        confirmLabel={activeConfirm?.confirmLabel}
+        cancelLabel="Volver"
+        busy={activeConfirm?.busy}
+        onConfirm={() => activeConfirm?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   )
 }

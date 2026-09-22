@@ -16,8 +16,8 @@ class Consultation(Base):
     __tablename__ = "consultations"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    specialty_id = Column(Integer, ForeignKey("specialties.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    specialty_id = Column(Integer, ForeignKey("specialties.id"), nullable=False, index=True)
     status = Column(Enum(ConsultationStatus), default=ConsultationStatus.created, nullable=False)
     room_id = Column(String(100), unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -26,6 +26,7 @@ from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
 from app.services.reminder_service import reminder_service
 from app.services.video_session_service import video_session_service
+from app.services.wallet_service import wallet_service
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 logger = get_logger(__name__)
@@ -57,6 +58,11 @@ def create_appointment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debe indicar la especialidad o una consulta previa")
     if not payload.accepted_terms:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar el consentimiento y terminos de la videoconsulta")
+    if not payload.accepted_overtime_terms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes aceptar que una consulta extendida puede consumir creditos adicionales",
+        )
 
     scheduled_at = payload.scheduled_at.astimezone(UTC)
     if scheduled_at <= datetime.now(UTC):
@@ -90,9 +96,15 @@ def create_appointment(
         booked_via_ai=consultation is not None,
         consent_accepted_at=datetime.now(UTC),
         consent_text_version=payload.consent_text_version,
+        overtime_terms_accepted_at=datetime.now(UTC),
     )
     db.add(appointment)
     db.flush()
+
+    # Cobro de la cita con créditos: el monto queda retenido hasta que se
+    # complete (se libera al médico) o se cancele (se reembolsa al paciente).
+    amount_cents = wallet_service.appointment_amount_cents(appointment)
+    wallet_service.charge_appointment(db, appointment, amount_cents)
 
     notification_service.create(
         db,
@@ -160,7 +172,7 @@ def get_my_doctor_appointments(
     )
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
-    appointments = query.order_by(Appointment.scheduled_at.asc()).all()
+    appointments = query.order_by(Appointment.scheduled_at.desc()).all()
     return AppointmentListResponse(
         appointments=[appointment_service.serialize_appointment(item) for item in appointments],
         total=len(appointments),
@@ -216,6 +228,8 @@ def cancel_appointment(
     appointment.status = AppointmentStatus.cancelled
     appointment.cancelled_at = datetime.now(UTC)
     appointment.cancellation_reason = payload.reason if payload else None
+    # Devolvemos los créditos retenidos al paciente.
+    wallet_service.refund_appointment(db, appointment)
     notification_service.create(
         db,
         user_id=appointment.patient_id,
@@ -338,6 +352,8 @@ def mark_appointment_no_show(
     appointment.status = AppointmentStatus.no_show
     appointment.no_show_marked_at = datetime.now(UTC)
     appointment.cancellation_reason = payload.reason
+    # El médico reservó el horario: se libera el pago aunque el paciente no asistiera.
+    wallet_service.release_appointment(db, appointment)
     notification_service.create(
         db,
         user_id=appointment.patient_id,
@@ -378,6 +394,8 @@ def complete_appointment(
     appointment.completed_at = datetime.now(UTC)
     appointment.doctor_note = payload.doctor_note
     appointment.followup_instructions = payload.followup_instructions
+    # Liberamos el pago retenido a favor del médico.
+    wallet_service.release_appointment(db, appointment)
     if appointment.consultation:
         appointment.consultation.status = ConsultationStatus.closed
         appointment.consultation.closed_at = datetime.now(UTC)

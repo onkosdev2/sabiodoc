@@ -13,11 +13,13 @@ import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES } from '../utils/st
 import { getRoomAvailability } from '../utils/appointmentRoom'
 import { getApiErrorMessage } from '../utils/apiError'
 import BackButton from '../components/BackButton'
+import Pagination from '../components/Pagination'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
+import { usePagination } from '../hooks/usePagination'
 
 type FilterValue = 'all' | AppointmentStatus
 
@@ -40,6 +42,7 @@ export default function DoctorAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [joiningId, setJoiningId] = useState<number | null>(null)
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(appointments, 8, filter)
 
   const loadAppointments = useCallback(
     async (nextFilter: FilterValue) => {
@@ -147,7 +150,7 @@ export default function DoctorAppointments() {
         />
       ) : (
         <div className="space-y-4">
-          {appointments.map((appointment) => {
+          {pageItems.map((appointment) => {
             const room = getRoomAvailability(appointment)
             return (
               <div key={appointment.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -200,6 +203,13 @@ export default function DoctorAppointments() {
               </div>
             )
           })}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

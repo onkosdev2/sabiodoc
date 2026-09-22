@@ -42,18 +42,35 @@ def is_recently_seen(last_seen_at: datetime | None, now: datetime | None = None)
     return last_seen_at >= now - _online_window()
 
 
+def _session_presence_window() -> timedelta:
+    # Un poco más amplio que el timeout de facturación para tolerar el
+    # throttling de timers en pestañas en segundo plano.
+    return timedelta(seconds=max(settings.VIDEO_PRESENCE_TIMEOUT_SECONDS * 2, 60))
+
+
 def doctor_has_active_session(db: Session, doctor_profile_id: int, now: datetime | None = None) -> bool:
     now = now or datetime.now(UTC)
-    return (
-        db.query(VideoSession.id)
+    session = (
+        db.query(VideoSession)
         .filter(
             VideoSession.doctor_id == doctor_profile_id,
             VideoSession.status == VideoSessionStatus.active,
             VideoSession.expires_at > now,
         )
+        .order_by(VideoSession.created_at.desc())
         .first()
-        is not None
     )
+    if session is None:
+        return False
+
+    # "En sesión" solo si el médico sigue realmente en la sala. Si cerró la
+    # videollamada (o dejó de dar señales), la sesión pudo quedar 'active' pero
+    # el médico no debe aparecer como ocupado indefinidamente.
+    if not session.doctor_present:
+        return False
+    if session.doctor_last_seen_at is None:
+        return False
+    return session.doctor_last_seen_at >= now - _session_presence_window()
 
 
 def resolve_presence(

@@ -135,7 +135,7 @@ export default function Home() {
       </div>
 
       {!isLoading && !isAuthenticated && (
-        <div className="mb-8 rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
+        <div className="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-4">
               <div className="rounded-2xl bg-emerald-100 p-3">

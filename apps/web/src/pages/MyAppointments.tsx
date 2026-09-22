@@ -16,11 +16,25 @@ import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
 import PageHeader from '../components/ui/PageHeader'
+import Pagination from '../components/Pagination'
 import Skeleton from '../components/ui/Skeleton'
 import { Textarea } from '../components/ui/Field'
+import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
+import SummaryToggleButton from '../components/SummaryToggleButton'
 import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES } from '../utils/statusLabels'
 import { getApiErrorMessage } from '../utils/apiError'
+import { formatMoney } from '../utils/format'
+import { usePagination } from '../hooks/usePagination'
+
+/** Vista previa en texto plano de un resumen con Markdown, para las tarjetas colapsadas. */
+function summaryPreview(summary: string, maxLength = 160): string {
+  const plain = summary
+    .replace(/[#*_>`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > maxLength ? `${plain.slice(0, maxLength).trimEnd()}…` : plain
+}
 
 export default function MyAppointments() {
   const navigate = useNavigate()
@@ -33,6 +47,8 @@ export default function MyAppointments() {
   const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelling, setCancelling] = useState(false)
+  const [expandedAppointments, setExpandedAppointments] = useState<Set<number>>(new Set())
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(appointments, 8)
 
   useEffect(() => {
     const loadAppointments = async () => {
@@ -132,6 +148,18 @@ export default function MyAppointments() {
     }
   }
 
+  const toggleAppointmentDetails = (appointmentId: number) => {
+    setExpandedAppointments((current) => {
+      const next = new Set(current)
+      if (next.has(appointmentId)) {
+        next.delete(appointmentId)
+      } else {
+        next.add(appointmentId)
+      }
+      return next
+    })
+  }
+
   const confirmCancel = async () => {
     if (!cancelTarget) return
     setCancelling(true)
@@ -178,8 +206,17 @@ export default function MyAppointments() {
         />
       ) : (
         <div className="space-y-4">
-          {appointments.map((appointment) => {
+          {pageItems.map((appointment) => {
             const roomAvailability = getRoomAvailability(appointment)
+            const hasPreConsultation = Boolean(
+              appointment.ai_summary_snapshot || appointment.ai_intake_snapshot,
+            )
+            const isExpanded = expandedAppointments.has(appointment.id)
+            const preview = appointment.ai_intake_snapshot?.chief_complaint
+              ? appointment.ai_intake_snapshot.chief_complaint
+              : appointment.ai_summary_snapshot
+                ? summaryPreview(appointment.ai_summary_snapshot)
+                : null
 
             return (
               <Card key={appointment.id}>
@@ -228,6 +265,20 @@ export default function MyAppointments() {
                   </div>
                 )}
 
+                {appointment.payment_amount_cents != null && (
+                  <p className="mt-3 text-sm text-slate-600">
+                    <span className="font-medium text-slate-800">
+                      {appointment.payment_status === 'refunded'
+                        ? 'Reembolsado'
+                        : appointment.payment_status === 'released'
+                          ? 'Pagado al médico'
+                          : 'Pago retenido'}
+                      :
+                    </span>{' '}
+                    {formatMoney(appointment.payment_amount_cents)}
+                  </p>
+                )}
+
                 {appointment.cancellation_reason && (
                   <div className="mt-4 rounded-2xl bg-rose-50 p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-rose-700">Motivo registrado</p>
@@ -235,19 +286,41 @@ export default function MyAppointments() {
                   </div>
                 )}
 
-                {appointment.ai_summary_snapshot && (
-                  <div className="mt-5 rounded-2xl bg-primary-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-primary-700">Brief IA</p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-primary-900">{appointment.ai_summary_snapshot}</p>
-                  </div>
-                )}
+                {hasPreConsultation && (
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      {preview && <p className="line-clamp-2 text-sm text-slate-600">{preview}</p>}
+                      <SummaryToggleButton
+                        expanded={isExpanded}
+                        onClick={() => toggleAppointmentDetails(appointment.id)}
+                        className="shrink-0 self-start sm:self-auto"
+                      />
+                    </div>
 
-                {appointment.ai_intake_snapshot && (
-                  <StructuredIntakeCard
-                    intake={appointment.ai_intake_snapshot}
-                    title="Ficha previa compartida con el médico"
-                    className="mt-4"
-                  />
+                    {isExpanded && (
+                      <div className="mt-4 space-y-4">
+                        {appointment.ai_summary_snapshot && (
+                          <div className="rounded-2xl bg-primary-50 p-4">
+                            <p className="text-xs uppercase tracking-[0.22em] text-primary-700">
+                              Resumen para el médico
+                            </p>
+                            <RichText
+                              text={appointment.ai_summary_snapshot}
+                              className="mt-2 text-sm text-primary-900"
+                            />
+                          </div>
+                        )}
+
+                        {appointment.ai_intake_snapshot && (
+                          <StructuredIntakeCard
+                            intake={appointment.ai_intake_snapshot}
+                            title="Ficha clínica estructurada"
+                            description="Datos clave de la pre-consulta que se comparten con el médico."
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {appointment.followup_instructions && (
@@ -313,6 +386,13 @@ export default function MyAppointments() {
               </Card>
             )
           })}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
 

@@ -9,6 +9,8 @@ import {
   MessageSquareQuote,
   Star,
 } from 'lucide-react'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
 
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
@@ -20,6 +22,8 @@ import {
   getDoctorBookableSlots,
 } from '../api/appointments'
 import { useAuth } from '../context/AuthContext'
+import { getMyWallet, Wallet } from '../api/wallet'
+import { getApiErrorMessage } from '../utils/apiError'
 import { formatMoney as currency } from '../utils/format'
 
 function Stars({ value, className = 'h-4 w-4' }: { value: number; className?: string }) {
@@ -49,10 +53,12 @@ export default function DoctorDetailPage() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState('')
   const [patientNote, setPatientNote] = useState('')
-  const [acceptedTerms, setAcceptedTerms] = useState(true)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [acceptedOvertime, setAcceptedOvertime] = useState(false)
   const [durationMinutes, setDurationMinutes] = useState('30')
   const [booking, setBooking] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [wallet, setWallet] = useState<Wallet | null>(null)
 
   const requestedSlug = searchParams.get('specialty')
   const consultationId = searchParams.get('consultation')
@@ -83,6 +89,21 @@ export default function DoctorDetailPage() {
     }
     load()
   }, [doctorId])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let active = true
+    getMyWallet()
+      .then((data) => {
+        if (active) setWallet(data)
+      })
+      .catch(() => {
+        if (active) setWallet(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [isAuthenticated])
 
   useEffect(() => {
     const loadSlots = async () => {
@@ -136,16 +157,19 @@ export default function DoctorDetailPage() {
         duration_minutes: duration,
         patient_note: patientNote.trim() || undefined,
         accepted_terms: acceptedTerms,
+        accepted_overtime_terms: acceptedOvertime,
         consent_text_version: 'v1',
       })
       navigate('/me/appointments')
     } catch (err: unknown) {
-      const requestError = err as { response?: { data?: { detail?: string } } }
-      setActionError(requestError.response?.data?.detail || 'No se pudo agendar la cita')
+      setActionError(getApiErrorMessage(err, 'No se pudo agendar la cita'))
     } finally {
       setBooking(false)
     }
   }
+
+  const totalCents = doctor ? duration * doctor.price_per_min_cents : 0
+  const hasEnoughCredits = wallet === null || wallet.balance_cents >= totalCents
 
   if (loading) {
     return (
@@ -160,7 +184,7 @@ export default function DoctorDetailPage() {
     return (
       <div className="mx-auto max-w-2xl text-center">
         <BackButton to="/specialties" label="Volver a especialidades" />
-        <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-12 text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-12 text-red-700">
           {loadError || 'Médico no encontrado'}
         </div>
       </div>
@@ -181,7 +205,7 @@ export default function DoctorDetailPage() {
       <BackButton to={backTo} label="Volver a especialidades" />
 
       {/* Cabecera del médico */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <Card as="section" className="sm:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div className="flex h-20 w-20 flex-none items-center justify-center rounded-2xl bg-primary-100 text-2xl font-bold text-primary-700">
             {initials || 'MD'}
@@ -248,7 +272,7 @@ export default function DoctorDetailPage() {
             )}
           </div>
         </div>
-      </section>
+      </Card>
 
       {!isAuthenticated && (
         <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 text-sky-900 sm:flex-row sm:items-center">
@@ -265,7 +289,7 @@ export default function DoctorDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* Reseñas */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <Card as="section" className="sm:p-8">
           <div className="flex items-center gap-3">
             <MessageSquareQuote className="h-6 w-6 text-primary-600" />
             <h2 className="text-2xl font-semibold text-slate-900">Reseñas de pacientes</h2>
@@ -281,7 +305,7 @@ export default function DoctorDetailPage() {
                 <article key={review.id} className="rounded-2xl border border-slate-200 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Stars value={review.rating} />
-                    <span className="text-xs uppercase tracking-[0.16em] text-slate-400">
+                    <span className="text-xs uppercase tracking-[0.16em] text-slate-500">
                       {new Date(review.created_at).toLocaleDateString('es-ES', {
                         day: 'numeric',
                         month: 'long',
@@ -295,11 +319,11 @@ export default function DoctorDetailPage() {
               ))
             )}
           </div>
-        </section>
+        </Card>
 
         {/* Acciones: agendar o videoconsulta inmediata */}
         <aside className="space-y-6">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <Card as="section">
             <h2 className="text-xl font-semibold text-slate-900">Agendar una cita</h2>
             <p className="mt-1 text-sm text-slate-600">Elige un horario disponible en la agenda del médico.</p>
 
@@ -319,9 +343,29 @@ export default function DoctorDetailPage() {
             <div className="mt-3 flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 text-sm">
               <span className="text-emerald-800">Total a pagar</span>
               <span className="font-semibold text-emerald-700">
-                {currency(duration * doctor.price_per_min_cents)}
+                {currency(totalCents)}
               </span>
             </div>
+
+            {isAuthenticated && wallet && (
+              <div
+                className={`mt-2 flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${
+                  hasEnoughCredits ? 'bg-slate-50 text-slate-700' : 'bg-rose-50 text-rose-800'
+                }`}
+              >
+                <span>Saldo disponible</span>
+                <span className="font-semibold">{currency(wallet.balance_cents)}</span>
+              </div>
+            )}
+
+            {isAuthenticated && !hasEnoughCredits && (
+              <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                No tienes créditos suficientes para esta cita.{' '}
+                <Link to="/me/wallet" className="font-semibold underline">
+                  Recargar créditos
+                </Link>
+              </div>
+            )}
 
             {!doctor.is_accepting_consultations ? (
               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -385,17 +429,41 @@ export default function DoctorDetailPage() {
                   </span>
                 </label>
 
-                <button type="button"
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">Recomendación: ten créditos excedentes</p>
+                  <p className="mt-1">
+                    Si la consulta se extiende más allá del tiempo reservado, se consumirán créditos
+                    adicionales ({currency(doctor.price_per_min_cents)}/min). Te recomendamos tener saldo
+                    extra para evitar que la videollamada se corte automáticamente.
+                  </p>
+                  <label className="mt-2 flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={acceptedOvertime}
+                      onChange={(event) => setAcceptedOvertime(event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Entiendo que si la consulta se prolonga se cobrarán créditos extra y que, si me
+                      quedo sin saldo, la videollamada finalizará automáticamente.
+                    </span>
+                  </label>
+                </div>
+
+                <Button
                   onClick={handleBook}
-                  disabled={!selectedSlot || booking || !acceptedTerms}
-                  className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={
+                    !selectedSlot || booking || !acceptedTerms || !acceptedOvertime || !hasEnoughCredits
+                  }
+                  loading={booking}
+                  leftIcon={<CalendarPlus className="h-4 w-4" />}
+                  className="w-full"
                 >
-                  {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
                   Confirmar cita
-                </button>
+                </Button>
               </div>
             )}
-          </section>
+          </Card>
         </aside>
       </div>
     </div>

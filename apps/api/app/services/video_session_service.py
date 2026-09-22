@@ -1,4 +1,5 @@
 import json
+import math
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
@@ -14,6 +15,7 @@ from app.models.patient_profile import PatientProfile
 from app.models.user import User, UserRole
 from app.models.video_session import PaymentStatus, VideoSession, VideoSessionStatus, VideoProvider
 from app.models.video_session_event import VideoSessionEvent
+from app.models.wallet import AppointmentPayment, AppointmentPaymentStatus
 from sqlalchemy import and_, or_
 from app.services.jitsi_service import jitsi_service
 from app.services.llm_client import llm_client
@@ -115,19 +117,243 @@ class VideoSessionService:
         logger.info(f"Video session intro generated: id={video_session.id}")
         return script
 
+    # --- Presencia y facturacion por tiempo real -------------------------
+
+    def _is_presence_fresh(self, last_seen: datetime | None, now: datetime) -> bool:
+        if last_seen is None:
+            return False
+        return (now - last_seen).total_seconds() <= settings.VIDEO_PRESENCE_TIMEOUT_SECONDS
+
+    def set_participant_presence(
+        self,
+        video_session: VideoSession,
+        role: str,
+        present: bool,
+        now: datetime | None = None,
+    ) -> None:
+        now = now or datetime.now(timezone.utc)
+        if role == "patient":
+            video_session.patient_present = present
+            video_session.patient_last_seen_at = now
+        else:
+            video_session.doctor_present = present
+            video_session.doctor_last_seen_at = now
+
+    def touch_participant(
+        self,
+        video_session: VideoSession,
+        role: str,
+        now: datetime | None = None,
+    ) -> None:
+        """Heartbeat: actualiza la ultima senal de vida del participante."""
+        now = now or datetime.now(timezone.utc)
+        if role == "patient":
+            video_session.patient_last_seen_at = now
+        else:
+            video_session.doctor_last_seen_at = now
+
+    def both_participants_present(self, video_session: VideoSession, now: datetime | None = None) -> bool:
+        now = now or datetime.now(timezone.utc)
+        return self.participant_present(video_session, "patient", now) and self.participant_present(
+            video_session, "doctor", now
+        )
+
+    def participant_present(
+        self,
+        video_session: VideoSession,
+        role: str,
+        now: datetime | None = None,
+    ) -> bool:
+        now = now or datetime.now(timezone.utc)
+        if role == "patient":
+            return bool(video_session.patient_present) and self._is_presence_fresh(
+                video_session.patient_last_seen_at, now
+            )
+        return bool(video_session.doctor_present) and self._is_presence_fresh(
+            video_session.doctor_last_seen_at, now
+        )
+
+    def pause_timer(self, video_session: VideoSession, now: datetime | None = None) -> None:
+        """Acumula el tiempo transcurrido y detiene el cronometro."""
+        if video_session.started_at is None:
+            return
+        now = now or datetime.now(timezone.utc)
+        segment = max(0, int((now - video_session.started_at).total_seconds()))
+        video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
+        video_session.started_at = None
+
+    def reconcile_timer(self, video_session: VideoSession, now: datetime | None = None) -> bool:
+        """Pausa el cronometro si dejo de haber ambos participantes en la sala.
+
+        Devuelve True si pauso el cronometro. Solo acumula el tiempo hasta el
+        ultimo momento en que ambos dieron senal de vida, para no cobrar tiempo
+        en el que el medico estuvo solo (evita que corra el reloj a su favor).
+        """
+        if video_session.started_at is None:
+            return False
+        now = now or datetime.now(timezone.utc)
+        if self.both_participants_present(video_session, now):
+            return False
+
+        candidates = [now]
+        if video_session.patient_last_seen_at is not None:
+            candidates.append(video_session.patient_last_seen_at)
+        if video_session.doctor_last_seen_at is not None:
+            candidates.append(video_session.doctor_last_seen_at)
+        break_at = min(candidates)
+
+        segment = max(0, int((break_at - video_session.started_at).total_seconds()))
+        video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
+        video_session.started_at = None
+        logger.info(
+            f"Video session {video_session.id} timer paused: participant left the room"
+        )
+        return True
+
+    def _effective_elapsed_seconds(self, video_session: VideoSession, now: datetime) -> int:
+        elapsed = video_session.billable_seconds or 0
+        if video_session.started_at is not None:
+            elapsed += max(0, int((now - video_session.started_at).total_seconds()))
+        return elapsed
+
+    def process_overtime_billing(
+        self, db: Session, video_session: VideoSession, now: datetime | None = None
+    ) -> bool:
+        """Consume creditos del paciente por el tiempo extra transcurrido.
+
+        Devuelve False cuando el paciente no tiene saldo para seguir: el llamador
+        debe terminar la videollamada de inmediato.
+        """
+        appointment = video_session.appointment
+        if appointment is None:
+            return True
+
+        now = now or datetime.now(timezone.utc)
+        price = video_session.doctor_price_per_min_cents or 0
+        scheduled_minutes = video_session.estimated_minutes or appointment.duration_minutes
+        if price <= 0 or scheduled_minutes <= 0:
+            return True
+
+        elapsed = self._effective_elapsed_seconds(video_session, now)
+        if elapsed <= 0:
+            return True
+
+        minutes = max(settings.VIDEO_MIN_BILLABLE_MINUTES, math.ceil(elapsed / 60))
+        overtime_minutes = max(0, minutes - scheduled_minutes)
+        if overtime_minutes <= 0:
+            return True
+
+        overtime_cost = overtime_minutes * price
+
+        from app.services.wallet_service import wallet_service
+
+        payment = wallet_service.get_held_appointment_payment(db, appointment.id)
+        already_charged = payment.overtime_amount_cents if payment else 0
+        delta = overtime_cost - already_charged
+        if delta <= 0:
+            return True
+
+        # Consume todo lo disponible (aunque no alcance para el minuto completo)
+        # y avisa si no se cubrio el tiempo extra: el llamador debe terminar.
+        balance = wallet_service.get_balance_cents(db, appointment.patient_id)
+        charge_amount = min(delta, balance)
+        if charge_amount > 0:
+            wallet_service.charge_overtime(db, appointment, charge_amount)
+        return charge_amount >= delta
+
+    def terminate_for_no_credits(
+        self, db: Session, video_session: VideoSession, now: datetime | None = None
+    ) -> None:
+        """Finaliza la videollamada de golpe porque el paciente se quedo sin creditos."""
+        now = now or datetime.now(timezone.utc)
+        self.pause_timer(video_session, now)
+        video_session.status = VideoSessionStatus.completed
+        video_session.ended_at = now
+        video_session.ended_by_user_id = None
+        video_session.closed_reason = "completed_no_credits"
+        video_session.patient_present = False
+        video_session.doctor_present = False
+
+        appointment = video_session.appointment
+        if appointment is not None:
+            from app.services.wallet_service import wallet_service
+
+            appointment.status = AppointmentStatus.completed
+            appointment.completed_at = appointment.completed_at or now
+            if appointment.consultation:
+                appointment.consultation.status = ConsultationStatus.closed
+                appointment.consultation.closed_at = appointment.consultation.closed_at or now
+            wallet_service.release_appointment(
+                db,
+                appointment,
+                billable_seconds=video_session.billable_seconds or 0,
+            )
+
+            from app.services.notification_service import notification_service
+
+            notification_service.create(
+                db,
+                user_id=appointment.patient_id,
+                notification_type="video_session_no_credits",
+                title="Videoconsulta finalizada por falta de creditos",
+                body="La videoconsulta termino al agotarse tus creditos. Recarga para futuras consultas.",
+                action_url="/me/wallet",
+                metadata={"video_session_id": video_session.id, "action_label": "Recargar creditos"},
+            )
+
+        db.add(
+            VideoSessionEvent(
+                video_session_id=video_session.id,
+                event_type="video_session_terminated_no_credits",
+                source="backend",
+                payload_json=json.dumps({"billable_seconds": video_session.billable_seconds or 0}),
+            )
+        )
+        logger.warning(
+            f"Video session {video_session.id} terminated: patient ran out of credits"
+        )
+
     def _apply_expiration(self, video_session: VideoSession, now: datetime) -> None:
         """Marca una sesion vencida como expirada, acumulando el tiempo si estaba activa."""
-        if video_session.status == VideoSessionStatus.active and video_session.started_at is not None:
+        if video_session.started_at is not None:
             # El tiempo no puede superar la ventana de la sala: evita cobros absurdos
             # si alguien dejo la sesion abierta.
             reference = min(now, video_session.expires_at)
             segment = max(0, int((reference - video_session.started_at).total_seconds()))
             video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
             video_session.started_at = None
+        video_session.patient_present = False
+        video_session.doctor_present = False
         video_session.status = VideoSessionStatus.expired
         video_session.ended_at = video_session.ended_at or video_session.expires_at
         if not video_session.closed_reason:
             video_session.closed_reason = "expired_inactivity"
+
+    def settle_appointment_if_billable(self, db: Session, video_session: VideoSession) -> None:
+        """Cierra la cita y cobra el tiempo real si la sesion expiro con uso.
+
+        Evita que el medico pierda el cobro y que la retencion quede colgada
+        cuando la sala expira en lugar de cerrarse manualmente.
+        """
+        appointment = video_session.appointment
+        if appointment is None or appointment.status != AppointmentStatus.scheduled:
+            return
+        if (video_session.billable_seconds or 0) <= 0:
+            return
+
+        from app.services.wallet_service import wallet_service
+
+        now = datetime.now(timezone.utc)
+        appointment.status = AppointmentStatus.completed
+        appointment.completed_at = appointment.completed_at or now
+        if appointment.consultation:
+            appointment.consultation.status = ConsultationStatus.closed
+            appointment.consultation.closed_at = appointment.consultation.closed_at or now
+        wallet_service.release_appointment(
+            db,
+            appointment,
+            billable_seconds=video_session.billable_seconds,
+        )
 
     def expire_session_if_stale(self, db: Session, video_session: VideoSession) -> bool:
         now = datetime.now(timezone.utc)
@@ -135,16 +361,47 @@ class VideoSessionService:
             return False
         if video_session.expires_at > now:
             return False
+        self.process_overtime_billing(db, video_session, now)
         self._apply_expiration(video_session, now)
+        self.settle_appointment_if_billable(db, video_session)
         db.commit()
         db.refresh(video_session)
         return True
 
-    def expire_stale_sessions(self, db: Session, doctor_id: int | None = None) -> int:
-        """Expira sesiones preparadas/activas cuya ventana ya cerro.
+    def _is_abandoned(self, video_session: VideoSession, now: datetime) -> bool:
+        """True si una sesion activa lleva un rato sin nadie en la sala."""
+        if video_session.status != VideoSessionStatus.active:
+            return False
+        if self.participant_present(video_session, "patient", now) or self.participant_present(
+            video_session, "doctor", now
+        ):
+            return False
+        references = [
+            value
+            for value in (video_session.patient_last_seen_at, video_session.doctor_last_seen_at)
+            if value is not None
+        ]
+        reference = max(references) if references else (video_session.created_at or now)
+        return reference <= now - timedelta(minutes=settings.VIDEO_SESSION_ABANDON_MINUTES)
 
-        Resuelve el caso de sesiones abandonadas que dejaban al medico marcado
-        como "En videoconsulta" de forma permanente.
+    def _close_abandoned(self, video_session: VideoSession, now: datetime) -> None:
+        # Pausa el cronometro hasta la ultima senal de vida (si seguia corriendo).
+        self.reconcile_timer(video_session, now)
+        video_session.patient_present = False
+        video_session.doctor_present = False
+        video_session.status = VideoSessionStatus.completed
+        video_session.ended_at = video_session.ended_at or now
+        if not video_session.closed_reason:
+            video_session.closed_reason = "auto_closed_inactivity"
+
+    def expire_stale_sessions(self, db: Session, doctor_id: int | None = None) -> int:
+        """Expira sesiones vencidas y cierra las abandonadas.
+
+        - Vencidas: la ventana de la sala ya cerro.
+        - Abandonadas: siguen `active` pero llevan sin nadie en la sala un rato
+          (antes quedaban colgadas hasta vencer).
+
+        En ambos casos se liquida la cita para no dejar retenciones sin resolver.
         """
         now = datetime.now(timezone.utc)
         query = db.query(VideoSession).filter(
@@ -153,14 +410,41 @@ class VideoSessionService:
         )
         if doctor_id is not None:
             query = query.filter(VideoSession.doctor_id == doctor_id)
-        stale = query.all()
-        if not stale:
+        stale = list(query.all())
+
+        abandoned_query = db.query(VideoSession).filter(
+            VideoSession.status == VideoSessionStatus.active,
+            VideoSession.expires_at > now,
+        )
+        if doctor_id is not None:
+            abandoned_query = abandoned_query.filter(VideoSession.doctor_id == doctor_id)
+        abandoned = [session for session in abandoned_query.all() if self._is_abandoned(session, now)]
+
+        if not stale and not abandoned:
             return 0
+
         for video_session in stale:
+            self.process_overtime_billing(db, video_session, now)
             self._apply_expiration(video_session, now)
+            self.settle_appointment_if_billable(db, video_session)
+
+        for video_session in abandoned:
+            self.process_overtime_billing(db, video_session, now)
+            self._close_abandoned(video_session, now)
+            self.settle_appointment_if_billable(db, video_session)
+            db.add(
+                VideoSessionEvent(
+                    video_session_id=video_session.id,
+                    event_type="video_session_auto_closed",
+                    source="backend",
+                    payload_json=json.dumps({"reason": "inactivity"}),
+                )
+            )
+
         db.commit()
-        logger.info(f"Expired {len(stale)} stale video session(s) (doctor_id={doctor_id})")
-        return len(stale)
+        total = len(stale) + len(abandoned)
+        logger.info(f"Closed {total} stale video session(s) (doctor_id={doctor_id})")
+        return total
 
     def sync_doctor_presence(self, db: Session, doctor_profile_id: int) -> None:
         """Persiste la presencia derivada (para mantenerla fresca tras eventos)."""
@@ -399,6 +683,25 @@ class VideoSessionService:
         expires_at = self._build_appointment_expiration(appointment)
         room_name = f"sabiodoc-appt-{appointment.id}-{uuid.uuid4().hex[:10]}"
 
+        # La cita ya se pagó con créditos al agendarse: reflejamos ese estado en la sesión.
+        appointment_payment = (
+            db.query(AppointmentPayment)
+            .filter(AppointmentPayment.appointment_id == appointment.id)
+            .first()
+        )
+        if appointment_payment is None:
+            session_payment_status = PaymentStatus.waived
+            prepaid_amount_cents = 0
+        elif appointment_payment.status == AppointmentPaymentStatus.released:
+            session_payment_status = PaymentStatus.captured
+            prepaid_amount_cents = appointment_payment.amount_cents
+        elif appointment_payment.status == AppointmentPaymentStatus.refunded:
+            session_payment_status = PaymentStatus.failed
+            prepaid_amount_cents = 0
+        else:
+            session_payment_status = PaymentStatus.authorized
+            prepaid_amount_cents = appointment_payment.amount_cents
+
         video_session = VideoSession(
             consultation_id=appointment.consultation_id,
             appointment_id=appointment.id,
@@ -406,11 +709,11 @@ class VideoSessionService:
             doctor_id=appointment.doctor_id,
             provider=VideoProvider.jitsi_mock if jitsi_service.is_mock else VideoProvider.jitsi,
             status=VideoSessionStatus.prepared,
-            payment_status=PaymentStatus.waived,
+            payment_status=session_payment_status,
             provider_room_name=room_name,
             doctor_price_per_min_cents=doctor_profile.price_per_min_cents,
             estimated_minutes=appointment.duration_minutes,
-            prepaid_amount_cents=0,
+            prepaid_amount_cents=prepaid_amount_cents,
             expires_at=expires_at,
         )
         db.add(video_session)

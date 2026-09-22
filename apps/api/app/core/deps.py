@@ -50,7 +50,14 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario no encontrado"
         )
-    
+
+    # Revocación: los tokens emitidos antes de un cambio de contraseña dejan de ser válidos.
+    if int(payload.get("ver", 1)) != int(user.session_version or 1):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tu sesión ya no es válida. Inicia sesión de nuevo.",
+        )
+
     return user
 
 
@@ -119,4 +126,10 @@ def get_current_user_optional(
         return None
     
     user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        return None
+
+    if int(payload.get("ver", 1)) != int(user.session_version or 1):
+        return None
+
     return user

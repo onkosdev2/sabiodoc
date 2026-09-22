@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
-import { getHomePath } from '../utils/homePath'
+import { getSectionHomePath } from '../utils/homePath'
 
 interface BackButtonProps {
   to?: string
@@ -19,8 +19,9 @@ export default function BackButton({ to, label = 'Volver al menú', useHistoryBa
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Destino de respaldo si no hay historial en la app.
-  const destination = to ?? getHomePath(user)
+  // Destino de respaldo si no hay historial en la app: depende de la sección
+  // actual (portal de paciente o panel profesional), no solo del rol.
+  const destination = to ?? getSectionHomePath(location.pathname, user)
 
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (useHistoryBack && to === undefined && location.key !== 'default') {

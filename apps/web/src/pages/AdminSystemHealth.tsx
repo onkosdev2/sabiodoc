@@ -75,7 +75,7 @@ export default function AdminSystemHealth() {
             {overall.label}
           </Badge>
           {lastUpdated && (
-            <span className="text-xs uppercase tracking-[0.18em] text-slate-400">
+            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">
               Última consulta: {lastUpdated.toLocaleTimeString('es-ES')}
             </span>
           )}
@@ -115,7 +115,7 @@ export default function AdminSystemHealth() {
                     </div>
                     <div>
                       <p className="text-lg font-semibold capitalize text-slate-950">{provider.name}</p>
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                         {isPrimary ? 'Principal' : 'Respaldo (fallback)'}
                       </p>
                     </div>
@@ -154,15 +154,15 @@ export default function AdminSystemHealth() {
         </div>
         <ul className="mt-4 space-y-2 text-sm text-slate-600">
           <li className="flex gap-2">
-            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
             Si DeepSeek falla, no responde o supera el timeout, la petición se reintenta automáticamente con Groq.
           </li>
           <li className="flex gap-2">
-            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
             También se usa Groq si DeepSeek devuelve una respuesta con formato inválido.
           </li>
           <li className="flex gap-2">
-            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+            <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
             Si ninguno responde, el sistema usa respuestas locales para no dejar de funcionar.
           </li>
         </ul>

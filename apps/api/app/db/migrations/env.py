@@ -9,17 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models.user import User
-from app.models.specialty import Specialty
-from app.models.triage_request import TriageRequest
-from app.models.consultation import Consultation
-from app.models.favorite import Favorite
-from app.models.chat_message import ChatMessage
-from app.models.doctor_profile import DoctorProfile
-from app.models.doctor_specialty import DoctorSpecialty
-from app.models.doctor_presence import DoctorPresence
-from app.models.video_session import VideoSession
-from app.models.video_session_event import VideoSessionEvent
+# Importar el paquete de modelos registra TODAS las tablas en Base.metadata,
+# de modo que `alembic revision --autogenerate` no proponga borrar tablas que
+# no estén importadas explícitamente aquí.
+from app import models  # noqa: F401
 
 config = context.config
 
@@ -56,7 +49,13 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            # Cada migración se confirma por separado. Es necesario porque hay
+            # migraciones que agregan un valor a un enum (p. ej. 'reviewer') y
+            # migraciones posteriores que lo usan: PostgreSQL exige el commit
+            # del ALTER TYPE antes de poder utilizar el valor nuevo.
+            transaction_per_migration=True,
         )
 
         with context.begin_transaction():

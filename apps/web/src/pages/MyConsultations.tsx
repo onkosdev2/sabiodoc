@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Calendar,
   CheckCircle2,
-  ChevronDown,
   ClipboardList,
   ExternalLink,
   MessageCircle,
@@ -23,10 +22,14 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import BackButton from '../components/BackButton'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Pagination from '../components/Pagination'
+import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
+import SummaryToggleButton from '../components/SummaryToggleButton'
 import Skeleton from '../components/ui/Skeleton'
 import { formatRelativeTime } from '../utils/relativeTime'
 import { getApiErrorMessage } from '../utils/apiError'
+import { usePagination } from '../hooks/usePagination'
 
 type TabKey = 'ongoing' | 'history'
 type StatusKey = 'draft' | 'active' | 'inactive' | 'closed'
@@ -87,6 +90,11 @@ export default function MyConsultations() {
       history: consultations.filter((c) => c.status === 'closed').sort(byActivityDesc),
     }
   }, [consultations])
+
+  // El listado visible y su paginación deben calcularse antes de cualquier
+  // return condicional para respetar las reglas de los Hooks.
+  const visible = tab === 'ongoing' ? ongoing : history
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(visible, 8, tab)
 
   const toggleExpanded = (id: number) => {
     setExpanded((prev) => {
@@ -153,7 +161,6 @@ export default function MyConsultations() {
     )
   }
 
-  const visible = tab === 'ongoing' ? ongoing : history
   const tabs: Array<{ key: TabKey; label: string; count: number }> = [
     { key: 'ongoing', label: 'En curso', count: ongoing.length },
     { key: 'history', label: 'Historial', count: history.length },
@@ -212,7 +219,7 @@ export default function MyConsultations() {
         </div>
       ) : (
         <div className="space-y-4">
-          {visible.map((consultation) => (
+          {pageItems.map((consultation) => (
             <ConsultationCard
               key={consultation.id}
               consultation={consultation}
@@ -222,6 +229,13 @@ export default function MyConsultations() {
               onDelete={(c) => setPendingAction({ type: 'delete', consultation: c })}
             />
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
 
@@ -285,7 +299,7 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
           <Link
             to={specialtyLink}
             aria-label={`Ver especialidad ${specialtyName}`}
-            className="shrink-0 rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary-600"
+            className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-primary-600"
           >
             <ExternalLink className="h-5 w-5" />
           </Link>
@@ -328,15 +342,7 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
         )}
 
         {hasDetails && (
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={expanded}
-            className="btn-secondary inline-flex items-center gap-2"
-          >
-            <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            {expanded ? 'Ocultar detalle' : 'Ver resumen'}
-          </button>
+          <SummaryToggleButton expanded={expanded} onClick={onToggle} />
         )}
 
         {(canClose || canDelete) && (
@@ -357,7 +363,7 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
                 onClick={() => onDelete(consultation)}
                 aria-label="Eliminar borrador"
                 title="Eliminar borrador"
-                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                className="rounded-full p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -371,10 +377,16 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
           {consultation.summary && (
             <div>
               <h4 className="mb-2 text-sm font-medium text-slate-700">Resumen para el médico</h4>
-              <p className="whitespace-pre-wrap text-sm text-slate-600">{consultation.summary}</p>
+              <RichText text={consultation.summary} className="text-sm text-slate-600" />
             </div>
           )}
-          {consultation.intake && <StructuredIntakeCard intake={consultation.intake} title="Ficha clínica previa" />}
+          {consultation.intake && (
+            <StructuredIntakeCard
+              intake={consultation.intake}
+              title="Ficha clínica estructurada"
+              description="Datos clave extraídos de la conversación para que el médico los revise de un vistazo."
+            />
+          )}
         </div>
       )}
     </article>

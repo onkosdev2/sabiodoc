@@ -3,7 +3,14 @@ import { ConsultationStructuredIntake } from '../api/consultations'
 interface StructuredIntakeCardProps {
   intake: ConsultationStructuredIntake
   title?: string
+  description?: string
   className?: string
+}
+
+const COMPLETENESS_LABELS: Record<string, string> = {
+  low: 'Baja',
+  partial: 'Media',
+  high: 'Alta',
 }
 
 const renderList = (items: string[]) => {
@@ -26,15 +33,23 @@ const renderList = (items: string[]) => {
 export default function StructuredIntakeCard({
   intake,
   title = 'Ficha previa IA',
+  description,
   className = '',
 }: StructuredIntakeCardProps) {
+  const completeness = intake.completeness || 'partial'
+  const completenessLabel = COMPLETENESS_LABELS[completeness] || completeness
+
   return (
     <section className={`rounded-2xl border border-indigo-100 bg-indigo-50 p-4 ${className}`.trim()}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-indigo-700">{title}</p>
+          {description && <p className="mt-1 text-xs text-indigo-700/80">{description}</p>}
           <p className="mt-1 text-sm text-indigo-900">
-            Completitud: <span className="font-medium">{intake.completeness || 'partial'}</span>
+            Nivel de detalle de la ficha:{' '}
+            <span className="font-medium" title="Indica cuántos datos clave se pudieron extraer de la conversación; no si la consulta finalizó.">
+              {completenessLabel}
+            </span>
           </p>
         </div>
       </div>

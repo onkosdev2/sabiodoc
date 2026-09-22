@@ -20,6 +20,7 @@ from app.models.notification import Notification, NotificationStatus
 from app.models.triage_request import TriageRequest
 from app.models.user import User, UserRole
 from app.models.video_session import VideoSession, VideoSessionStatus
+from app.models.wallet import Wallet, WalletTransaction, Withdrawal, WithdrawalStatus
 from app.schemas.appointment import (
     AdminIncidentListResponse,
     AdminIncidentResponse,
@@ -40,6 +41,12 @@ from app.schemas.user import (
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
 from app.services.patient_profile_service import get_patient_display_name
+from app.services.wallet_service import wallet_service
+from app.schemas.wallet import (
+    WithdrawalListResponse,
+    WithdrawalProcessRequest,
+    WithdrawalResponse,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -465,6 +472,8 @@ def update_user(
 
     if payload.password:
         user.password_hash = get_password_hash(payload.password)
+        # Invalida las sesiones activas del usuario.
+        user.session_version = (user.session_version or 1) + 1
 
     if payload.role and payload.role != user.role:
         if user.id == current_user.id:
@@ -561,9 +570,24 @@ def delete_user(
             detail="El usuario tiene historial clínico y no puede eliminarse. Suspende o desactiva su acceso en su lugar.",
         )
 
+    # Con dinero de por medio, conservamos el rastro: no se elimina un usuario con
+    # movimientos de créditos (recargas, pagos, retiros o saldo pendiente).
+    wallet_row = db.query(Wallet).filter(Wallet.user_id == user.id).first()
+    has_wallet_movement = (
+        db.query(WalletTransaction.id).filter(WalletTransaction.user_id == user.id).first()
+        is not None
+    )
+    if wallet_row is not None and (has_wallet_movement or (wallet_row.balance_cents or 0) != 0):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El usuario tiene movimientos de créditos y no puede eliminarse. Suspende su acceso en su lugar.",
+        )
+
     db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.user_id == user.id).delete(synchronize_session=False)
     db.query(TriageRequest).filter(TriageRequest.user_id == user.id).delete(synchronize_session=False)
+    if wallet_row is not None:
+        db.delete(wallet_row)
     if profile:
         db.query(DoctorSpecialty).filter(DoctorSpecialty.doctor_id == profile.id).delete(synchronize_session=False)
         db.query(DoctorAvailabilitySlot).filter(DoctorAvailabilitySlot.doctor_id == profile.id).delete(synchronize_session=False)
@@ -577,6 +601,9 @@ def delete_user(
     db.query(VideoSession).filter(VideoSession.ended_by_user_id == user.id).update(
         {VideoSession.ended_by_user_id: None}, synchronize_session=False
     )
+    db.query(Withdrawal).filter(Withdrawal.processed_by_user_id == user.id).update(
+        {Withdrawal.processed_by_user_id: None}, synchronize_session=False
+    )
 
     audit_service.log(
         db,
@@ -589,3 +616,75 @@ def delete_user(
     db.delete(user)
     db.commit()
     return None
+
+
+@router.get("/withdrawals", response_model=WithdrawalListResponse)
+def list_withdrawals(
+    status_filter: WithdrawalStatus | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Lista las solicitudes de retiro de créditos para su revisión."""
+    query = db.query(Withdrawal).options(joinedload(Withdrawal.user))
+    if status_filter is not None:
+        query = query.filter(Withdrawal.status == status_filter)
+    withdrawals = query.order_by(Withdrawal.created_at.desc()).all()
+    return WithdrawalListResponse(
+        withdrawals=[
+            WithdrawalResponse(
+                id=item.id,
+                user_id=item.user_id,
+                user_email=item.user.email if item.user else None,
+                amount_cents=item.amount_cents,
+                status=item.status,
+                destination=item.destination,
+                admin_notes=item.admin_notes,
+                requested_at=item.requested_at,
+                processed_at=item.processed_at,
+                created_at=item.created_at,
+            )
+            for item in withdrawals
+        ],
+        total=len(withdrawals),
+    )
+
+
+@router.post("/withdrawals/{withdrawal_id}/process", response_model=WithdrawalResponse)
+def process_withdrawal(
+    withdrawal_id: int,
+    payload: WithdrawalProcessRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Aprueba (paga) o rechaza una solicitud de retiro."""
+    withdrawal = (
+        db.query(Withdrawal)
+        .filter(Withdrawal.id == withdrawal_id)
+        .with_for_update()
+        .first()
+    )
+    if not withdrawal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitud de retiro no encontrada")
+
+    wallet_service.process_withdrawal(
+        db,
+        withdrawal,
+        approve=payload.approve,
+        admin_user_id=current_user.id,
+        notes=payload.notes,
+    )
+    audit_service.log(
+        db,
+        action="withdrawal.processed",
+        entity_type="withdrawal",
+        entity_id=withdrawal.id,
+        actor_user_id=current_user.id,
+        metadata={
+            "user_id": withdrawal.user_id,
+            "amount_cents": withdrawal.amount_cents,
+            "approved": payload.approve,
+        },
+    )
+    response = WithdrawalResponse.model_validate(withdrawal)
+    db.commit()
+    return response

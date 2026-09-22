@@ -11,9 +11,16 @@
     @apply bg-slate-50 font-sans text-slate-900 antialiased;
   }
 
-  /* Foco visible consistente en toda la app (accesibilidad por teclado). */
+  /* Anillo de foco por defecto (accesibilidad por teclado). Los componentes
+     pueden sobreescribirlo con sus propias utilidades focus-visible:*. */
   :focus-visible {
-    @apply outline-none;
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+
+  /* Contenedores con foco programático (p. ej. el <main> o el <h1> al cambiar
+     de ruta) no deben mostrar el anillo. */
+  [tabindex='-1']:focus-visible {
+    @apply ring-0 ring-offset-0 outline-none;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -55,5 +62,18 @@
 
   .skeleton {
     @apply animate-pulse rounded-md bg-slate-200;
+  }
+
+  /* El iframe del API externo de Jitsi es rectangular. Heredamos el radio del
+     contenedor y lo aplicamos al iframe para que sus esquinas redondeadas
+     coincidan con las de la tarjeta. */
+  .jitsi-meeting-frame {
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
+  .jitsi-meeting-frame iframe {
+    border-radius: inherit !important;
+    overflow: hidden;
   }
 }

@@ -9,9 +9,9 @@ class ConsultationReview(Base):
     __tablename__ = "consultation_reviews"
 
     id = Column(Integer, primary_key=True, index=True)
-    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False, unique=True, index=True)
-    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    doctor_id = Column(Integer, ForeignKey("doctor_profiles.id"), nullable=False)
+    appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False, unique=True)
+    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    doctor_id = Column(Integer, ForeignKey("doctor_profiles.id"), nullable=False, index=True)
     rating = Column(Integer, nullable=False)
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

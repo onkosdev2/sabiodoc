@@ -90,7 +90,7 @@ export default function DoctorPending() {
           {error}
         </Alert>
       ) : application ? (
-        <div className="mt-8 rounded-3xl border border-slate-200 bg-slate-50 p-6 text-left">
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-left">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Perfil</p>

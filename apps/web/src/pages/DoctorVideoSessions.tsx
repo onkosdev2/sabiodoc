@@ -13,7 +13,9 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
+import Pagination from '../components/Pagination'
 import Skeleton from '../components/ui/Skeleton'
+import { usePagination } from '../hooks/usePagination'
 
 export default function DoctorVideoSessions() {
   const navigate = useNavigate()
@@ -21,6 +23,7 @@ export default function DoctorVideoSessions() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const [sessions, setSessions] = useState<DoctorVideoSession[]>([])
   const [loading, setLoading] = useState(true)
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(sessions, 8)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
@@ -102,7 +105,7 @@ export default function DoctorVideoSessions() {
         />
       ) : (
         <div className="space-y-4">
-          {sessions.map((session) => (
+          {pageItems.map((session) => (
             <div key={session.video_session_id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -154,6 +157,13 @@ export default function DoctorVideoSessions() {
               </div>
             </div>
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

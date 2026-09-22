@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
 
 import Button from './ui/Button'
@@ -30,18 +30,13 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null)
 
-  useEffect(() => {
-    if (open) {
-      cancelRef.current?.focus()
-    }
-  }, [open])
-
   return (
     <Modal
       open={open}
       onClose={() => !busy && onCancel()}
       title={title}
       description={description}
+      initialFocusRef={cancelRef}
       icon={
         <span
           className={`inline-flex rounded-full p-2 ${

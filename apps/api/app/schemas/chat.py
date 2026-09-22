@@ -26,6 +26,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
+    # True cuando la respuesta cierra la pre-consulta y adjunta el resumen final.
+    summary_generated: bool = False
 
 
 class ChatHistoryResponse(BaseModel):

@@ -12,8 +12,10 @@ import {
   getMyNotifications,
   markAllNotificationsAsRead,
   markNotificationAsRead,
+  streamNotifications,
   NotificationItem,
 } from '../api/notifications'
+import { getStoredToken } from '../utils/authStorage'
 import { useAuth } from './AuthContext'
 
 interface NotificationsContextType {
@@ -28,9 +30,10 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined)
 
-// Las notificaciones se refrescan periódicamente para reflejar eventos nuevos
-// (recordatorios, cambios de cita, etc.) sin recargar la página.
-const POLL_INTERVAL_MS = 60_000
+const MAX_NOTIFICATIONS = 50
+// Si el stream SSE falla repetidamente, se usa polling como respaldo.
+const FALLBACK_POLL_MS = 120_000
+const MAX_STREAM_RETRIES = 5
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -59,7 +62,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!localStorage.getItem('token')) {
+    if (!getStoredToken()) {
       applyNotifications([])
       return
     }
@@ -82,6 +85,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [applyNotifications])
+
+  // Inserta una notificación recibida por SSE sin duplicarla.
+  const applyIncoming = useCallback(
+    (notification: NotificationItem) => {
+      const current = notificationsRef.current
+      if (current.some((item) => item.id === notification.id)) return
+      applyNotifications([notification, ...current].slice(0, MAX_NOTIFICATIONS))
+    },
+    [applyNotifications],
+  )
 
   const markRead = useCallback(
     async (notificationId: number) => {
@@ -109,15 +122,62 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
 
     refresh()
-    const interval = setInterval(refresh, POLL_INTERVAL_MS)
-    const handleFocus = () => refresh()
 
+    const controller = new AbortController()
+    let cancelled = false
+    let retry = 0
+    const timers: number[] = []
+    let fallbackTimer: number | undefined
+
+    const schedule = (fn: () => void, ms: number) => {
+      timers.push(window.setTimeout(fn, ms))
+    }
+
+    const startFallback = () => {
+      if (fallbackTimer !== undefined) return
+      fallbackTimer = window.setInterval(refresh, FALLBACK_POLL_MS)
+    }
+    const stopFallback = () => {
+      if (fallbackTimer !== undefined) {
+        window.clearInterval(fallbackTimer)
+        fallbackTimer = undefined
+      }
+    }
+
+    const connect = async () => {
+      if (cancelled) return
+      try {
+        await streamNotifications(applyIncoming, controller.signal)
+        retry = 0
+      } catch {
+        if (cancelled || controller.signal.aborted) return
+      }
+      if (cancelled) return
+
+      retry += 1
+      if (retry <= MAX_STREAM_RETRIES) {
+        // Reconexión con backoff exponencial.
+        schedule(connect, Math.min(30_000, 1_000 * 2 ** retry))
+      } else {
+        // El stream no está disponible: red de seguridad con polling.
+        startFallback()
+        schedule(connect, 300_000)
+      }
+    }
+
+    connect()
+
+    const handleFocus = () => refresh()
     window.addEventListener('focus', handleFocus)
+
     return () => {
-      clearInterval(interval)
+      cancelled = true
+      controller.abort()
+      stopFallback()
+      timers.forEach((id) => window.clearTimeout(id))
       window.removeEventListener('focus', handleFocus)
     }
-  }, [isAuthenticated, refresh, applyNotifications])
+  }, [isAuthenticated, refresh, applyIncoming, applyNotifications])
 
   return (
     <NotificationsContext.Provider

@@ -94,6 +94,54 @@ def test_close_stale_consultations_closes_idle_drafts_only():
         db.close()
 
 
+def test_close_stale_consultations_purges_untouched_drafts():
+    db = SessionLocal()
+    user_id = None
+    ids: list[int] = []
+    try:
+        user = _make_user(db)
+        user_id = user.id
+        specialty = db.query(Specialty).first()
+        assert specialty is not None
+
+        abandoned = Consultation(
+            user_id=user.id,
+            specialty_id=specialty.id,
+            room_id=f"room-abandoned-{uuid.uuid4().hex[:8]}",
+            status=ConsultationStatus.created,
+        )
+        db.add(abandoned)
+        db.commit()
+        db.refresh(abandoned)
+        ids = [abandoned.id]
+
+        # Borrador antiguo donde el paciente nunca escribio: solo tiene el
+        # mensaje de bienvenida del asistente (clic accidental).
+        old = datetime.now(UTC) - timedelta(days=30)
+        abandoned.created_at = old
+        db.add(
+            ChatMessage(
+                consultation_id=abandoned.id,
+                role=MessageRole.assistant,
+                content="Hola, soy tu asistente",
+                created_at=old,
+            )
+        )
+        db.commit()
+        abandoned_id = abandoned.id
+
+        closed = close_stale_consultations(db, user_id=user.id, ttl_hours=24)
+        assert closed == 0
+        assert db.query(Consultation).filter(Consultation.id == abandoned_id).first() is None
+        assert (
+            db.query(ChatMessage).filter(ChatMessage.consultation_id == abandoned_id).count() == 0
+        )
+        ids = []
+    finally:
+        _cleanup(db, user_id=user_id, consultation_ids=ids)
+        db.close()
+
+
 def test_close_stale_consultations_keeps_recent_creation():
     db = SessionLocal()
     user_id = None

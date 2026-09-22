@@ -18,7 +18,7 @@ from app.models.notification import Notification, NotificationStatus
 from app.models.patient_profile import PatientProfile  # noqa: F401  (registra la relacion User.patient_profile)
 from app.models.user import User
 from app.services.patient_profile_service import get_patient_display_name
-from app.services.specialist_assistant import specialist_assistant
+from app.services.specialist_assistant import specialist_assistant, sanitize_summary_text
 
 
 class AppointmentService:
@@ -32,11 +32,29 @@ class AppointmentService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Zona horaria no valida") from exc
 
     def validate_slots(self, slots: Iterable[DoctorAvailabilitySlot]) -> None:
+        slots_by_day: dict[int, list] = {}
         for slot in slots:
             if slot.weekday < 0 or slot.weekday > 6:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dia de semana invalido")
             if slot.start_time >= slot.end_time:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cada franja debe tener hora de inicio menor a hora de fin")
+            if slot.is_active:
+                slots_by_day.setdefault(slot.weekday, []).append(slot)
+
+        # Dos franjas activas del mismo dia no pueden solaparse.
+        for weekday, day_slots in slots_by_day.items():
+            ordered = sorted(day_slots, key=lambda item: item.start_time)
+            for previous, current in zip(ordered, ordered[1:]):
+                if current.start_time < previous.end_time:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            "Las franjas activas de un mismo dia no pueden solaparse "
+                            f"(dia {weekday}: {previous.start_time.strftime('%H:%M')}-"
+                            f"{previous.end_time.strftime('%H:%M')} y "
+                            f"{current.start_time.strftime('%H:%M')}-{current.end_time.strftime('%H:%M')})"
+                        ),
+                    )
 
     def doctor_supports_specialty(self, doctor_profile: DoctorProfile, specialty_id: int) -> bool:
         return any(link.specialty_id == specialty_id for link in doctor_profile.doctor_specialties)
@@ -117,6 +135,7 @@ class AppointmentService:
             specialty_slug=consultation.specialty.slug,
             specialty_name=consultation.specialty.name,
             messages=formatted_messages,
+            consultation_date=consultation.created_at,
         )
         consultation.summary = summary
         db.flush()
@@ -153,6 +172,7 @@ class AppointmentService:
 
     def serialize_appointment(self, appointment: Appointment):
         review = appointment.review[0] if appointment.review else None
+        payment = getattr(appointment, "payment", None)
         from app.schemas.appointment import AppointmentResponse
 
         return AppointmentResponse(
@@ -169,7 +189,7 @@ class AppointmentService:
             scheduled_at=appointment.scheduled_at,
             duration_minutes=appointment.duration_minutes,
             patient_note=appointment.patient_note,
-            ai_summary_snapshot=appointment.ai_summary_snapshot,
+            ai_summary_snapshot=sanitize_summary_text(appointment.ai_summary_snapshot),
             ai_intake_snapshot=appointment.ai_intake_snapshot_json,
             doctor_note=appointment.doctor_note,
             followup_instructions=appointment.followup_instructions,
@@ -184,6 +204,8 @@ class AppointmentService:
             created_at=appointment.created_at,
             review_rating=review.rating if review else None,
             review_comment=review.comment if review else None,
+            payment_amount_cents=payment.amount_cents if payment else None,
+            payment_status=payment.status if payment else None,
         )
 
     def compute_bookable_slots(

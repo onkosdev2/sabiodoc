@@ -21,7 +21,9 @@ import Modal from '../components/ui/Modal'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import { Textarea } from '../components/ui/Field'
+import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
+import SummaryToggleButton from '../components/SummaryToggleButton'
 
 // Cada tarjeta del dashboard lleva al detalle real correspondiente.
 const METRIC_DESTINATIONS: Record<string, string> = {
@@ -41,6 +43,7 @@ export default function DoctorDashboard() {
   const [noShowTarget, setNoShowTarget] = useState<Appointment | null>(null)
   const [noShowReason, setNoShowReason] = useState('')
   const [noShowBusy, setNoShowBusy] = useState(false)
+  const [expandedAppointments, setExpandedAppointments] = useState<Set<number>>(new Set())
 
   const loadDashboard = async () => {
     try {
@@ -93,6 +96,18 @@ export default function DoctorDashboard() {
     }
     const graceLimit = new Date(appointment.scheduled_at).getTime() + 10 * 60 * 1000
     return Date.now() >= graceLimit && !appointment.joined_patient_at
+  }
+
+  const toggleAppointmentDetails = (appointmentId: number) => {
+    setExpandedAppointments((current) => {
+      const next = new Set(current)
+      if (next.has(appointmentId)) {
+        next.delete(appointmentId)
+      } else {
+        next.add(appointmentId)
+      }
+      return next
+    })
   }
 
   const confirmNoShow = async () => {
@@ -160,7 +175,7 @@ export default function DoctorDashboard() {
     <div className="space-y-6">
       <PageHeader
         title="Panel operativo"
-        description="Agenda próxima, briefs IA, reseñas recientes y notificaciones para tu práctica digital."
+        description="Agenda próxima, resúmenes de pre-consulta, reseñas recientes y notificaciones para tu práctica digital."
       />
 
       {error && <Alert tone="warning">{error}</Alert>}
@@ -238,19 +253,57 @@ export default function DoctorDashboard() {
                       </Button>
                     )}
                   </div>
-                  {appointment.ai_summary_snapshot && (
-                    <div className="mt-4 rounded-2xl bg-primary-50 p-4 text-sm text-primary-900">
-                      <p className="mb-2 text-xs uppercase tracking-[0.22em] text-primary-700">Brief IA</p>
-                      <p className="whitespace-pre-wrap">{appointment.ai_summary_snapshot}</p>
-                    </div>
-                  )}
-                  {appointment.ai_intake_snapshot && (
-                    <StructuredIntakeCard
-                      intake={appointment.ai_intake_snapshot}
-                      title="Ficha previa estructurada"
-                      className="mt-4"
-                    />
-                  )}
+                  {(() => {
+                    const hasPreConsultation = Boolean(
+                      appointment.ai_summary_snapshot || appointment.ai_intake_snapshot,
+                    )
+                    if (!hasPreConsultation) return null
+                    const isExpanded = expandedAppointments.has(appointment.id)
+                    const chiefComplaint = appointment.ai_intake_snapshot?.chief_complaint
+
+                    return (
+                      <div className="mt-4 border-t border-slate-200 pt-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="line-clamp-2 text-sm text-slate-600">
+                            {chiefComplaint ? (
+                              <>
+                                <span className="font-medium text-slate-700">Motivo: </span>
+                                {chiefComplaint}
+                              </>
+                            ) : (
+                              'Pre-consulta IA disponible'
+                            )}
+                          </p>
+                          <SummaryToggleButton
+                            expanded={isExpanded}
+                            onClick={() => toggleAppointmentDetails(appointment.id)}
+                            size="sm"
+                            className="shrink-0"
+                          />
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-4 space-y-4">
+                            {appointment.ai_summary_snapshot && (
+                              <div className="rounded-2xl bg-primary-50 p-4 text-sm text-primary-900">
+                                <p className="mb-2 text-xs uppercase tracking-[0.22em] text-primary-700">
+                                  Resumen para el médico
+                                </p>
+                                <RichText text={appointment.ai_summary_snapshot} />
+                              </div>
+                            )}
+                            {appointment.ai_intake_snapshot && (
+                              <StructuredIntakeCard
+                                intake={appointment.ai_intake_snapshot}
+                                title="Ficha clínica estructurada"
+                                description="Datos clave de la pre-consulta para revisar antes de la cita."
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               ))
             )}

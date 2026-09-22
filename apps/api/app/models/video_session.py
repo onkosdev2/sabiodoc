@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -31,10 +31,10 @@ class VideoSession(Base):
     __tablename__ = "video_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    consultation_id = Column(Integer, ForeignKey("consultations.id"), nullable=True)
+    consultation_id = Column(Integer, ForeignKey("consultations.id"), nullable=True, index=True)
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True, index=True)
-    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    doctor_id = Column(Integer, ForeignKey("doctor_profiles.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    doctor_id = Column(Integer, ForeignKey("doctor_profiles.id"), nullable=False, index=True)
     provider = Column(Enum(VideoProvider), nullable=False)
     status = Column(Enum(VideoSessionStatus), nullable=False, default=VideoSessionStatus.prepared)
     payment_status = Column(Enum(PaymentStatus), nullable=False, default=PaymentStatus.pending)
@@ -50,6 +50,12 @@ class VideoSession(Base):
     ended_at = Column(DateTime(timezone=True), nullable=True)
     joined_patient_at = Column(DateTime(timezone=True), nullable=True)
     joined_doctor_at = Column(DateTime(timezone=True), nullable=True)
+    # Presencia actual en la sala (se limpia al salir) y ultima senal de vida
+    # (heartbeat via polling de estado), para facturar solo el tiempo con ambos.
+    patient_present = Column(Boolean, nullable=False, server_default="false")
+    doctor_present = Column(Boolean, nullable=False, server_default="false")
+    patient_last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    doctor_last_seen_at = Column(DateTime(timezone=True), nullable=True)
     doctor_note = Column(Text, nullable=True)
     followup_instructions = Column(Text, nullable=True)
     # Guion de apertura generado por IA (ayuda a identificar voces en la transcripcion).

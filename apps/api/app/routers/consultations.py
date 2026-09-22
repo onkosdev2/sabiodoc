@@ -24,7 +24,12 @@ from app.schemas.chat import (
     ChatHistoryResponse, GenerateSummaryResponse
 )
 from app.schemas.video_session import VideoSessionPrepareRequest, VideoSessionPrepareResponse
-from app.services.specialist_assistant import specialist_assistant
+from app.services.specialist_assistant import (
+    specialist_assistant,
+    is_affirmative,
+    is_summary_offer,
+    sanitize_summary_text,
+)
 from app.services.patient_profile_service import build_patient_context
 from app.services.consultation_service import close_stale_consultations
 from app.services.video_session_service import video_session_service
@@ -40,8 +45,52 @@ def serialize_consultation(consultation: Consultation, last_activity_at=None) ->
         response.specialty = SpecialtyResponse.model_validate(consultation.specialty)
     if consultation.intake_json:
         response.intake = ConsultationStructuredIntake.model_validate(consultation.intake_json)
+    # Limpia marcadores de posición en resúmenes guardados con versiones previas.
+    response.summary = sanitize_summary_text(consultation.summary)
     response.last_activity_at = last_activity_at or consultation.closed_at or consultation.created_at
     return response
+
+
+def generate_and_close_consultation(
+    db: Session,
+    consultation: Consultation,
+) -> tuple[str, dict]:
+    """Genera el resumen + ficha estructurada y finaliza la pre-consulta.
+
+    Se usa tanto desde el botón "Generar resumen" como cuando el paciente
+    confirma en el chat que quiere generarlo.
+    """
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.consultation_id == consultation.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+    message_history = [{"role": m.role.value, "content": m.content} for m in messages]
+    specialty = consultation.specialty
+
+    summary = specialist_assistant.generate_summary(
+        specialty_slug=specialty.slug,
+        specialty_name=specialty.name,
+        messages=message_history,
+        consultation_date=consultation.created_at,
+    )
+    intake = specialist_assistant.generate_structured_intake(
+        specialty_slug=specialty.slug,
+        specialty_name=specialty.name,
+        messages=message_history,
+    )
+
+    # Guardar resultados en la consulta y finalizarla (la pre-consulta terminó).
+    consultation.summary = summary
+    consultation.intake_json = intake
+    consultation.status = ConsultationStatus.closed
+    consultation.closed_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(consultation)
+
+    logger.info(f"Summary generated for consultation {consultation.id}")
+    return summary, intake
 
 
 @router.post("", response_model=ConsultationResponse, status_code=status.HTTP_201_CREATED)
@@ -336,6 +385,45 @@ def chat_with_assistant(
             assistant_message=ChatMessageResponse.model_validate(assistant_message),
         )
 
+    # Si el paciente confirma que quiere el resumen, lo generamos y cerramos la
+    # pre-consulta automáticamente, sin obligarle a pulsar el botón.
+    previous_assistant_message = (
+        db.query(ChatMessage)
+        .filter(
+            ChatMessage.consultation_id == consultation_id,
+            ChatMessage.role == MessageRole.assistant,
+        )
+        .order_by(ChatMessage.created_at.desc())
+        .first()
+    )
+    if (
+        previous_assistant_message
+        and is_summary_offer(previous_assistant_message.content)
+        and is_affirmative(data.message)
+    ):
+        summary, _intake = generate_and_close_consultation(db, consultation)
+        assistant_message = ChatMessage(
+            consultation_id=consultation_id,
+            role=MessageRole.assistant,
+            content=(
+                "He generado el resumen de nuestra conversación para el especialista:\n\n"
+                f"{summary}\n\n"
+                "✅ La pre-consulta ha finalizado. Ya puedes agendar tu videoconsulta "
+                "desde la página de la especialidad."
+            ),
+        )
+        db.add(assistant_message)
+        db.commit()
+        db.refresh(assistant_message)
+        logger.info(
+            f"Pre-consultation auto-closed after patient confirmed summary: {consultation_id}"
+        )
+        return ChatResponse(
+            user_message=ChatMessageResponse.model_validate(user_message),
+            assistant_message=ChatMessageResponse.model_validate(assistant_message),
+            summary_generated=True,
+        )
+
     # Obtener historial de mensajes para contexto
     messages = (
         db.query(ChatMessage)
@@ -473,49 +561,20 @@ def generate_consultation_summary(
             detail="Consulta no encontrada"
         )
     
-    # Obtener historial de mensajes
-    messages = (
-        db.query(ChatMessage)
+    message_count = (
+        db.query(func.count(ChatMessage.id))
         .filter(ChatMessage.consultation_id == consultation_id)
-        .order_by(ChatMessage.created_at.asc())
-        .all()
+        .scalar()
+        or 0
     )
-    
-    if len(messages) < 2:
+    if message_count < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No hay suficientes mensajes para generar un resumen"
         )
-    
-    # Convertir a formato para el asistente
-    message_history = [
-        {"role": m.role.value, "content": m.content}
-        for m in messages
-    ]
-    
-    # Generar resumen estructurado y ficha de intake
-    specialty = consultation.specialty
-    summary = specialist_assistant.generate_summary(
-        specialty_slug=specialty.slug,
-        specialty_name=specialty.name,
-        messages=message_history
-    )
-    intake = specialist_assistant.generate_structured_intake(
-        specialty_slug=specialty.slug,
-        specialty_name=specialty.name,
-        messages=message_history,
-    )
-    
-    # Guardar resultados en la consulta y finalizarla (la pre-consulta terminó).
-    consultation.summary = summary
-    consultation.intake_json = intake
-    consultation.status = ConsultationStatus.closed
-    consultation.closed_at = datetime.now(UTC)
-    db.commit()
-    db.refresh(consultation)
-    
-    logger.info(f"Summary generated for consultation {consultation_id}")
-    
+
+    summary, intake = generate_and_close_consultation(db, consultation)
+
     return GenerateSummaryResponse(
         summary=summary,
         consultation_id=consultation_id,

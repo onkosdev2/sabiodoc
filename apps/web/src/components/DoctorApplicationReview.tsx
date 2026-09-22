@@ -8,8 +8,10 @@ import Badge from './ui/Badge'
 import type { BadgeTone } from './ui/Badge'
 import Button from './ui/Button'
 import EmptyState from './ui/EmptyState'
+import Pagination from './Pagination'
 import Skeleton from './ui/Skeleton'
 import { Textarea } from './ui/Field'
+import { usePagination } from '../hooks/usePagination'
 
 const STATUS_OPTIONS = ['all', 'pending', 'approved', 'rejected', 'suspended'] as const
 
@@ -97,6 +99,12 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
     )
   }, [applications, search])
 
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(
+    filteredApplications,
+    8,
+    `${filter}-${search}`,
+  )
+
   useEffect(() => {
     if (selectedApplication) {
       setReviewNotes(selectedApplication.review_notes || '')
@@ -166,7 +174,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
         <section className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-24 xl:h-[calc(100vh-8rem)] xl:self-start">
           <div className="mb-3 flex-none">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
               <input
                 type="search"
                 aria-label="Buscar postulación por nombre o email"
@@ -176,7 +184,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                 className="input-field pl-10"
               />
             </div>
-            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
               {filteredApplications.length} postulación(es)
             </p>
           </div>
@@ -200,7 +208,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
               />
             ) : (
               <div className="space-y-3">
-                {filteredApplications.map((application) => (
+                {pageItems.map((application) => (
                   <button
                     key={application.doctor_id}
                     type="button"
@@ -233,6 +241,13 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                     <p className="mt-4 text-sm text-slate-700">{currency(application.price_per_min_cents)}</p>
                   </button>
                 ))}
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                />
               </div>
             )}
           </div>

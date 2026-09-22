@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User, getMe } from '../api/auth'
 import { heartbeatPresence } from '../api/doctors'
+import { clearStoredAuth, getStoredToken, setStoredAuth, setStoredUser } from '../utils/authStorage'
 
 interface AuthContextType {
   user: User | null
   token: string | null
-  login: (token: string, user: User) => void
+  login: (token: string, user: User, remember?: boolean) => void
   logout: () => void
   refreshUser: () => Promise<User | null>
   isAuthenticated: boolean
@@ -16,20 +17,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
+  const [token, setToken] = useState<string | null>(getStoredToken())
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const initAuth = async () => {
-      const storedToken = localStorage.getItem('token')
+      const storedToken = getStoredToken()
       if (storedToken) {
         try {
           const userData = await getMe()
           setUser(userData)
           setToken(storedToken)
         } catch {
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
+          clearStoredAuth()
           setToken(null)
           setUser(null)
         }
@@ -41,8 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleUnauthorized = () => {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
+      clearStoredAuth()
       setToken(null)
       setUser(null)
     }
@@ -66,22 +65,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(intervalId)
   }, [token, user?.doctor_status])
 
-  const login = (newToken: string, userData: User) => {
-    localStorage.setItem('token', newToken)
-    localStorage.setItem('user', JSON.stringify(userData))
+  const login = (newToken: string, userData: User, remember = false) => {
+    setStoredAuth(newToken, userData, remember)
     setToken(newToken)
     setUser(userData)
   }
 
   const logout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    clearStoredAuth()
     setToken(null)
     setUser(null)
   }
 
   const refreshUser = async () => {
-    const storedToken = localStorage.getItem('token')
+    const storedToken = getStoredToken()
     if (!storedToken) {
       setToken(null)
       setUser(null)
@@ -90,13 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const userData = await getMe()
-      localStorage.setItem('user', JSON.stringify(userData))
+      setStoredUser(userData)
       setToken(storedToken)
       setUser(userData)
       return userData
     } catch {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
+      clearStoredAuth()
       setToken(null)
       setUser(null)
       return null

@@ -50,3 +50,42 @@ export const getPatientProfile = async (patientId: number): Promise<PatientProfi
   const response = await client.get<PatientProfile>(`/doctors/patients/${patientId}/profile`)
   return response.data
 }
+
+export interface PatientProfileChangeDiff {
+  from: unknown
+  to: unknown
+}
+
+export interface PatientProfileChangeRequest {
+  id: number
+  patient_id: number
+  patient_email: string | null
+  patient_name: string | null
+  doctor_id: number | null
+  doctor_name: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  proposed_changes: Record<string, PatientProfileChangeDiff>
+  current_snapshot: Record<string, unknown>
+  doctor_message: string | null
+  patient_note: string | null
+  created_at: string | null
+  resolved_at: string | null
+}
+
+/** Solicitudes de cambio que un médico propuso al paciente autenticado. */
+export const getMyPatientProfileChangeRequests = async (): Promise<PatientProfileChangeRequest[]> => {
+  const response = await client.get<PatientProfileChangeRequest[]>('/patients/me/profile-change-requests')
+  return response.data
+}
+
+export const resolvePatientProfileChangeRequest = async (
+  requestId: number,
+  action: 'approve' | 'reject',
+  patientNote?: string | null,
+): Promise<PatientProfileChangeRequest> => {
+  const response = await client.post<PatientProfileChangeRequest>(
+    `/patients/me/profile-change-requests/${requestId}/resolve`,
+    { action, patient_note: patientNote ?? null },
+  )
+  return response.data
+}

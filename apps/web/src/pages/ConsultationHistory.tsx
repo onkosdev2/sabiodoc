@@ -9,8 +9,10 @@ import Badge from '../components/ui/Badge'
 import type { BadgeTone } from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
+import Pagination from '../components/Pagination'
 import Skeleton from '../components/ui/Skeleton'
 import { getApiErrorMessage } from '../utils/apiError'
+import { usePagination } from '../hooks/usePagination'
 
 type FilterValue = 'all' | ConsultationSource
 
@@ -55,6 +57,7 @@ export default function ConsultationHistory() {
   }, [])
 
   const filtered = filter === 'all' ? items : items.filter((item) => item.source === filter)
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(filtered, 8, filter)
 
   const filters: { value: FilterValue; label: string }[] = [
     { value: 'all', label: 'Todas' },
@@ -113,7 +116,7 @@ export default function ConsultationHistory() {
         />
       ) : (
         <div className="space-y-4">
-          {filtered.map((item) => {
+          {pageItems.map((item) => {
             const config = SOURCE_CONFIG[item.source] ?? SOURCE_CONFIG.triage
             const Icon = config.icon
             const isExpanded = expandedId === item.id
@@ -140,12 +143,12 @@ export default function ConsultationHistory() {
                         {item.result.recommended_specialty_slug.replace(/-/g, ' ')}
                       </p>
                       {item.summary && <p className="mt-1 line-clamp-2 text-sm text-slate-500">{item.summary}</p>}
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="mt-1 text-xs text-slate-500">
                         {new Date(item.created_at).toLocaleString('es-ES')}
                       </p>
                     </div>
                     <ChevronDown
-                      className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                       aria-hidden="true"
                     />
                   </div>
@@ -159,6 +162,13 @@ export default function ConsultationHistory() {
               </div>
             )
           })}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

@@ -55,9 +55,19 @@ export const getMe = async (): Promise<User> => {
   return response.data
 }
 
-export const checkEmailExists = async (email: string): Promise<{ exists: boolean; role: string | null }> => {
-  const response = await client.get<{ exists: boolean; role: string | null }>('/auth/check-email', {
-    params: { email }
+export interface MessageResponse {
+  message: string
+}
+
+export const forgotPassword = async (email: string): Promise<MessageResponse> => {
+  const response = await client.post<MessageResponse>('/auth/forgot-password', { email })
+  return response.data
+}
+
+export const resetPassword = async (token: string, newPassword: string): Promise<MessageResponse> => {
+  const response = await client.post<MessageResponse>('/auth/reset-password', {
+    token,
+    new_password: newPassword,
   })
   return response.data
 }

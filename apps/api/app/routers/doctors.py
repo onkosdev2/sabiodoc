@@ -45,6 +45,10 @@ from app.schemas.doctor import (
     DoctorSpecialtySummary,
 )
 from app.schemas.patient import PatientProfileResponse
+from app.schemas.patient_profile_change import (
+    PatientProfileChangeRequestCreate,
+    PatientProfileChangeRequestResponse,
+)
 from app.schemas.video_session import DoctorVideoSessionListResponse, DoctorVideoSessionResponse
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
@@ -52,8 +56,14 @@ from app.services.jitsi_service import jitsi_service
 from app.services.doctor_onboarding_service import doctor_onboarding_service
 from app.services.notification_service import notification_service
 from app.services.patient_profile_service import get_patient_display_name, serialize_patient_profile
+from app.services.patient_profile_change_service import (
+    create_change_request,
+    list_for_patient_and_doctor,
+    serialize_change_request,
+)
 from app.services.presence_service import resolve_presence, touch_presence
 from app.services.consultation_service import close_stale_consultations
+from app.services.specialist_assistant import sanitize_summary_text
 from app.services.reminder_service import reminder_service
 from app.services.video_session_service import video_session_service
 
@@ -563,13 +573,14 @@ def get_patient_timeline_for_doctor(
                 specialty_name=consultation.specialty.name if consultation.specialty else "Especialidad",
                 consultation_id=consultation.id,
                 consultation_status=consultation.status,
-                summary=consultation.summary,
+                summary=sanitize_summary_text(consultation.summary),
                 intake=consultation.intake_json,
                 created_at=consultation.created_at,
             )
         )
 
     appointment_items = []
+    appointment_items_consultation_ids = {c.id for c in consultations}
     appointments = (
         db.query(Appointment)
         .filter(Appointment.patient_id == patient_id, Appointment.doctor_id == doctor_profile.id)
@@ -578,6 +589,12 @@ def get_patient_timeline_for_doctor(
     )
     for appointment in appointments:
         review = appointment.review[0] if appointment.review else None
+        # La preconsulta vinculada ya aparece como su propio evento: no repetimos
+        # su resumen/ficha en la cita para no duplicar la informacion clinica.
+        linked_consultation = (
+            appointment.consultation_id is not None
+            and appointment.consultation_id in appointment_items_consultation_ids
+        )
         appointment_items.append(
             DoctorPatientTimelineItemResponse(
                 item_type="appointment",
@@ -587,8 +604,8 @@ def get_patient_timeline_for_doctor(
                 consultation_id=appointment.consultation_id,
                 appointment_id=appointment.id,
                 appointment_status=appointment.status,
-                summary=appointment.ai_summary_snapshot,
-                intake=appointment.ai_intake_snapshot_json,
+                summary=None if linked_consultation else sanitize_summary_text(appointment.ai_summary_snapshot),
+                intake=None if linked_consultation else appointment.ai_intake_snapshot_json,
                 patient_note=appointment.patient_note,
                 doctor_note=appointment.doctor_note,
                 followup_instructions=appointment.followup_instructions,
@@ -772,6 +789,83 @@ def get_patient_profile_for_doctor(
 
     profile = db.query(PatientProfile).filter(PatientProfile.user_id == patient_id).first()
     return serialize_patient_profile(profile, patient)
+
+
+@router.get(
+    "/patients/{patient_id}/profile-change-requests",
+    response_model=list[PatientProfileChangeRequestResponse],
+)
+def list_patient_profile_change_requests(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Propuestas de cambio de datos que este médico envió al paciente."""
+    doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
+    if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo puedes ver pacientes con relacion clinica previa o cita agendada",
+        )
+
+    requests = list_for_patient_and_doctor(
+        db, patient_id=patient_id, doctor_profile_id=doctor_profile.id
+    )
+    return [serialize_change_request(db, request) for request in requests]
+
+
+@router.post(
+    "/patients/{patient_id}/profile-change-requests",
+    response_model=PatientProfileChangeRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_patient_profile_change_request(
+    patient_id: int,
+    payload: PatientProfileChangeRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Propone cambios en los datos del paciente. El paciente debe aprobarlos."""
+    doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
+    if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo puedes ver pacientes con relacion clinica previa o cita agendada",
+        )
+
+    patient = db.query(User).filter(User.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado")
+
+    try:
+        request = create_change_request(
+            db,
+            patient=patient,
+            doctor_profile=doctor_profile,
+            payload=payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    notification_service.create(
+        db,
+        user_id=patient.id,
+        notification_type="patient_profile_change_request",
+        title="Tu medico propone actualizar tus datos",
+        body=(
+            f"El Dr(a). {doctor_profile.display_name} propuso cambios en tu perfil clinico. "
+            "Revisalos y acepta o rechaza los cambios."
+        ),
+        action_url="/me/profile",
+        metadata={
+            "action_label": "Revisar cambios",
+            "change_request_id": request.id,
+            "doctor_id": doctor_profile.id,
+        },
+    )
+    db.commit()
+    db.refresh(request)
+    return serialize_change_request(db, request)
 
 
 @router.get("/me/video-sessions", response_model=DoctorVideoSessionListResponse)

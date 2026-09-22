@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Bell } from 'lucide-react'
 
 import { useNotifications } from '../context/NotificationsContext'
-import UserMenu, { UserMenuItem } from './UserMenu'
+import UserMenu from './UserMenu'
 
 export interface PanelNavItem {
   to: string
@@ -18,7 +18,8 @@ interface PanelLayoutProps {
   panelName: string
   brandIcon: LucideIcon
   accent: PanelAccent
-  navItems: PanelNavItem[]
+  /** Enlaces agrupados por utilidad; cada grupo se separa con un divisor. */
+  menuGroups: PanelNavItem[][]
   /** Destino del icono de notificaciones (por defecto el portal de paciente). */
   notificationsTo?: string
   children: ReactNode
@@ -39,13 +40,13 @@ export default function PanelLayout({
   panelName,
   brandIcon: BrandIcon,
   accent,
-  navItems,
+  menuGroups,
   notificationsTo = '/notifications',
   children,
 }: PanelLayoutProps) {
   const { unread } = useNotifications()
   const accentClasses = ACCENTS[accent]
-  const homePath = navItems[0]?.to || '/'
+  const homePath = menuGroups[0]?.[0]?.to || '/'
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -66,7 +67,7 @@ export default function PanelLayout({
               <BrandIcon className={`h-6 w-6 ${accentClasses.icon}`} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">SabioDoc</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">SabioDoc</p>
               <p className="truncate text-base font-semibold leading-tight">{panelName}</p>
             </div>
           </Link>
@@ -88,7 +89,7 @@ export default function PanelLayout({
               )}
             </Link>
 
-            <UserMenu theme="dark" groups={[navItems as UserMenuItem[]]} showPortalGeneral nameContext="professional" />
+            <UserMenu theme="dark" groups={menuGroups} showPortalGeneral nameContext="professional" />
           </div>
         </div>
       </header>

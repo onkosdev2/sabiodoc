@@ -33,7 +33,7 @@ export default function Register() {
     if (!email.trim()) next.email = 'Ingresa tu correo.'
     else if (!EMAIL_PATTERN.test(email.trim())) next.email = 'El correo no parece válido.'
     if (!password) next.password = 'Ingresa una contraseña.'
-    else if (password.length < 6) next.password = 'Debe tener al menos 6 caracteres.'
+    else if (password.length < 8) next.password = 'Debe tener al menos 8 caracteres.'
     if (confirmPassword !== password) next.confirmPassword = 'Las contraseñas no coinciden.'
     setFieldErrors(next)
     return Object.keys(next).length === 0
@@ -48,7 +48,8 @@ export default function Register() {
     try {
       const response = await register(email.trim(), password)
       authLogin(response.access_token, response.user)
-      navigate('/')
+      // Un usuario nuevo empieza completando su perfil de paciente.
+      navigate('/me/profile', { replace: true, state: { fromRegistration: true } })
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No pudimos crear tu cuenta. Intenta de nuevo.'))
     } finally {
@@ -83,7 +84,7 @@ export default function Register() {
             placeholder="••••••••"
             autoComplete="new-password"
             required
-            hint="Mínimo 6 caracteres"
+            hint="Mínimo 8 caracteres"
             error={fieldErrors.password}
           />
 

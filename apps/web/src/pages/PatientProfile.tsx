@@ -1,21 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Save, UserRound } from 'lucide-react'
-import { Country, City } from 'country-state-city'
+import { useLocation } from 'react-router-dom'
+import { Loader2, Save, Sparkles, UserRound } from 'lucide-react'
+import { Country, getCitiesOfCountry } from '../utils/locations'
 
 import {
   getMyPatientProfile,
+  getMyPatientProfileChangeRequests,
   updateMyPatientProfile,
   type PatientProfile,
+  type PatientProfileChangeRequest,
   type PatientProfilePayload,
   type PatientSex,
 } from '../api/patients'
 import BackButton from '../components/BackButton'
+import PatientProfileChangeReview from '../components/PatientProfileChangeReview'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
 import { Field, Input, Select, Textarea } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
 
 const SEX_OPTIONS: Array<{ value: PatientSex; label: string }> = [
   { value: 'female', label: 'Femenino' },
@@ -72,6 +78,7 @@ function parsePhone(value: string | null, countries: CountryList): { iso: string
 export default function PatientProfilePage() {
   const { refreshUser } = useAuth()
   const toast = useToast()
+  const location = useLocation()
   const allCountries = useMemo(() => Country.getAllCountries(), [])
   const timezones = useMemo(
     () => (NATIVE_TIMEZONES.includes('UTC') ? NATIVE_TIMEZONES : ['UTC', ...NATIVE_TIMEZONES]),
@@ -82,6 +89,8 @@ export default function PatientProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [changeRequests, setChangeRequests] = useState<PatientProfileChangeRequest[]>([])
+  const [reloadToken, setReloadToken] = useState(0)
 
   // Estado de ubicación (se deriva del perfil al cargar).
   const [countryIso, setCountryIso] = useState('')
@@ -95,10 +104,7 @@ export default function PatientProfilePage() {
   const [emergencyIso, setEmergencyIso] = useState('')
   const [emergencyNumber, setEmergencyNumber] = useState('')
 
-  const availableCities = useMemo(
-    () => (countryIso ? City.getCitiesOfCountry(countryIso) || [] : []),
-    [countryIso],
-  )
+  const [availableCities, setAvailableCities] = useState<string[]>([])
 
   useEffect(() => {
     const load = async () => {
@@ -110,8 +116,9 @@ export default function PatientProfilePage() {
         const iso = matchedCountry?.isoCode || ''
         setCountryIso(iso)
 
-        const cities = iso ? City.getCitiesOfCountry(iso) || [] : []
-        if (data.city && cities.some((city) => city.name === data.city)) {
+        const cities = await getCitiesOfCountry(iso)
+        setAvailableCities(cities)
+        if (data.city && cities.includes(data.city)) {
           setCityName(data.city)
           setCustomCity('')
         } else if (data.city) {
@@ -128,6 +135,11 @@ export default function PatientProfilePage() {
         const emergency = parsePhone(data.emergency_contact_phone, allCountries)
         setEmergencyIso(emergency.iso || iso)
         setEmergencyNumber(emergency.number)
+
+        // Propuestas de cambio pendientes de aprobación por parte del paciente.
+        getMyPatientProfileChangeRequests()
+          .then(setChangeRequests)
+          .catch(() => setChangeRequests([]))
       } catch (err: unknown) {
         const requestError = err as { response?: { data?: { detail?: string } } }
         setError(requestError.response?.data?.detail || 'No se pudo cargar tu perfil.')
@@ -137,17 +149,18 @@ export default function PatientProfilePage() {
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [reloadToken])
 
   const set = <K extends keyof PatientProfile>(field: K, value: PatientProfile[K]) => {
     setProfile((current) => (current ? { ...current, [field]: value } : current))
   }
 
-  const handleCountryChange = (iso: string) => {
+  const handleCountryChange = async (iso: string) => {
     setCountryIso(iso)
-    const cities = iso ? City.getCitiesOfCountry(iso) || [] : []
+    const cities = await getCitiesOfCountry(iso)
+    setAvailableCities(cities)
     if (cities.length > 0) {
-      setCityName(cities[0].name)
+      setCityName(cities[0])
       setCustomCity('')
     } else {
       setCityName('Otra')
@@ -235,6 +248,13 @@ export default function PatientProfilePage() {
     )
   }
 
+  const fromRegistration = Boolean(
+    (location.state as { fromRegistration?: boolean } | null)?.fromRegistration,
+  )
+  // Si el paciente recién se registra o casi no ha llenado su perfil, le
+  // recomendamos completarlo.
+  const showProfileTip = fromRegistration || isPatientProfileIncomplete(profile)
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <BackButton />
@@ -250,10 +270,30 @@ export default function PatientProfilePage() {
         </p>
       </div>
 
+      {showProfileTip && (
+        <Alert
+          tone="info"
+          title={fromRegistration ? '¡Bienvenido a SabioDoc!' : 'Recomendamos completar tu perfil'}
+        >
+          <p className="flex items-start gap-2">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Completar tus datos personales y clínicos hace que las consultas con IA sean más precisas y
+              agiliza la generación de citas con médicos. Todo es opcional y puedes editarlo cuando quieras.
+            </span>
+          </p>
+        </Alert>
+      )}
+
       {error && <Alert tone="danger">{error}</Alert>}
 
+      <PatientProfileChangeReview
+        requests={changeRequests}
+        onResolved={() => setReloadToken((token) => token + 1)}
+      />
+
       <form onSubmit={handleSave} className="space-y-6">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <Card as="section">
           <h2 className="text-lg font-semibold text-slate-900">Datos personales</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Input
@@ -307,8 +347,8 @@ export default function PatientProfilePage() {
               <Select label="Ciudad" value={cityName} onChange={(e) => setCityName(e.target.value)}>
                 <option value="">Selecciona una ciudad</option>
                 {availableCities.map((city) => (
-                  <option key={city.name} value={city.name}>
-                    {city.name}
+                  <option key={city} value={city}>
+                    {city}
                   </option>
                 ))}
                 <option value="Otra">Otra…</option>
@@ -365,9 +405,9 @@ export default function PatientProfilePage() {
               </Field>
             </div>
           </div>
-        </section>
+        </Card>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <Card as="section">
           <h2 className="text-lg font-semibold text-slate-900">Datos clínicos</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Select
@@ -385,6 +425,7 @@ export default function PatientProfilePage() {
             <Input
               label="Altura (cm)"
               type="number"
+              inputMode="numeric"
               min={30}
               max={260}
               value={profile.height_cm ?? ''}
@@ -393,6 +434,7 @@ export default function PatientProfilePage() {
             <Input
               label="Peso (kg)"
               type="number"
+              inputMode="numeric"
               min={2}
               max={500}
               value={profile.weight_kg ?? ''}
@@ -454,9 +496,9 @@ export default function PatientProfilePage() {
               />
             </div>
           </div>
-        </section>
+        </Card>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <Card as="section">
           <h2 className="text-lg font-semibold text-slate-900">Contacto de emergencia y notas</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Input
@@ -500,7 +542,7 @@ export default function PatientProfilePage() {
               />
             </div>
           </div>
-        </section>
+        </Card>
 
         <div className="flex justify-end">
           <Button type="submit" loading={saving} leftIcon={<Save className="h-4 w-4" />}>

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /me/
+Disallow: /reviewer
+Disallow: /video-room
+Disallow: /notifications
+
+Sitemap: %SITE_URL%/sitemap.xml

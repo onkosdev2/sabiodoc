@@ -60,6 +60,8 @@ export interface Appointment {
   created_at: string
   review_rating: number | null
   review_comment: string | null
+  payment_amount_cents: number | null
+  payment_status: 'held' | 'released' | 'refunded' | null
 }
 
 export interface AppointmentListResponse {
@@ -117,6 +119,7 @@ export interface AppointmentCreatePayload {
   specialty_id?: number
   patient_note?: string
   accepted_terms: boolean
+  accepted_overtime_terms: boolean
   consent_text_version?: string
 }
 

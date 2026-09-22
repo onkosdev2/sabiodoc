@@ -4,15 +4,28 @@ import { Bell, CheckCheck, Loader2 } from 'lucide-react'
 
 import { NotificationItem } from '../api/notifications'
 import { useNotifications } from '../context/NotificationsContext'
+import Button from '../components/ui/Button'
+import Pagination from '../components/Pagination'
 import { hasUsefulAction } from '../utils/notificationActions'
+import { usePagination } from '../hooks/usePagination'
 
 export default function NotificationsPage() {
   const navigate = useNavigate()
   const { notifications, loading, error, refresh, markRead, markAllRead } = useNotifications()
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(notifications, 10)
 
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // Al abrir cualquiera de las páginas de notificaciones, todo lo visible queda
+  // marcado como leído (y también lo que llegue mientras la página sigue abierta).
+  useEffect(() => {
+    if (loading) return
+    if (notifications.some((item) => item.status === 'unread')) {
+      markAllRead().catch(() => {})
+    }
+  }, [loading, notifications, markAllRead])
 
   const handleMarkRead = async (notificationId: number) => {
     await markRead(notificationId)
@@ -38,13 +51,9 @@ export default function NotificationsPage() {
           <h1 className="text-3xl font-bold text-slate-900">Notificaciones</h1>
           <p className="mt-2 text-slate-600">Recordatorios, cambios de estado y eventos clínicos relevantes.</p>
         </div>
-        <button type="button"
-          onClick={handleMarkAllRead}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-900"
-        >
-          <CheckCheck className="h-4 w-4" />
+        <Button variant="secondary" onClick={handleMarkAllRead} leftIcon={<CheckCheck className="h-4 w-4" />}>
           Marcar todo como leído
-        </button>
+        </Button>
       </div>
 
       {loading ? (
@@ -55,46 +64,47 @@ export default function NotificationsPage() {
       ) : error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>
       ) : notifications.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center text-slate-500">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center text-slate-500">
           <Bell className="mx-auto mb-4 h-12 w-12 text-slate-300" />
           No tienes notificaciones todavía.
         </div>
       ) : (
         <div className="space-y-3">
-          {notifications.map((notification) => (
+          {pageItems.map((notification) => (
             <div
               key={notification.id}
-              className={`rounded-3xl border p-5 ${notification.status === 'unread' ? 'border-primary-200 bg-primary-50' : 'border-slate-200 bg-white'}`}
+              className={`rounded-2xl border p-5 ${notification.status === 'unread' ? 'border-primary-200 bg-primary-50' : 'border-slate-200 bg-white'}`}
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
                   <p className="mt-2 text-sm text-slate-600">{notification.body}</p>
-                  <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-400">
+                  <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-500">
                     {new Date(notification.created_at).toLocaleString('es-ES')}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {hasUsefulAction(notification) && (
-                    <button type="button"
-                      onClick={() => handleOpenNotification(notification)}
-                      className="inline-flex items-center justify-center rounded-full border border-primary-300 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-white"
-                    >
+                    <Button variant="secondary" onClick={() => handleOpenNotification(notification)}>
                       {notification.action_label || 'Abrir'}
-                    </button>
+                    </Button>
                   )}
                   {notification.status === 'unread' && (
-                    <button type="button"
-                      onClick={() => handleMarkRead(notification.id)}
-                      className="inline-flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white"
-                    >
+                    <Button variant="ghost" onClick={() => handleMarkRead(notification.id)}>
                       Marcar leída
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
             </div>
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

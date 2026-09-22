@@ -1,23 +1,51 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Send, Stethoscope } from 'lucide-react'
 
 import { submitTriage, TriageResult } from '../api/triage'
+import { getMyPatientProfile } from '../api/patients'
 import TriageResultCard from '../components/TriageResultCard'
 import BackButton from '../components/BackButton'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import PageHeader from '../components/ui/PageHeader'
 import { Input, Select, Textarea } from '../components/ui/Field'
+import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
 
 export default function Triage() {
+  const { isAuthenticated } = useAuth()
   const [symptomsText, setSymptomsText] = useState('')
   const [age, setAge] = useState('')
   const [sex, setSex] = useState('')
+  const [profileDefaults, setProfileDefaults] = useState<{ age: string; sex: string }>({ age: '', sex: '' })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<TriageResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [symptomsError, setSymptomsError] = useState<string | undefined>()
+
+  // Prellena edad y sexo con los datos del perfil del paciente, si existen.
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let active = true
+    getMyPatientProfile()
+      .then((profile) => {
+        if (!active) return
+        const defaults = {
+          age: profile.age != null ? String(profile.age) : '',
+          sex: profile.sex ?? '',
+        }
+        setProfileDefaults(defaults)
+        // Respeta lo que el usuario ya haya escrito manualmente.
+        setAge((current) => current || defaults.age)
+        setSex((current) => current || defaults.sex)
+      })
+      .catch(() => {
+        // Sin sesión o sin perfil: los campos quedan opcionales y vacíos.
+      })
+    return () => {
+      active = false
+    }
+  }, [isAuthenticated])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -47,8 +75,8 @@ export default function Triage() {
 
   const handleReset = () => {
     setSymptomsText('')
-    setAge('')
-    setSex('')
+    setAge(profileDefaults.age)
+    setSex(profileDefaults.sex)
     setResult(null)
     setError(null)
     setSymptomsError(undefined)
@@ -81,6 +109,7 @@ export default function Triage() {
             <Input
               label="Edad (opcional)"
               type="number"
+              inputMode="numeric"
               min={0}
               max={150}
               value={age}
@@ -90,6 +119,7 @@ export default function Triage() {
               <option value="">Sin especificar</option>
               <option value="male">Masculino</option>
               <option value="female">Femenino</option>
+              <option value="other">Otro</option>
             </Select>
           </div>
 

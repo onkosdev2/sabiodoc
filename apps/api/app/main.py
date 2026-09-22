@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.services.llm_client import llm_client
-from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, patients, specialties, triage, video_sessions, emergency
+from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, patients, specialties, triage, video_sessions, emergency, wallet
 
 setup_logging()
 logger = get_logger(__name__)
@@ -12,19 +12,16 @@ logger = get_logger(__name__)
 app = FastAPI(
     title="SabioDoc API",
     description="API de orientación médica inteligente",
-    version="1.0.0"
+    version="1.0.0",
+    # En producción no exponemos la documentación interactiva.
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:9091",
-        "http://127.0.0.1:9091",
-        "http://192.168.1.84:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -42,6 +39,7 @@ app.include_router(patients.router)
 app.include_router(appointments.router)
 app.include_router(notifications.router)
 app.include_router(admin.router)
+app.include_router(wallet.router)
 app.include_router(video_sessions.router)
 app.include_router(emergency.router)
 

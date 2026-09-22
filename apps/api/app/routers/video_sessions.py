@@ -1,10 +1,12 @@
 import json
+import math
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.appointment import AppointmentStatus
 from app.models.consultation import ConsultationStatus
@@ -20,6 +22,7 @@ from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
 from app.services.patient_profile_service import get_patient_display_name
 from app.services.video_session_service import video_session_service
+from app.services.wallet_service import wallet_service
 
 router = APIRouter(prefix="/video-sessions", tags=["video-sessions"])
 logger = get_logger(__name__)
@@ -42,7 +45,31 @@ def _expire_if_needed(db: Session, video_session: VideoSession) -> None:
         video_session_service.sync_doctor_presence(db, video_session.doctor_id)
 
 
-def _serialize_status(video_session: VideoSession, participant_role: str) -> VideoSessionStatusResponse:
+def _heartbeat_and_reconcile(db: Session, video_session: VideoSession, participant_role: str) -> None:
+    """Registra la presencia del que consulta y pausa el cronometro si falta alguien.
+
+    Durante el tiempo extra consume creditos del paciente; si se queda sin saldo,
+    termina la videollamada de inmediato.
+    """
+    if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
+        return
+    now = datetime.now(timezone.utc)
+    video_session_service.touch_participant(video_session, participant_role, now)
+    video_session_service.reconcile_timer(video_session, now)
+    if video_session.status == VideoSessionStatus.active:
+        if not video_session_service.process_overtime_billing(db, video_session, now):
+            video_session_service.terminate_for_no_credits(db, video_session, now)
+    db.commit()
+    db.refresh(video_session)
+
+
+def _serialize_status(
+    video_session: VideoSession,
+    participant_role: str,
+    *,
+    patient_balance_cents: int = 0,
+    overtime_amount_cents: int = 0,
+) -> VideoSessionStatusResponse:
     reference_end = video_session.ended_at or datetime.now(timezone.utc)
     billable_seconds = video_session.billable_seconds or 0
     elapsed_seconds = billable_seconds
@@ -52,6 +79,36 @@ def _serialize_status(video_session: VideoSession, participant_role: str) -> Vid
     target_seconds = max(0, video_session.estimated_minutes * 60)
     remaining_seconds = max(0, target_seconds - elapsed_seconds)
     is_overtime = elapsed_seconds > target_seconds if target_seconds else False
+
+    price_per_min_cents = video_session.doctor_price_per_min_cents or 0
+    held_amount_cents = video_session.prepaid_amount_cents or 0
+    billable_minutes_total = (
+        max(settings.VIDEO_MIN_BILLABLE_MINUTES, math.ceil(elapsed_seconds / 60))
+        if elapsed_seconds > 0
+        else 0
+    )
+    if elapsed_seconds > 0:
+        # Costo real acumulado de la sesión (lo retenido se muestra aparte).
+        # No lo limitamos a la retención: en citas sin pago adelantado seguiría
+        # marcando 0 y no reflejaría el tiempo transcurrido.
+        current_cost_cents = billable_minutes_total * price_per_min_cents
+    else:
+        current_cost_cents = 0
+
+    scheduled_minutes = video_session.estimated_minutes or 0
+    overtime_minutes = max(0, billable_minutes_total - scheduled_minutes)
+    can_afford_overtime = price_per_min_cents > 0 and patient_balance_cents >= price_per_min_cents
+    if overtime_minutes <= 0:
+        billing_mode = "scheduled"
+    elif can_afford_overtime:
+        billing_mode = "overtime"
+    else:
+        billing_mode = "exhausted"
+
+    now = datetime.now(timezone.utc)
+    patient_present = video_session_service.participant_present(video_session, "patient", now)
+    doctor_present = video_session_service.participant_present(video_session, "doctor", now)
+    both_present = patient_present and doctor_present
 
     return VideoSessionStatusResponse(
         video_session_id=video_session.id,
@@ -74,10 +131,40 @@ def _serialize_status(video_session: VideoSession, participant_role: str) -> Vid
         elapsed_seconds=elapsed_seconds,
         remaining_seconds=remaining_seconds,
         is_overtime=is_overtime,
+        price_per_min_cents=price_per_min_cents,
+        held_amount_cents=held_amount_cents,
+        current_cost_cents=current_cost_cents,
+        overtime_amount_cents=overtime_amount_cents,
+        patient_balance_cents=patient_balance_cents,
+        can_afford_overtime=can_afford_overtime,
+        billing_mode=billing_mode,
+        patient_present=patient_present,
+        doctor_present=doctor_present,
+        both_present=both_present,
         doctor_note=video_session.doctor_note,
         followup_instructions=video_session.followup_instructions,
         intro_script=video_session.intro_script,
         closed_reason=video_session.closed_reason,
+    )
+
+
+def _serialize_status_with_billing(
+    db: Session, video_session: VideoSession, participant_role: str
+) -> VideoSessionStatusResponse:
+    """Carga saldo del paciente y tiempo extra ya consumido antes de serializar."""
+    patient_balance_cents = 0
+    overtime_amount_cents = 0
+    appointment = video_session.appointment
+    if appointment is not None:
+        payment = wallet_service.get_appointment_payment(db, appointment.id)
+        if payment is not None:
+            overtime_amount_cents = payment.overtime_amount_cents or 0
+        patient_balance_cents = wallet_service.get_balance_cents(db, appointment.patient_id)
+    return _serialize_status(
+        video_session,
+        participant_role,
+        patient_balance_cents=patient_balance_cents,
+        overtime_amount_cents=overtime_amount_cents,
     )
 
 
@@ -93,7 +180,8 @@ def get_video_session_status(
 
     _expire_if_needed(db, video_session)
     participant_role = _resolve_participant_role(video_session, current_user)
-    return _serialize_status(video_session, participant_role)
+    _heartbeat_and_reconcile(db, video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/join", response_model=VideoSessionStatusResponse)
@@ -111,12 +199,11 @@ def join_video_session(
     if video_session.status in {VideoSessionStatus.completed, VideoSessionStatus.cancelled, VideoSessionStatus.expired, VideoSessionStatus.failed}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
 
+    # Entrar a la sala NO inicia el cronometro: solo registra la conexion y la
+    # presencia. El tiempo de consulta lo controla el medico (iniciar/pausar/finalizar)
+    # y solo corre cuando ambos estan presentes.
     now = datetime.now(timezone.utc)
-    if video_session.expires_at <= now and video_session.status == VideoSessionStatus.prepared:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La videoconsulta ya expiro")
-
-    # Entrar a la sala NO inicia el cronometro: solo registra la conexion.
-    # El tiempo de consulta lo controla el medico (iniciar/pausar/finalizar).
+    video_session_service.set_participant_presence(video_session, participant_role, True, now)
     if participant_role == "patient":
         video_session.joined_patient_at = video_session.joined_patient_at or now
         if video_session.appointment:
@@ -137,7 +224,7 @@ def join_video_session(
     _sync_doctor_presence_from_video_sessions(db, video_session.doctor_id)
     db.commit()
     db.refresh(video_session)
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/intro", response_model=VideoSessionStatusResponse)
@@ -166,7 +253,7 @@ def generate_video_session_intro(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
 
     video_session_service.generate_intro_script(db, video_session)
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/start", response_model=VideoSessionStatusResponse)
@@ -195,6 +282,15 @@ def start_video_session_timer(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
 
     now = datetime.now(timezone.utc)
+    video_session_service.touch_participant(video_session, "doctor", now)
+    # Limpia primero cualquier tiempo con presencia incompleta.
+    video_session_service.reconcile_timer(video_session, now)
+    if not video_session_service.both_participants_present(video_session, now):
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Para iniciar la consulta, el paciente y el medico deben estar en la sala",
+        )
     if video_session.started_at is None:
         video_session.started_at = now
     # Al iniciar, garantizamos que la sala siga vigente durante la consulta
@@ -215,7 +311,7 @@ def start_video_session_timer(
     db.commit()
     db.refresh(video_session)
     logger.info(f"Video session {video_session_id} timer started by doctor (user={current_user.id})")
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/pause", response_model=VideoSessionStatusResponse)
@@ -237,10 +333,9 @@ def pause_video_session_timer(
         )
 
     now = datetime.now(timezone.utc)
-    if video_session.started_at is not None:
-        segment = max(0, int((now - video_session.started_at).total_seconds()))
-        video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
-        video_session.started_at = None
+    video_session_service.touch_participant(video_session, "doctor", now)
+    video_session_service.pause_timer(video_session, now)
+    video_session_service.process_overtime_billing(db, video_session, now)
     db.add(
         VideoSessionEvent(
             video_session_id=video_session.id,
@@ -252,7 +347,7 @@ def pause_video_session_timer(
     db.commit()
     db.refresh(video_session)
     logger.info(f"Video session {video_session_id} timer paused by doctor (user={current_user.id})")
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/leave", response_model=VideoSessionStatusResponse)
@@ -273,12 +368,11 @@ def leave_video_session(
     participant_role = _resolve_participant_role(video_session, current_user)
 
     now = datetime.now(timezone.utc)
-    # El cronometro lo controla el medico: la salida del paciente no lo pausa.
-    # Si el medico sale (cierra la sala), se pausa para no cobrar tiempo ausente.
-    if participant_role == "doctor" and video_session.started_at is not None:
-        segment = max(0, int((now - video_session.started_at).total_seconds()))
-        video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
-        video_session.started_at = None
+    # El cronometro solo corre con ambos presentes: al salir cualquiera de los
+    # dos, se pausa y se acumula unicamente el tiempo en el que ambos estuvieron.
+    video_session_service.set_participant_presence(video_session, participant_role, False, now)
+    video_session_service.pause_timer(video_session, now)
+    video_session_service.process_overtime_billing(db, video_session, now)
 
     db.add(
         VideoSessionEvent(
@@ -291,7 +385,7 @@ def leave_video_session(
     db.commit()
     db.refresh(video_session)
     logger.info(f"Video session {video_session_id} paused by {participant_role} (user={current_user.id})")
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.patch("/{video_session_id}/doctor-note", response_model=VideoSessionStatusResponse)
@@ -327,7 +421,7 @@ def update_video_session_doctor_note(
     )
     db.commit()
     db.refresh(video_session)
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/complete", response_model=VideoSessionStatusResponse)
@@ -348,16 +442,17 @@ def complete_video_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya fue cerrada")
 
     now = datetime.now(timezone.utc)
+    video_session_service.reconcile_timer(video_session, now)
+    video_session_service.pause_timer(video_session, now)
+    video_session_service.process_overtime_billing(db, video_session, now)
+    video_session.patient_present = False
+    video_session.doctor_present = False
     video_session.status = VideoSessionStatus.completed
     video_session.ended_at = video_session.ended_at or now
     video_session.ended_by_user_id = current_user.id
     video_session.closed_reason = payload.closed_reason or "completed_by_doctor"
     video_session.doctor_note = payload.doctor_note
     video_session.followup_instructions = payload.followup_instructions
-    if video_session.started_at:
-        segment = max(0, int((video_session.ended_at - video_session.started_at).total_seconds()))
-        video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
-        video_session.started_at = None
 
     if video_session.appointment:
         appointment = video_session.appointment
@@ -368,6 +463,12 @@ def complete_video_session(
         if appointment.consultation:
             appointment.consultation.status = ConsultationStatus.closed
             appointment.consultation.closed_at = appointment.consultation.closed_at or now
+        # Cobro real segun el tiempo efectivo; el resto se devuelve al paciente.
+        wallet_service.release_appointment(
+            db,
+            appointment,
+            billable_seconds=video_session.billable_seconds or 0,
+        )
         notification_service.create(
             db,
             user_id=appointment.patient_id,
@@ -410,4 +511,4 @@ def complete_video_session(
     _sync_doctor_presence_from_video_sessions(db, video_session.doctor_id)
     db.commit()
     db.refresh(video_session)
-    return _serialize_status(video_session, participant_role)
+    return _serialize_status_with_billing(db, video_session, participant_role)

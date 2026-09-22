@@ -128,7 +128,7 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
               {primaryName}
             </p>
             {contextualName && <p className="truncate text-xs text-slate-500">{user?.email}</p>}
-            <p className="mt-0.5 text-xs uppercase tracking-[0.18em] text-slate-400">{roleLabel}</p>
+            <p className="mt-0.5 text-xs uppercase tracking-[0.18em] text-slate-500">{roleLabel}</p>
           </div>
 
           {visibleGroups.map((group, index) => (
@@ -144,11 +144,12 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
                     key={item.to}
                     to={item.to}
                     onClick={() => setIsOpen(false)}
+                    aria-current={active ? 'page' : undefined}
                     className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                       active ? 'bg-slate-100 font-medium text-slate-950' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <Icon className={`h-4 w-4 ${active ? 'text-slate-900' : 'text-slate-400'}`} />
+                    <Icon className={`h-4 w-4 ${active ? 'text-slate-900' : 'text-slate-500'}`} />
                     {item.label}
                   </Link>
                 )
@@ -163,7 +164,7 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
                 onClick={() => setIsOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
               >
-                <Home className="h-4 w-4 text-slate-400" />
+                <Home className="h-4 w-4 text-slate-500" />
                 Portal general
               </Link>
             )}

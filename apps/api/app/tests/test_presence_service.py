@@ -44,7 +44,7 @@ def test_presence_is_derived_from_activity_and_sessions():
         doctor.is_accepting_consultations = True
         db.commit()
 
-        # Con una videoconsulta activa -> En sesión
+        # Con una videoconsulta activa y el médico presente -> En sesión
         now = datetime.now(UTC)
         video_session = VideoSession(
             patient_id=doctor.user_id,
@@ -58,12 +58,20 @@ def test_presence_is_derived_from_activity_and_sessions():
             prepaid_amount_cents=0,
             expires_at=now + timedelta(minutes=30),
             started_at=now,
+            doctor_present=True,
+            doctor_last_seen_at=now,
         )
         db.add(video_session)
         db.commit()
         db.refresh(video_session)
         video_session_id = video_session.id
         assert resolve_presence(db, doctor).status_message == "En sesión"
+
+        # Si el médico ya no está presente en la sala, no debe seguir "En sesión"
+        # aunque la sesión siga marcada como activa.
+        video_session.doctor_present = False
+        db.commit()
+        assert resolve_presence(db, doctor).status_message == "Disponible"
     finally:
         if video_session_id is not None:
             db.query(VideoSessionEvent).filter(

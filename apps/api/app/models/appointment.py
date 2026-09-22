@@ -20,7 +20,7 @@ class Appointment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     consultation_id = Column(Integer, ForeignKey("consultations.id"), nullable=True, index=True)
-    specialty_id = Column(Integer, ForeignKey("specialties.id"), nullable=False)
+    specialty_id = Column(Integer, ForeignKey("specialties.id"), nullable=False, index=True)
     patient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     doctor_id = Column(Integer, ForeignKey("doctor_profiles.id"), nullable=False, index=True)
     status = Column(Enum(AppointmentStatus), nullable=False, default=AppointmentStatus.scheduled)
@@ -34,6 +34,8 @@ class Appointment(Base):
     booked_via_ai = Column(Boolean, nullable=False, server_default="false")
     consent_accepted_at = Column(DateTime(timezone=True), nullable=True)
     consent_text_version = Column(String(50), nullable=True)
+    # El paciente acepto que la consulta puede extenderse y consumir creditos extra.
+    overtime_terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     cancellation_reason = Column(Text, nullable=True)

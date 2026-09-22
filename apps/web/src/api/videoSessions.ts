@@ -21,6 +21,16 @@ export interface VideoSessionStatus {
   elapsed_seconds: number
   remaining_seconds: number
   is_overtime: boolean
+  price_per_min_cents: number
+  held_amount_cents: number
+  current_cost_cents: number
+  overtime_amount_cents: number
+  patient_balance_cents: number
+  can_afford_overtime: boolean
+  billing_mode: 'scheduled' | 'overtime' | 'exhausted'
+  patient_present: boolean
+  doctor_present: boolean
+  both_present: boolean
   doctor_note: string | null
   followup_instructions: string | null
   intro_script: string | null

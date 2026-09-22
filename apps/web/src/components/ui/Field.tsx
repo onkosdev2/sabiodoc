@@ -29,7 +29,7 @@ function FieldShell({ label, hint, error, required, htmlFor, children, className
       )}
       {children}
       {error ? (
-        <p id={`${htmlFor}-error`} className="text-sm text-red-600">
+        <p id={`${htmlFor}-error`} role="alert" className="text-sm text-red-600">
           {error}
         </p>
       ) : hint ? (
@@ -112,7 +112,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
           onClick={() => setVisible((current) => !current)}
           aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
           aria-pressed={visible}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
         </button>

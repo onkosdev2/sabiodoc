@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.appointment import AppointmentStatus
+from app.models.wallet import AppointmentPaymentStatus
 from app.schemas.consultation import ConsultationStructuredIntake
 
 
@@ -54,6 +55,7 @@ class AppointmentCreateRequest(BaseModel):
     specialty_id: Optional[int] = None
     patient_note: Optional[str] = Field(default=None, max_length=2000)
     accepted_terms: bool = True
+    accepted_overtime_terms: bool = True
     consent_text_version: str = Field(default="v1", min_length=1, max_length=50)
 
 
@@ -110,6 +112,9 @@ class AppointmentResponse(BaseModel):
     created_at: datetime
     review_rating: Optional[int] = None
     review_comment: Optional[str] = None
+    # Pago de la cita con créditos.
+    payment_amount_cents: Optional[int] = None
+    payment_status: Optional[AppointmentPaymentStatus] = None
 
 
 class AppointmentListResponse(BaseModel):

@@ -10,8 +10,10 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
+import Pagination from '../components/Pagination'
 import Skeleton from '../components/ui/Skeleton'
 import { getApiErrorMessage } from '../utils/apiError'
+import { usePagination } from '../hooks/usePagination'
 
 export default function MyFavorites() {
   const { isAuthenticated, isLoading: authLoading } = useAuth()
@@ -20,6 +22,7 @@ export default function MyFavorites() {
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [loading, setLoading] = useState(true)
   const [removingId, setRemovingId] = useState<number | null>(null)
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(favorites, 8)
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -84,7 +87,7 @@ export default function MyFavorites() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {favorites.map((favorite) => (
+          {pageItems.map((favorite) => (
             <Card key={favorite.id}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -111,13 +114,21 @@ export default function MyFavorites() {
                   loading={removingId === favorite.specialty_id}
                   aria-label={`Quitar ${favorite.specialty?.name || 'especialidad'} de favoritos`}
                   title="Eliminar de favoritos"
-                  className="text-slate-400 hover:text-red-600"
+                  className="text-slate-500 hover:text-red-600"
                 >
                   <Trash2 className="h-5 w-5" />
                 </Button>
               </div>
             </Card>
           ))}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            className="md:col-span-2"
+          />
         </div>
       )}
     </div>

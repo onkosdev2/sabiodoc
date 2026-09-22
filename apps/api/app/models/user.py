@@ -20,4 +20,6 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.patient, nullable=False)
     # Capacidad independiente del rol: permite ser medico y revisor a la vez.
     is_reviewer = Column(Boolean, nullable=False, server_default="false")
+    # Se incrementa al cambiar la contraseña para invalidar los tokens emitidos.
+    session_version = Column(Integer, nullable=False, server_default="1")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

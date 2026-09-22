@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Search, Sparkles } from 'lucide-react'
 
+import Button from '../components/ui/Button'
+
 import { getSpecialties, getTopSpecialties, Specialty } from '../api/specialties'
 import SpecialtyCard from '../components/SpecialtyCard'
 import BackButton from '../components/BackButton'
@@ -82,7 +84,7 @@ export default function Specialties() {
 
       <div className="relative mb-8">
         <Search
-          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"
           aria-hidden="true"
         />
         <input
@@ -118,9 +120,9 @@ export default function Specialties() {
                 title="Sin resultados"
                 description={`No encontramos especialidades para "${query}". Prueba con otras palabras.`}
                 action={
-                  <button type="button" onClick={() => setQuery('')} className="btn-secondary">
+                  <Button variant="secondary" onClick={() => setQuery('')}>
                     Limpiar búsqueda
-                  </button>
+                  </Button>
                 }
               />
             )

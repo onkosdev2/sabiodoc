@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Star, Calendar, Loader2, ChevronRight, CircleDollarSign, RefreshCcw } from 'lucide-react'
+import { Star, Calendar, Loader2, ChevronRight, CircleDollarSign, RefreshCcw, Search } from 'lucide-react'
+import Button from '../components/ui/Button'
 import { getSpecialtyBySlug, Specialty } from '../api/specialties'
 import { createConsultation, getMyConsultations } from '../api/consultations'
 import { addFavorite, removeFavorite, getMyFavorites } from '../api/favorites'
@@ -9,6 +10,8 @@ import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
 import { formatMoney } from '../utils/format'
+
+type DoctorSort = 'availability' | 'rating' | 'name' | 'price_asc' | 'price_desc'
 
 export default function SpecialtyDetail() {
   const { slug } = useParams<{ slug: string }>()
@@ -27,6 +30,8 @@ export default function SpecialtyDetail() {
   const [openConsultations, setOpenConsultations] = useState<
     Array<{ id: number; specialtyId: number | null; specialtyName: string | null }>
   >([])
+  const [doctorSearch, setDoctorSearch] = useState('')
+  const [doctorSort, setDoctorSort] = useState<DoctorSort>('rating')
 
   const loadData = useCallback(async () => {
     if (!slug) return
@@ -145,6 +150,52 @@ export default function SpecialtyDetail() {
 
   const formatPrice = (pricePerMinCents: number) => formatMoney(pricePerMinCents)
 
+  // Filtrado y ordenamiento de médicos (búsqueda por nombre/título + criterio).
+  const visibleDoctors = useMemo(() => {
+    const term = doctorSearch.trim().toLowerCase()
+    const filtered = term
+      ? doctors.filter(
+          (doctor) =>
+            doctor.display_name.toLowerCase().includes(term) ||
+            (doctor.professional_title || '').toLowerCase().includes(term) ||
+            (doctor.bio_short || '').toLowerCase().includes(term),
+        )
+      : doctors
+
+    const sorted = [...filtered]
+    const availabilityRank = (status?: string) =>
+      status === 'online' ? 0 : status === 'busy' ? 1 : 2
+    switch (doctorSort) {
+      case 'availability':
+        sorted.sort(
+          (a, b) =>
+            availabilityRank(a.presence?.status) - availabilityRank(b.presence?.status) ||
+            Number(b.rating_avg) - Number(a.rating_avg) ||
+            b.rating_count - a.rating_count,
+        )
+        break
+      case 'name':
+        sorted.sort((a, b) =>
+          a.display_name.localeCompare(b.display_name, 'es', { sensitivity: 'base' }),
+        )
+        break
+      case 'price_asc':
+        sorted.sort((a, b) => a.price_per_min_cents - b.price_per_min_cents)
+        break
+      case 'price_desc':
+        sorted.sort((a, b) => b.price_per_min_cents - a.price_per_min_cents)
+        break
+      case 'rating':
+      default:
+        sorted.sort(
+          (a, b) =>
+            Number(b.rating_avg) - Number(a.rating_avg) || b.rating_count - a.rating_count,
+        )
+        break
+    }
+    return sorted
+  }, [doctors, doctorSearch, doctorSort])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -188,7 +239,7 @@ export default function SpecialtyDetail() {
             className={`p-3 rounded-full transition-colors ${
               isFavorite
                 ? 'bg-yellow-100 text-yellow-500 hover:bg-yellow-200'
-                : 'bg-slate-100 text-slate-400 hover:bg-yellow-100 hover:text-yellow-500'
+                : 'bg-slate-100 text-slate-500 hover:bg-yellow-100 hover:text-yellow-500'
             }`}
           >
             <Star className={`w-6 h-6 ${isFavorite ? 'fill-current' : ''}`} />
@@ -217,14 +268,13 @@ export default function SpecialtyDetail() {
 
         <div className="border-t border-slate-100 pt-6 mt-6">
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button"
+            <Button
               onClick={handleCreateConsultation}
-              disabled={actionLoading}
-              className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+              loading={actionLoading}
+              leftIcon={<Calendar className="h-5 w-5" />}
             >
-              <Calendar className="w-5 h-5" />
               {actionLoading ? 'Creando...' : currentOpen ? 'Continuar consulta IA' : 'Crear Consulta IA'}
-            </button>
+            </Button>
           </div>
 
           {currentOpen && (
@@ -267,30 +317,75 @@ export default function SpecialtyDetail() {
       </div>
 
       <div className="card mt-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold text-slate-800">Médicos disponibles</h2>
-            <span className="text-sm font-medium bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
-              {doctors.length}
-            </span>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-semibold text-slate-800">Médicos disponibles</h2>
+              <span className="text-sm font-medium bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
+                {visibleDoctors.length}
+              </span>
+            </div>
+            <button type="button"
+              onClick={handleRefreshDoctors}
+              disabled={refreshingDoctors}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw className={`w-4 h-4 ${refreshingDoctors ? 'animate-spin' : ''}`} />
+              {refreshingDoctors ? 'Actualizando...' : 'Actualizar lista'}
+            </button>
           </div>
-          <button type="button"
-            onClick={handleRefreshDoctors}
-            disabled={refreshingDoctors}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCcw className={`w-4 h-4 ${refreshingDoctors ? 'animate-spin' : ''}`} />
-            {refreshingDoctors ? 'Actualizando...' : 'Actualizar lista'}
-          </button>
+
+          {doctors.length > 0 && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="relative flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  value={doctorSearch}
+                  onChange={(event) => setDoctorSearch(event.target.value)}
+                  placeholder="Buscar por nombre o título..."
+                  aria-label="Buscar médicos"
+                  className="input-field pl-10"
+                />
+              </div>
+              <div className="sm:w-60">
+                <label
+                  htmlFor="doctor-sort"
+                  className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
+                >
+                  Ordenar por
+                </label>
+                <select
+                  id="doctor-sort"
+                  value={doctorSort}
+                  onChange={(event) => setDoctorSort(event.target.value as DoctorSort)}
+                  className="input-field"
+                >
+                  <option value="availability">Disponibilidad</option>
+                  <option value="rating">Mejor valoración</option>
+                  <option value="name">Nombre (A–Z)</option>
+                  <option value="price_asc">Menor costo por minuto</option>
+                  <option value="price_desc">Mayor costo por minuto</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {doctors.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 p-6 text-slate-500 text-center">
             Aún no hay médicos cargados para esta especialidad.
           </div>
+        ) : visibleDoctors.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 p-6 text-slate-500 text-center">
+            No encontramos médicos que coincidan con «{doctorSearch}». Prueba con otro término.
+          </div>
         ) : (
           <div className="space-y-4">
-            {doctors.map((doctor) => (
+            {visibleDoctors.map((doctor) => (
               <Link
                 key={doctor.id}
                 to={`/doctors/${doctor.id}?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`}

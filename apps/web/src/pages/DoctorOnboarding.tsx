@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check } from 'lucide-react'
-import { Country, City } from 'country-state-city'
+import { Country, getCitiesOfCountry } from '../utils/locations'
 
 import BackButton from '../components/BackButton'
 import Alert from '../components/ui/Alert'
@@ -11,7 +11,6 @@ import { registerDoctor } from '../api/auth'
 import { getSpecialties, Specialty } from '../api/specialties'
 import { getMyDoctorApplication, updateMyDoctorProfile } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
-import { checkEmailExists } from '../api/auth'
 
 const centsToDisplay = (value: number) => (value / 100).toFixed(2)
 
@@ -51,7 +50,6 @@ export default function DoctorOnboarding() {
   
   const [doctorTimezone, setDoctorTimezone] = useState('America/Lima')
 
-  const [isValidating, setIsValidating] = useState(false)
 
   // --- Estados del Formulario (Paso 2) ---
   const [professionalTitle, setProfessionalTitle] = useState('')
@@ -72,7 +70,7 @@ export default function DoctorOnboarding() {
   const [licenseNumberVal, setLicenseNumberVal] = useState('')
   
   // --- Estados de UI ---
-  const availableCities = City.getCitiesOfCountry(countryIso) || []
+  const [availableCities, setAvailableCities] = useState<string[]>([])
   const [specialties, setSpecialties] = useState<Specialty[]>([])
   const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -122,8 +120,9 @@ export default function DoctorOnboarding() {
           const iso = matchedCountry ? matchedCountry.isoCode : 'PE'
           setCountryIso(iso)
           
-          const loadedCities = City.getCitiesOfCountry(iso) || []
-          if (loadedCities.some(c => c.name === app.city)) {
+          const loadedCities = await getCitiesOfCountry(iso)
+          setAvailableCities(loadedCities)
+          if (app.city && loadedCities.includes(app.city)) {
             setCityName(app.city || '')
           } else {
             setCityName('Otra')
@@ -155,6 +154,8 @@ export default function DoctorOnboarding() {
              setLicenseType(parsedLicType)
           }
           setLicenseNumberVal(splitLic.slice(1).join(' ') || '')
+        } else {
+          setAvailableCities(await getCitiesOfCountry(countryIso))
         }
       } catch (err: unknown) {
         if (mounted) setError('Error al cargar datos del perfil.')
@@ -168,11 +169,12 @@ export default function DoctorOnboarding() {
   }, [authLoading, isDoctorEditing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handlers para cuando cambia el país
-  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleCountryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const iso = e.target.value
     setCountryIso(iso)
-    const cities = City.getCitiesOfCountry(iso)
-    setCityName(cities && cities.length > 0 ? cities[0].name : 'Otra')
+    const cities = await getCitiesOfCountry(iso)
+    setAvailableCities(cities)
+    setCityName(cities.length > 0 ? cities[0] : 'Otra')
     
     // Actualizar documentos según el nuevo país
     const docs = DOC_DATA[iso] || DOC_DATA['DEFAULT']
@@ -214,35 +216,12 @@ export default function DoctorOnboarding() {
       if (cityName === 'Otra' && !customCity) return setError('Por favor especifica tu ciudad.')
       
       if (!isDoctorEditing) {
-        if (password.length < 6 || password !== confirmPassword) {
-          return setError('Las contraseñas no coinciden o son muy cortas (mínimo 6 caracteres).')
+        if (password.length < 8 || password !== confirmPassword) {
+          return setError('Las contraseñas no coinciden o son muy cortas (mínimo 8 caracteres).')
         }
-
-        // NUEVO: Verificamos en la BD si el email ya existe y su rol
-        setIsValidating(true)
-        try {
-          const { exists, role } = await checkEmailExists(email)
-          
-          // Solo bloqueamos si existe Y además ya es doctor
-          if (exists && role === 'doctor') {
-            setError('Este email ya está registrado como médico. Por favor, inicia sesión.')
-            setIsValidating(false)
-            return // Bloqueamos el avance
-          }
-
-          // Si el usuario existe (paciente, revisor o admin) o no existe, el código
-          // sigue de largo. Al enviarse, el backend conserva el rol si es revisor o
-          // admin y añade la capacidad médica mediante su DoctorProfile.
-
-          // Si el usuario existe y es 'patient' o no existe, simplemente 
-          // el código sigue de largo y pasa al Paso 2 sin problemas.
-
-        } catch (err) {
-          setError('Hubo un problema verificando tu correo. Intenta de nuevo.')
-          setIsValidating(false)
-          return
-        }
-        setIsValidating(false)
+        // La existencia del email se valida al enviar: el backend responde con un
+        // error claro si ya está registrado como médico. No exponemos un endpoint
+        // público que revele si un correo existe (enumeración de usuarios).
       }
     }
     
@@ -396,11 +375,11 @@ export default function DoctorOnboarding() {
                       ? 'border-primary-600 bg-primary-600 text-white' 
                       : step === s.id 
                         ? 'border-primary-600 bg-white text-primary-600' 
-                        : 'border-slate-200 bg-white text-slate-400'
+                        : 'border-slate-200 bg-white text-slate-500'
                   }`}>
                     {step > s.id ? <Check className="w-5 h-5" /> : s.id}
                   </div>
-                  <span className={`text-xs font-medium ${step >= s.id ? 'text-slate-900' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-medium ${step >= s.id ? 'text-slate-900' : 'text-slate-500'}`}>
                     {s.label}
                   </span>
                 </div>
@@ -460,7 +439,7 @@ export default function DoctorOnboarding() {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
-                          minLength={6}
+                          minLength={8}
                           placeholder="••••••••"
                           autoComplete="new-password"
                         />
@@ -469,7 +448,7 @@ export default function DoctorOnboarding() {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           required
-                          minLength={6}
+                          minLength={8}
                           placeholder="••••••••"
                           autoComplete="new-password"
                         />
@@ -485,7 +464,7 @@ export default function DoctorOnboarding() {
                     {availableCities.length > 0 ? (
                       <Select label="Ciudad" value={cityName} onChange={(e) => setCityName(e.target.value)} required>
                         {availableCities.map((c) => (
-                          <option key={c.name} value={c.name}>{c.name}</option>
+                          <option key={c} value={c}>{c}</option>
                         ))}
                         <option value="Otra">Otra…</option>
                       </Select>
@@ -540,6 +519,7 @@ export default function DoctorOnboarding() {
                     <Input
                       label="Años de experiencia"
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       max={80}
                       value={yearsExperience}
@@ -594,7 +574,8 @@ export default function DoctorOnboarding() {
                             id="doctor-price"
                             type="number"
                             step="0.01"
-                            min="1"
+                            min="0.1"
+                            inputMode="decimal"
                             value={pricePerMinute}
                             onChange={(e) => setPricePerMinute(e.target.value)}
                             className="input-field"
@@ -736,10 +717,9 @@ export default function DoctorOnboarding() {
                       event.preventDefault()
                       void handleNextStep()
                     }}
-                    loading={isValidating}
-                    rightIcon={!isValidating ? <ChevronRight className="h-4 w-4" /> : undefined}
+                    rightIcon={<ChevronRight className="h-4 w-4" />}
                   >
-                    {isValidating ? 'Verificando...' : 'Siguiente'}
+                    Siguiente
                   </Button>
                 ) : (
                   <Button

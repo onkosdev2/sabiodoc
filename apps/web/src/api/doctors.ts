@@ -1,5 +1,6 @@
 import client from './client'
 import type { ConsultationStructuredIntake } from './consultations'
+import type { PatientProfileChangeRequest, PatientProfilePayload } from './patients'
 
 export type DoctorPresenceStatus = 'offline' | 'online' | 'busy'
 
@@ -248,5 +249,27 @@ export interface DoctorPatientListResponse {
 
 export const getMyPatients = async (): Promise<DoctorPatientListResponse> => {
   const response = await client.get<DoctorPatientListResponse>('/doctors/me/patients')
+  return response.data
+}
+
+/** Propone cambios en los datos del paciente. El paciente debe aprobarlos. */
+export const proposePatientProfileChanges = async (
+  patientId: number,
+  payload: PatientProfilePayload & { doctor_message?: string | null },
+): Promise<PatientProfileChangeRequest> => {
+  const response = await client.post<PatientProfileChangeRequest>(
+    `/doctors/patients/${patientId}/profile-change-requests`,
+    payload,
+  )
+  return response.data
+}
+
+/** Propuestas de cambio enviadas por este médico a un paciente. */
+export const getPatientProfileChangeRequests = async (
+  patientId: number,
+): Promise<PatientProfileChangeRequest[]> => {
+  const response = await client.get<PatientProfileChangeRequest[]>(
+    `/doctors/patients/${patientId}/profile-change-requests`,
+  )
   return response.data
 }

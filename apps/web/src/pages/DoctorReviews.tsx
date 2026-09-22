@@ -5,10 +5,12 @@ import { DoctorReviewsResponse, getMyDoctorReviews } from '../api/doctors'
 import { useToast } from '../context/ToastContext'
 import { getApiErrorMessage } from '../utils/apiError'
 import BackButton from '../components/BackButton'
+import Pagination from '../components/Pagination'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
+import { usePagination } from '../hooks/usePagination'
 
 function Stars({ value, className = 'h-4 w-4' }: { value: number; className?: string }) {
   return (
@@ -28,6 +30,8 @@ export default function DoctorReviews() {
   const toast = useToast()
   const [data, setData] = useState<DoctorReviewsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const reviews = data?.reviews ?? []
+  const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(reviews, 8)
 
   const loadReviews = useCallback(async () => {
     setLoading(true)
@@ -88,15 +92,15 @@ export default function DoctorReviews() {
             </div>
           </section>
 
-          {data.reviews.length === 0 ? (
+          {reviews.length === 0 ? (
             <EmptyState icon={Star} title="Aún no tienes reseñas escritas" description="Cuando un paciente deje un comentario, lo verás aquí." />
           ) : (
             <div className="space-y-4">
-              {data.reviews.map((review) => (
+              {pageItems.map((review) => (
                 <article key={review.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Stars value={review.rating} />
-                    <span className="text-xs uppercase tracking-[0.16em] text-slate-400">
+                    <span className="text-xs uppercase tracking-[0.16em] text-slate-500">
                       {new Date(review.created_at).toLocaleDateString('es-ES', {
                         day: 'numeric',
                         month: 'long',
@@ -108,6 +112,13 @@ export default function DoctorReviews() {
                   <p className="mt-3 text-sm font-medium text-slate-500">{review.patient_label}</p>
                 </article>
               ))}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setPage}
+              />
             </div>
           )}
         </>

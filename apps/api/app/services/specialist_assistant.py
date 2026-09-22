@@ -5,6 +5,8 @@ antes de la videoconsulta con el médico real.
 """
 import json
 import re
+import unicodedata
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 from app.services.llm_client import llm_client
 from app.core.logging import get_logger
@@ -357,9 +359,10 @@ REGLAS IMPORTANTES QUE DEBES SEGUIR SIEMPRE:
 3. NUNCA minimices síntomas que podrían ser graves
 4. Sé empático, profesional y claro
 5. Haz UNA o DOS preguntas a la vez, no bombardees al paciente
-6. Resume la información recopilada cuando sea apropiado
+6. Resume brevemente lo que has entendido cuando sea apropiado (sin redactar el resumen clínico final)
 7. Si detectas señales de emergencia, indica claramente que debe buscar atención urgente
 8. Recuerda que tu rol es PREPARAR la consulta, no reemplazarla
+9. NUNCA redactes tú el resumen clínico ni digas que ya lo generaste. Cuando tengas suficiente información, haz UNA pregunta clara ofreciéndote a generarlo (por ejemplo: "¿Quieres que genere el resumen de esta conversación para el médico?"). Formúlala de forma aislada, sin combinarla con otras preguntas, y cuando el paciente confirme, el sistema lo generará automáticamente y dará por finalizada la pre-consulta.
 
 FORMATO DE RESPUESTA:
 - Responde de forma conversacional y natural
@@ -367,7 +370,7 @@ FORMATO DE RESPUESTA:
 - Muestra empatía y comprensión
 - Guía la conversación hacia información útil para el médico
 
-Al final de la conversación (cuando tengas suficiente información), ofrece generar un resumen para el médico.
+Al final de la conversación (cuando tengas suficiente información), ofrece generar un resumen para el médico preguntándolo de forma clara. NO escribas tú el resumen: el sistema lo generará cuando el paciente confirme.
 
 ALCANCE ESTRICTO (OBLIGATORIO, NO NEGOCIABLE):
 - Tu ÚNICA función es ayudar al paciente a preparar su consulta médica con el especialista.
@@ -409,6 +412,105 @@ def is_off_topic(message: str) -> bool:
     if not normalized:
         return False
     return any(re.search(pattern, normalized) for pattern in OFF_TOPIC_PATTERNS)
+
+
+# --- Detección de intención para el cierre automático de la pre-consulta ---
+
+# Confirmaciones cortas que aceptan una oferta del asistente.
+_AFFIRMATIVE_RE = re.compile(
+    r"^(?:si+|claro|dale|ok|okay|okey|perfecto|de acuerdo|adelante|correcto|listo|vamos|"
+    r"hazlo|generalo|genera|sip|yes|yep|afirmativo|exacto|asi es|eso es)"
+    r"(?:[\s,]+(?:que|quiero|el|resumen|por favor|porfavor|porfa|gracias|pues|"
+    r"entonces|ya|si+|generalo|genera|hazlo))*[\s.!]*$",
+    re.IGNORECASE,
+)
+
+# Frases que indican que el asistente ofreció generar el resumen.
+_SUMMARY_OFFER_MARKERS = (
+    "puedo generar",
+    "puedo preparar",
+    "quieres que",
+    "deseas que",
+    "te preparo",
+    "te genero",
+    "genero el resumen",
+    "preparo el resumen",
+    "generar el resumen",
+)
+
+# Verbo de acción aplicado al resumen (para no confundir una simple mención).
+_SUMMARY_ACTION_RE = re.compile(
+    r"(gener|prepar|elabor|hac|crea|redact)\w*\s+(?:el\s+|un\s+)?resumen"
+)
+
+# Líneas con marcadores de posición sin resolver, p. ej. "Fecha: [fecha de la consulta]".
+_SUMMARY_PLACEHOLDER_LINE_RE = re.compile(
+    r"^\s*(?:[-*#>]+\s*)?[^\n]*:\s*(?:\*\*)?\s*\[[^\]\n]+\]\s*$",
+    re.IGNORECASE,
+)
+# Marcador de posición entre corchetes que menciona una fecha (caso reportado).
+_SUMMARY_DATE_PLACEHOLDER_RE = re.compile(
+    r"\[\s*fecha[^\]]*\]", re.IGNORECASE
+)
+
+
+def _normalize_intent_text(text: str) -> str:
+    """Minúsculas y sin acentos, para comparar intenciones de forma robusta."""
+    lowered = text.strip().lower()
+    decomposed = unicodedata.normalize("NFD", lowered)
+    without_accents = "".join(
+        char for char in decomposed if unicodedata.category(char) != "Mn"
+    )
+    return re.sub(r"\s+", " ", without_accents).strip()
+
+
+def sanitize_summary_text(summary: Optional[str]) -> Optional[str]:
+    """Elimina marcadores de posición que el modelo pudo dejar sin resolver.
+
+    Detecta líneas tipo "Fecha: [fecha de la consulta]" y restos de fecha entre
+    corchetes. Se usa al generar el resumen y al servirlo, para limpiar también
+    los resúmenes ya guardados.
+    """
+    if not summary:
+        return summary
+
+    cleaned_lines: list[str] = []
+    for line in summary.splitlines():
+        if _SUMMARY_PLACEHOLDER_LINE_RE.match(line):
+            continue
+        if _SUMMARY_DATE_PLACEHOLDER_RE.search(line):
+            without_placeholder = _SUMMARY_DATE_PLACEHOLDER_RE.sub("", line).rstrip()
+            if without_placeholder.strip(" -:#*"):
+                cleaned_lines.append(without_placeholder)
+            continue
+        cleaned_lines.append(line)
+
+    cleaned = "\n".join(cleaned_lines).strip()
+    # Colapsamos más de una línea en blanco seguida.
+    return re.sub(r"\n{3,}", "\n\n", cleaned)
+
+
+def is_affirmative(message: str) -> bool:
+    """Detecta una respuesta corta de confirmación ('sí', 'claro, por favor', etc.)."""
+    normalized = _normalize_intent_text(message)
+    if not normalized or len(normalized) > 40:
+        return False
+    return bool(_AFFIRMATIVE_RE.match(normalized))
+
+
+def is_summary_offer(message: str) -> bool:
+    """Detecta si el asistente ofreció o preguntó por generar el resumen.
+
+    Exige que se hable de *generar/preparar* el resumen, para no confundir una
+    simple mención (por ejemplo, el propio texto del resumen ya redactado).
+    """
+    normalized = _normalize_intent_text(message)
+    if "resumen" not in normalized:
+        return False
+    asks = "?" in message or "¿" in message
+    has_action = bool(_SUMMARY_ACTION_RE.search(normalized))
+    has_offer_marker = any(marker in normalized for marker in _SUMMARY_OFFER_MARKERS)
+    return has_action and (asks or has_offer_marker)
 
 
 class SpecialistAssistant:
@@ -502,7 +604,8 @@ Tu objetivo es recopilar información que ayude al médico a entender mejor el c
         self,
         specialty_slug: str,
         specialty_name: str,
-        messages: List[Dict[str, str]]
+        messages: List[Dict[str, str]],
+        consultation_date: Optional[datetime] = None,
     ) -> str:
         """
         Genera un resumen de la pre-consulta para el médico.
@@ -511,16 +614,21 @@ Tu objetivo es recopilar información que ayude al médico a entender mejor el c
             specialty_slug: Slug de la especialidad
             specialty_name: Nombre de la especialidad
             messages: Historial completo de mensajes
+            consultation_date: Fecha de la consulta (se incluye en el resumen)
         
         Returns:
             Resumen estructurado para el médico
         """
         if self.is_mock:
             return self._get_mock_summary(specialty_name)
-        
+
+        date_text = (consultation_date or datetime.now(UTC)).strftime("%d/%m/%Y")
+
         try:
             summary_prompt = f"""Eres un asistente médico. Analiza la siguiente conversación de pre-consulta 
 con un paciente que va a ver a un {specialty_name.lower()} y genera un RESUMEN ESTRUCTURADO para el médico.
+
+La pre-consulta se realizó el {date_text}. Usa esa fecha si necesitas mencionarla.
 
 El resumen debe incluir:
 1. **Motivo de consulta**: Razón principal por la que consulta
@@ -529,6 +637,11 @@ El resumen debe incluir:
 4. **Antecedentes relevantes**: Enfermedades, medicamentos, alergias mencionadas
 5. **Información adicional**: Cualquier otro dato relevante
 6. **Señales de alerta**: Si se detectaron síntomas preocupantes
+
+Reglas de formato:
+- Usa Markdown simple (encabezados con ##, **negritas** y viñetas con -).
+- NUNCA escribas marcadores de posición ni textos entre corchetes (por ejemplo "[fecha de la consulta]").
+- No inventes datos: si un dato no aparece en la conversación, omite esa sección.
 
 Sé conciso pero completo. Este resumen ayudará al médico a prepararse para la videoconsulta."""
 
@@ -549,7 +662,7 @@ Sé conciso pero completo. Este resumen ayudará al médico a prepararse para la
                 raise RuntimeError("ningun proveedor LLM disponible")
 
             logger.info(f"Summary generated for consultation with {specialty_slug}")
-            return summary
+            return sanitize_summary_text(summary)
             
         except Exception as e:
             logger.error(f"Summary generation error: {e}")
@@ -630,8 +743,7 @@ Reglas:
                    "¿Tienes alguna alergia o condición médica conocida?")
         elif num_exchanges == 3:
             return ("Muy bien, ya tengo una buena idea de tu situación. "
-                   "¿Hay algo más que quieras que el médico sepa antes de la consulta? "
-                   "Si no, puedo generar un resumen de nuestra conversación para el especialista.")
+                   "¿Quieres que genere el resumen de esta conversación para el médico?")
         else:
             return ("Perfecto. He recopilado información útil para tu consulta. "
                    "El médico podrá revisar este historial antes de atenderte. "
@@ -656,6 +768,10 @@ Reglas:
 **Antecedentes**: Se consultó sobre medicamentos y condiciones previas.
 
 **Nota**: Este es un resumen automático. Por favor revise el historial completo del chat para más detalles."""
+
+    def _sanitize_summary(self, summary: str) -> str:
+        """Compatibilidad: delega en `sanitize_summary_text`."""
+        return sanitize_summary_text(summary)
 
     def _parse_json_content(self, content: str | None) -> Dict[str, Any]:
         if not content:
