@@ -17,6 +17,7 @@ from app.models.triage_request import TriageRequest
 from app.models.user import User
 from app.models.video_session import VideoSession
 from app.models.video_session_event import VideoSessionEvent
+from app.models.video_session_file import VideoSessionFile
 from app.models.wallet import (
     AppointmentPayment,
     Wallet,

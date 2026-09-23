@@ -23,6 +23,7 @@ from app.schemas.appointment import (
 from app.schemas.video_session import AppointmentVideoSessionResponse
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
+from app.services import session_file_service
 from app.services.notification_service import notification_service
 from app.services.reminder_service import reminder_service
 from app.services.video_session_service import video_session_service
@@ -150,8 +151,12 @@ def get_my_appointments(
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
     appointments = query.order_by(Appointment.scheduled_at.desc()).all()
+    files_map = session_file_service.list_files_grouped_by_appointment(db, [item.id for item in appointments])
     return AppointmentListResponse(
-        appointments=[appointment_service.serialize_appointment(item) for item in appointments],
+        appointments=[
+            appointment_service.serialize_appointment(item, files=files_map.get(item.id, []))
+            for item in appointments
+        ],
         total=len(appointments),
     )
 
@@ -190,7 +195,10 @@ def get_appointment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
     if current_user.role != UserRole.admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes ver esta cita")
-    return appointment_service.serialize_appointment(appointment)
+    return appointment_service.serialize_appointment(
+        appointment,
+        files=session_file_service.list_files_for_appointment(db, appointment.id),
+    )
 
 
 @router.post("/{appointment_id}/video-session/prepare", response_model=AppointmentVideoSessionResponse)

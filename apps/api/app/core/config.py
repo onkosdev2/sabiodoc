@@ -78,6 +78,16 @@ class Settings(BaseSettings):
     # se cierra y liquida automaticamente.
     VIDEO_SESSION_ABANDON_MINUTES: int = 5
 
+    # Archivos adjuntos de la videoconsulta (Cloudinary)
+    CLOUDINARY_CLOUD_NAME: Optional[str] = None
+    CLOUDINARY_API_KEY: Optional[str] = None
+    CLOUDINARY_API_SECRET: Optional[str] = None
+    CLOUDINARY_FOLDER: str = "sabiodoc/session-files"
+    # Maximo de archivos que cada participante puede enviar por sesion.
+    SESSION_FILES_MAX: int = 10
+    # Tamano maximo por archivo (MB).
+    SESSION_FILE_MAX_MB: int = 20
+
     # Borradores de consulta IA: se cierran automaticamente si no registran
     # actividad (mensajes) en este tiempo. 168 h = 7 dias.
     CONSULTATION_DRAFT_TTL_HOURS: int = 168
@@ -98,6 +108,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.strip().lower() in {"production", "prod"}
+
+    @property
+    def cloudinary_enabled(self) -> bool:
+        return bool(
+            self.CLOUDINARY_CLOUD_NAME and self.CLOUDINARY_API_KEY and self.CLOUDINARY_API_SECRET
+        )
 
     @property
     def primary_frontend_origin(self) -> str:

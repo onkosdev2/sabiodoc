@@ -1,5 +1,21 @@
 import client from './client'
 
+export interface VideoSessionFile {
+  id: number
+  video_session_id: number
+  appointment_id: number | null
+  uploader_id: number
+  uploader_role: 'patient' | 'doctor'
+  original_name: string
+  content_type: string | null
+  resource_type: string
+  file_format: string | null
+  bytes: number
+  url: string
+  secure_url: string
+  created_at: string | null
+}
+
 export interface VideoSessionStatus {
   video_session_id: number
   consultation_id: number | null
@@ -35,6 +51,8 @@ export interface VideoSessionStatus {
   followup_instructions: string | null
   intro_script: string | null
   closed_reason: string | null
+  files_enabled: boolean
+  files: VideoSessionFile[]
 }
 
 export const getVideoSessionStatus = async (videoSessionId: number): Promise<VideoSessionStatus> => {
@@ -45,6 +63,31 @@ export const getVideoSessionStatus = async (videoSessionId: number): Promise<Vid
 export const joinVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
   const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/join`)
   return response.data
+}
+
+export const listVideoSessionFiles = async (videoSessionId: number): Promise<VideoSessionFile[]> => {
+  const response = await client.get<VideoSessionFile[]>(`/video-sessions/${videoSessionId}/files`)
+  return response.data
+}
+
+export const uploadVideoSessionFile = async (
+  videoSessionId: number,
+  file: File,
+): Promise<VideoSessionFile> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await client.post<VideoSessionFile>(
+    `/video-sessions/${videoSessionId}/files`,
+    formData,
+  )
+  return response.data
+}
+
+export const deleteVideoSessionFile = async (
+  videoSessionId: number,
+  fileId: number,
+): Promise<void> => {
+  await client.delete(`/video-sessions/${videoSessionId}/files/${fileId}`)
 }
 
 export const startVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {

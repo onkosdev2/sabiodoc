@@ -66,6 +66,7 @@ from app.services.consultation_service import close_stale_consultations
 from app.services.specialist_assistant import sanitize_summary_text
 from app.services.reminder_service import reminder_service
 from app.services.video_session_service import video_session_service
+from app.services import session_file_service
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 logger = get_logger(__name__)
@@ -644,6 +645,18 @@ def get_patient_timeline_for_doctor(
         )
 
     items = sorted([*appointment_items, *consultation_items, *video_items], key=lambda item: item.sort_at, reverse=True)
+
+    appointment_ids = [item.appointment_id for item in appointment_items if item.appointment_id]
+    session_ids = [item.video_session_id for item in video_items if item.video_session_id]
+    files_by_appointment = session_file_service.list_files_grouped_by_appointment(db, appointment_ids)
+    files_by_session = session_file_service.list_files_grouped_by_session(db, session_ids)
+    for item in appointment_items:
+        if item.appointment_id:
+            item.files = files_by_appointment.get(item.appointment_id, [])
+    for item in video_items:
+        if item.video_session_id:
+            item.files = files_by_session.get(item.video_session_id, [])
+
     return DoctorPatientTimelineResponse(
         patient_id=patient.id,
         patient_email=patient.email,

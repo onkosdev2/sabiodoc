@@ -8,10 +8,10 @@ export { API_URL }
 
 const client = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
+// No fijamos `Content-Type` global: axios usa application/json para objetos y
+// deja que el navegador ponga `multipart/form-data; boundary=...` en los FormData
+// (subida de archivos).
 
 client.interceptors.request.use((config) => {
   const token = getStoredToken()

@@ -170,7 +170,7 @@ class AppointmentService:
         """Nombre del paciente desde su perfil, si lo completo."""
         return get_patient_display_name(appointment.patient)
 
-    def serialize_appointment(self, appointment: Appointment):
+    def serialize_appointment(self, appointment: Appointment, files: list | None = None):
         review = appointment.review[0] if appointment.review else None
         payment = getattr(appointment, "payment", None)
         from app.schemas.appointment import AppointmentResponse
@@ -206,6 +206,7 @@ class AppointmentService:
             review_comment=review.comment if review else None,
             payment_amount_cents=payment.amount_cents if payment else None,
             payment_status=payment.status if payment else None,
+            files=files or [],
         )
 
     def compute_bookable_slots(

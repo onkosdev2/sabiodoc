@@ -14,6 +14,7 @@ import Skeleton from '../components/ui/Skeleton'
 import { DoctorPatientTimeline, DoctorPatientTimelineItem, getDoctorPatientTimeline, getPatientProfileChangeRequests } from '../api/doctors'
 import { PatientProfile, PatientProfileChangeRequest, getPatientProfile } from '../api/patients'
 import PatientProfileEditModal from '../components/PatientProfileEditModal'
+import { formatFileSize } from '../components/SessionFilesPanel'
 import { formatDateTime } from '../utils/format'
 import { usePagination } from '../hooks/usePagination'
 import {
@@ -318,7 +319,8 @@ export default function DoctorPatientTimelinePage() {
                 item.scheduled_at ||
                 item.completed_at ||
                 item.review_rating ||
-                item.review_comment,
+                item.review_comment ||
+                item.files.length > 0,
             )
 
             return (
@@ -430,6 +432,30 @@ export default function DoctorPatientTimelinePage() {
                         </div>
                       )}
                     </div>
+
+                    {item.files.length > 0 && (
+                      <div className="rounded-2xl bg-sky-50 p-4">
+                        <p className="text-xs uppercase tracking-[0.22em] text-sky-700">Archivos compartidos</p>
+                        <ul className="mt-3 space-y-2">
+                          {item.files.map((file) => (
+                            <li key={file.id} className="flex flex-wrap items-center gap-x-2 text-sm">
+                              <a
+                                href={file.secure_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-sky-800 hover:underline"
+                              >
+                                {file.original_name}
+                              </a>
+                              <span className="text-xs text-sky-600">
+                                {file.uploader_role === 'doctor' ? 'Médico' : 'Paciente'} ·{' '}
+                                {formatFileSize(file.bytes)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {(item.review_rating || item.review_comment) && (
                       <div className="rounded-2xl bg-violet-50 p-4">

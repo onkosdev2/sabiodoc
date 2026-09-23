@@ -2,7 +2,7 @@ import json
 import math
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
@@ -16,8 +16,10 @@ from app.models.video_session_event import VideoSessionEvent
 from app.schemas.video_session import (
     VideoSessionCompleteRequest,
     VideoSessionDoctorNoteRequest,
+    VideoSessionFileResponse,
     VideoSessionStatusResponse,
 )
+from app.services import session_file_service
 from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
 from app.services.patient_profile_service import get_patient_display_name
@@ -69,6 +71,7 @@ def _serialize_status(
     *,
     patient_balance_cents: int = 0,
     overtime_amount_cents: int = 0,
+    files: list | None = None,
 ) -> VideoSessionStatusResponse:
     reference_end = video_session.ended_at or datetime.now(timezone.utc)
     billable_seconds = video_session.billable_seconds or 0
@@ -141,6 +144,8 @@ def _serialize_status(
         patient_present=patient_present,
         doctor_present=doctor_present,
         both_present=both_present,
+        files_enabled=settings.cloudinary_enabled,
+        files=files or [],
         doctor_note=video_session.doctor_note,
         followup_instructions=video_session.followup_instructions,
         intro_script=video_session.intro_script,
@@ -165,6 +170,7 @@ def _serialize_status_with_billing(
         participant_role,
         patient_balance_cents=patient_balance_cents,
         overtime_amount_cents=overtime_amount_cents,
+        files=session_file_service.list_session_files(db, video_session.id),
     )
 
 
@@ -182,6 +188,73 @@ def get_video_session_status(
     participant_role = _resolve_participant_role(video_session, current_user)
     _heartbeat_and_reconcile(db, video_session, participant_role)
     return _serialize_status_with_billing(db, video_session, participant_role)
+
+
+@router.get("/{video_session_id}/files", response_model=list[VideoSessionFileResponse])
+def list_video_session_files(
+    video_session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    _resolve_participant_role(video_session, current_user)
+    return session_file_service.list_session_files(db, video_session_id)
+
+
+@router.post(
+    "/{video_session_id}/files",
+    response_model=VideoSessionFileResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_video_session_file(
+    video_session_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="La videoconsulta ya está cerrada."
+        )
+
+    record = session_file_service.upload_session_file(
+        db, video_session, current_user, participant_role, file
+    )
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type="file_shared",
+            source="backend",
+            payload_json=json.dumps({"file_id": record.id, "uploader_role": participant_role}),
+        )
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.delete("/{video_session_id}/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_video_session_file(
+    video_session_id: int,
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    _resolve_participant_role(video_session, current_user)
+    if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="La videoconsulta ya está cerrada."
+        )
+    session_file_service.delete_session_file(db, video_session, current_user, file_id)
 
 
 @router.post("/{video_session_id}/join", response_model=VideoSessionStatusResponse)

@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.appointment import AppointmentStatus
 from app.models.wallet import AppointmentPaymentStatus
 from app.schemas.consultation import ConsultationStructuredIntake
+from app.schemas.video_session import VideoSessionFileResponse
 
 
 class DoctorAvailabilitySlotInput(BaseModel):
@@ -115,6 +116,8 @@ class AppointmentResponse(BaseModel):
     # Pago de la cita con créditos.
     payment_amount_cents: Optional[int] = None
     payment_status: Optional[AppointmentPaymentStatus] = None
+    # Archivos compartidos durante la videoconsulta de esta cita.
+    files: list[VideoSessionFileResponse] = []
 
 
 class AppointmentListResponse(BaseModel):

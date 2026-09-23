@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from app.models.video_session import PaymentStatus, VideoProvider, VideoSessionStatus
 
 
@@ -66,6 +66,24 @@ class AppointmentVideoSessionResponse(BaseModel):
     expires_at: datetime
 
 
+class VideoSessionFileResponse(BaseModel):
+    id: int
+    video_session_id: int
+    appointment_id: int | None = None
+    uploader_id: int
+    uploader_role: str
+    original_name: str
+    content_type: str | None = None
+    resource_type: str
+    file_format: str | None = None
+    bytes: int = 0
+    url: str
+    secure_url: str
+    created_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class VideoSessionStatusResponse(BaseModel):
     video_session_id: int
     consultation_id: int | None = None
@@ -103,6 +121,9 @@ class VideoSessionStatusResponse(BaseModel):
     followup_instructions: str | None = None
     intro_script: str | None = None
     closed_reason: str | None = None
+    # Archivos compartidos en la sesión.
+    files_enabled: bool = False
+    files: list[VideoSessionFileResponse] = []
 
 
 class VideoSessionDoctorNoteRequest(BaseModel):

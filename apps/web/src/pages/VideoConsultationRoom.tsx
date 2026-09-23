@@ -15,6 +15,7 @@ import {
   LogOut,
   Mic,
   Pause,
+  Paperclip,
   Play,
   ShieldCheck,
   Sparkles,
@@ -27,6 +28,7 @@ import {
 
 import {
   completeVideoSession,
+  deleteVideoSessionFile,
   generateVideoSessionIntro,
   getVideoSessionStatus,
   joinVideoSession,
@@ -34,6 +36,8 @@ import {
   pauseVideoSession,
   startVideoSession,
   updateVideoSessionDoctorNote,
+  uploadVideoSessionFile,
+  VideoSessionFile,
   VideoSessionStatus,
 } from '../api/videoSessions'
 import { useAuth } from '../context/AuthContext'
@@ -47,6 +51,8 @@ import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 import JitsiMeeting from '../components/JitsiMeeting'
+import SessionFilesPanel from '../components/SessionFilesPanel'
+import { getApiErrorMessage } from '../utils/apiError'
 
 type PreparedVideoSession = {
   video_session_id: number
@@ -63,7 +69,9 @@ type PreparedVideoSession = {
   expires_at: string
 }
 
-type DoctorTab = 'session' | 'history' | 'notes'
+type DoctorTab = 'session' | 'history' | 'notes' | 'files'
+
+const MAX_SESSION_FILES = 10
 
 const STORAGE_KEY = 'sabiodoc-video-session'
 const STATUS_POLL_MS = 5000
@@ -118,6 +126,9 @@ export default function VideoConsultationRoom() {
   const [joined, setJoined] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [openedExternally, setOpenedExternally] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [fileToDelete, setFileToDelete] = useState<VideoSessionFile | null>(null)
+  const [deletingFile, setDeletingFile] = useState(false)
   const [statusData, setStatusData] = useState<VideoSessionStatus | null>(null)
   const [clockNow, setClockNow] = useState(Date.now())
   const [doctorNote, setDoctorNote] = useState('')
@@ -300,6 +311,41 @@ export default function VideoConsultationRoom() {
     setOpenedExternally(true)
     if (!joined) {
       await handleJoin()
+    }
+  }
+
+  const handleUploadFile = async (file: File) => {
+    if (!session) return
+    setUploadingFile(true)
+    setError(null)
+    try {
+      const record = await uploadVideoSessionFile(session.video_session_id, file)
+      setStatusData((current) =>
+        current ? { ...current, files: [...current.files, record] } : current,
+      )
+    } catch (uploadError: unknown) {
+      setError(getApiErrorMessage(uploadError, 'No se pudo subir el archivo.'))
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
+  const handleDeleteFile = async () => {
+    if (!session || !fileToDelete) return
+    setDeletingFile(true)
+    setError(null)
+    try {
+      await deleteVideoSessionFile(session.video_session_id, fileToDelete.id)
+      setStatusData((current) =>
+        current
+          ? { ...current, files: current.files.filter((file) => file.id !== fileToDelete.id) }
+          : current,
+      )
+      setFileToDelete(null)
+    } catch (deleteError: unknown) {
+      setError(getApiErrorMessage(deleteError, 'No se pudo borrar el archivo.'))
+    } finally {
+      setDeletingFile(false)
     }
   }
 
@@ -559,6 +605,7 @@ export default function VideoConsultationRoom() {
   const doctorTabs: Array<{ key: DoctorTab; label: string; Icon: typeof Timer }> = [
     { key: 'session', label: 'Sesión', Icon: Timer },
     { key: 'history', label: 'Historial', Icon: FileText },
+    { key: 'files', label: 'Archivos', Icon: Paperclip },
     { key: 'notes', label: 'Notas', Icon: ClipboardList },
   ]
 
@@ -813,6 +860,19 @@ export default function VideoConsultationRoom() {
     </div>
   )
 
+  const filesContent = (
+    <SessionFilesPanel
+      files={statusData?.files ?? []}
+      enabled={Boolean(statusData?.files_enabled)}
+      maxFiles={MAX_SESSION_FILES}
+      currentRole={session?.participant_role ?? 'patient'}
+      uploading={uploadingFile}
+      onSelectFile={handleUploadFile}
+      onDelete={setFileToDelete}
+      deletingId={deletingFile ? fileToDelete?.id ?? null : null}
+    />
+  )
+
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-slate-50 p-2 sm:p-3 lg:p-4">
       <header className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
@@ -1041,6 +1101,7 @@ export default function VideoConsultationRoom() {
                   {introContent}
                   {sessionContent}
                   {devicesContent}
+                  {filesContent}
                   <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
                     <p className="flex items-center gap-2 font-medium text-slate-800">
                       <ShieldCheck className="h-4 w-4 text-emerald-600" /> Antes de empezar
@@ -1067,6 +1128,7 @@ export default function VideoConsultationRoom() {
                 </>
               )}
               {isDoctor && activeTab === 'history' && historyContent}
+              {isDoctor && activeTab === 'files' && filesContent}
               {isDoctor && activeTab === 'notes' && notesContent}
             </div>
 
@@ -1167,6 +1229,23 @@ export default function VideoConsultationRoom() {
         busy={completingSession}
         onConfirm={handleCompleteSession}
         onCancel={() => setConfirmComplete(false)}
+      />
+
+      <ConfirmDialog
+        open={fileToDelete !== null}
+        tone="danger"
+        title="¿Borrar el archivo?"
+        description={
+          fileToDelete
+            ? `Se eliminará "${fileToDelete.original_name}" de esta sesión.`
+            : undefined
+        }
+        confirmLabel="Borrar archivo"
+        busy={deletingFile}
+        onConfirm={handleDeleteFile}
+        onCancel={() => {
+          if (!deletingFile) setFileToDelete(null)
+        }}
       />
     </div>
   )

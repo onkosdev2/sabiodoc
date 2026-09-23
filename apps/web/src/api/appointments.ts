@@ -1,5 +1,6 @@
 import client from './client'
 import type { ConsultationStructuredIntake } from './consultations'
+import type { VideoSessionFile } from './videoSessions'
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show'
 
@@ -62,6 +63,7 @@ export interface Appointment {
   review_comment: string | null
   payment_amount_cents: number | null
   payment_status: 'held' | 'released' | 'refunded' | null
+  files: VideoSessionFile[]
 }
 
 export interface AppointmentListResponse {

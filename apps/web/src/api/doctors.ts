@@ -1,5 +1,6 @@
 import client from './client'
 import type { ConsultationStructuredIntake } from './consultations'
+import type { VideoSessionFile } from './videoSessions'
 import type { PatientProfileChangeRequest, PatientProfilePayload } from './patients'
 
 export type DoctorPresenceStatus = 'offline' | 'online' | 'busy'
@@ -156,6 +157,7 @@ export interface DoctorPatientTimelineItem {
   scheduled_at: string | null
   completed_at: string | null
   created_at: string
+  files: VideoSessionFile[]
 }
 
 export interface DoctorPatientTimeline {

@@ -7,6 +7,7 @@ from app.models.doctor_profile import DoctorApprovalStatus
 from app.models.appointment import AppointmentStatus
 from app.models.consultation import ConsultationStatus
 from app.schemas.consultation import ConsultationStructuredIntake
+from app.schemas.video_session import VideoSessionFileResponse
 
 
 class DoctorPresenceUpdate(BaseModel):
@@ -152,6 +153,7 @@ class DoctorPatientTimelineItemResponse(BaseModel):
     scheduled_at: datetime | None = None
     completed_at: datetime | None = None
     created_at: datetime
+    files: list[VideoSessionFileResponse] = []
 
 
 class DoctorPatientTimelineResponse(BaseModel):
