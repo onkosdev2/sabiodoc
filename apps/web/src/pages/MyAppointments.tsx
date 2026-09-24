@@ -22,7 +22,8 @@ import { Textarea } from '../components/ui/Field'
 import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
-import { formatFileSize } from '../components/SessionFilesPanel'
+import AppointmentFilesPanel from '../components/AppointmentFilesPanel'
+import type { VideoSessionFile } from '../api/videoSessions'
 import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES } from '../utils/statusLabels'
 import { getApiErrorMessage } from '../utils/apiError'
 import { formatMoney } from '../utils/format'
@@ -159,6 +160,15 @@ export default function MyAppointments() {
       }
       return next
     })
+  }
+
+  const handleAppointmentFilesChange = (
+    appointmentId: number,
+    files: VideoSessionFile[],
+  ) => {
+    setAppointments((current) =>
+      current.map((item) => (item.id === appointmentId ? { ...item, files } : item)),
+    )
   }
 
   const confirmCancel = async () => {
@@ -324,28 +334,15 @@ export default function MyAppointments() {
                   </div>
                 )}
 
-                {appointment.files.length > 0 && (
-                  <div className="mt-4 rounded-2xl bg-sky-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-sky-700">Archivos compartidos</p>
-                    <ul className="mt-2 space-y-2">
-                      {appointment.files.map((file) => (
-                        <li key={file.id} className="flex flex-wrap items-center gap-x-2 text-sm">
-                          <a
-                            href={file.secure_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium text-sky-800 hover:underline"
-                          >
-                            {file.original_name}
-                          </a>
-                          <span className="text-xs text-sky-600">
-                            {file.uploader_role === 'doctor' ? 'Médico' : 'Tú'} · {formatFileSize(file.bytes)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <AppointmentFilesPanel
+                    appointmentId={appointment.id}
+                    files={appointment.files}
+                    enabled={appointment.files_enabled}
+                    role="patient"
+                    onFilesChange={(files) => handleAppointmentFilesChange(appointment.id, files)}
+                  />
+                </div>
 
                 {appointment.followup_instructions && (
                   <div className="mt-4 rounded-2xl bg-emerald-50 p-4">

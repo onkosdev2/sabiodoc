@@ -68,7 +68,7 @@ class AppointmentVideoSessionResponse(BaseModel):
 
 class VideoSessionFileResponse(BaseModel):
     id: int
-    video_session_id: int
+    video_session_id: int | None = None
     appointment_id: int | None = None
     uploader_id: int
     uploader_role: str

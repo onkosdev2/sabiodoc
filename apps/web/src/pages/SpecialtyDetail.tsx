@@ -5,6 +5,7 @@ import Button from '../components/ui/Button'
 import { getSpecialtyBySlug, Specialty } from '../api/specialties'
 import { createConsultation, getMyConsultations } from '../api/consultations'
 import { addFavorite, removeFavorite, getMyFavorites } from '../api/favorites'
+import DoctorFavoriteButton from '../components/DoctorFavoriteButton'
 import { DoctorCard, getDoctorsBySpecialty } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
@@ -24,7 +25,7 @@ export default function SpecialtyDetail() {
   const [doctors, setDoctors] = useState<DoctorCard[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshingDoctors, setRefreshingDoctors] = useState(false)
-  const [isFavorite, setIsFavorite] = useState(false)
+  const [favoriteDoctorIds, setFavoriteDoctorIds] = useState<Set<number>>(new Set())
   const [actionLoading, setActionLoading] = useState(false)
   const [consultationNotice, setConsultationNotice] = useState<string | null>(null)
   const [openConsultations, setOpenConsultations] = useState<
@@ -43,7 +44,7 @@ export default function SpecialtyDetail() {
 
       if (isAuthenticated) {
         const favorites = await getMyFavorites()
-        setIsFavorite(favorites.favorites.some((f) => f.specialty_id === data.id))
+        setFavoriteDoctorIds(new Set(favorites.favorites.map((f) => f.doctor_id)))
 
         const consultations = await getMyConsultations()
         setOpenConsultations(
@@ -79,21 +80,24 @@ export default function SpecialtyDetail() {
     }
   }
 
-  const handleToggleFavorite = async () => {
+  const handleToggleDoctorFavorite = async (doctorId: number) => {
     if (!isAuthenticated) {
       navigate('/login')
       return
     }
-    if (!specialty) return
-
+    const alreadyFavorite = favoriteDoctorIds.has(doctorId)
     setActionLoading(true)
     try {
-      if (isFavorite) {
-        await removeFavorite(specialty.id)
-        setIsFavorite(false)
+      if (alreadyFavorite) {
+        await removeFavorite(doctorId)
+        setFavoriteDoctorIds((prev) => {
+          const next = new Set(prev)
+          next.delete(doctorId)
+          return next
+        })
       } else {
-        await addFavorite(specialty.id)
-        setIsFavorite(true)
+        await addFavorite(doctorId)
+        setFavoriteDoctorIds((prev) => new Set(prev).add(doctorId))
       }
     } catch (error) {
       console.error('Error toggling favorite:', error)
@@ -232,18 +236,6 @@ export default function SpecialtyDetail() {
               )}
             </div>
           </div>
-
-          <button type="button"
-            onClick={handleToggleFavorite}
-            disabled={actionLoading}
-            className={`p-3 rounded-full transition-colors ${
-              isFavorite
-                ? 'bg-yellow-100 text-yellow-500 hover:bg-yellow-200'
-                : 'bg-slate-100 text-slate-500 hover:bg-yellow-100 hover:text-yellow-500'
-            }`}
-          >
-            <Star className={`w-6 h-6 ${isFavorite ? 'fill-current' : ''}`} />
-          </button>
         </div>
 
         {specialty.description && (
@@ -386,11 +378,11 @@ export default function SpecialtyDetail() {
         ) : (
           <div className="space-y-4">
             {visibleDoctors.map((doctor) => (
-              <Link
-                key={doctor.id}
-                to={`/doctors/${doctor.id}?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`}
-                className="group block w-full rounded-2xl border border-slate-200 p-5 text-left transition-all hover:border-primary-400 hover:shadow-sm"
-              >
+              <div key={doctor.id} className="relative">
+                <Link
+                  to={`/doctors/${doctor.id}?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`}
+                  className="group block w-full rounded-2xl border border-slate-200 p-5 pr-16 text-left transition-all hover:border-primary-400 hover:shadow-sm"
+                >
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                   <h3 className="text-xl font-semibold text-slate-800">{doctor.display_name}</h3>
                   <PresenceBadge presence={doctor.presence} />
@@ -423,6 +415,16 @@ export default function SpecialtyDetail() {
                     </span>
                   </div>
                 </Link>
+                {isAuthenticated && (
+                  <DoctorFavoriteButton
+                    doctorId={doctor.id}
+                    active={favoriteDoctorIds.has(doctor.id)}
+                    onToggle={handleToggleDoctorFavorite}
+                    disabled={actionLoading}
+                    className="absolute right-4 top-4"
+                  />
+                )}
+              </div>
             ))}
           </div>
         )}

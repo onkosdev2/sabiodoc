@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, CalendarClock, FileText, Filter, MessageSquareText, Pencil, Stethoscope, Video } from 'lucide-react'
+import { ArrowLeft, CalendarClock, FileText, Filter, MessageSquareText, Pencil, Stethoscope, Trash2, Video } from 'lucide-react'
 
 import Pagination from '../components/Pagination'
 import RichText from '../components/RichText'
@@ -14,6 +14,12 @@ import Skeleton from '../components/ui/Skeleton'
 import { DoctorPatientTimeline, DoctorPatientTimelineItem, getDoctorPatientTimeline, getPatientProfileChangeRequests } from '../api/doctors'
 import { PatientProfile, PatientProfileChangeRequest, getPatientProfile } from '../api/patients'
 import PatientProfileEditModal from '../components/PatientProfileEditModal'
+import AppointmentFilesPanel from '../components/AppointmentFilesPanel'
+import ConfirmDialog from '../components/ConfirmDialog'
+import { deleteFile } from '../api/files'
+import type { VideoSessionFile } from '../api/videoSessions'
+import { useToast } from '../context/ToastContext'
+import { getApiErrorMessage } from '../utils/apiError'
 import { formatFileSize } from '../components/SessionFilesPanel'
 import { formatDateTime } from '../utils/format'
 import { usePagination } from '../hooks/usePagination'
@@ -86,6 +92,9 @@ export default function DoctorPatientTimelinePage() {
   const [itemTypeFilter, setItemTypeFilter] = useState<ItemTypeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const toast = useToast()
+  const [fileToDelete, setFileToDelete] = useState<VideoSessionFile | null>(null)
+  const [deletingFile, setDeletingFile] = useState(false)
 
   useEffect(() => {
     const loadTimeline = async () => {
@@ -152,6 +161,44 @@ export default function DoctorPatientTimelinePage() {
       }
       return next
     })
+  }
+
+  const handleItemFilesChange = (
+    item: DoctorPatientTimelineItem,
+    files: VideoSessionFile[],
+  ) => {
+    setTimeline((current) =>
+      current
+        ? {
+            ...current,
+            items: current.items.map((it) => (itemKey(it) === itemKey(item) ? { ...it, files } : it)),
+          }
+        : current,
+    )
+  }
+
+  const handleDeleteFile = async () => {
+    if (!fileToDelete) return
+    setDeletingFile(true)
+    try {
+      await deleteFile(fileToDelete.id)
+      setTimeline((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((it) => ({
+                ...it,
+                files: it.files.filter((file) => file.id !== fileToDelete.id),
+              })),
+            }
+          : current,
+      )
+      setFileToDelete(null)
+    } catch (deleteError) {
+      toast.error(getApiErrorMessage(deleteError, 'No se pudo borrar el archivo.'))
+    } finally {
+      setDeletingFile(false)
+    }
   }
 
   if (loading) {
@@ -320,7 +367,8 @@ export default function DoctorPatientTimelinePage() {
                 item.completed_at ||
                 item.review_rating ||
                 item.review_comment ||
-                item.files.length > 0,
+                item.files.length > 0 ||
+                Boolean(item.appointment_id),
             )
 
             return (
@@ -433,7 +481,17 @@ export default function DoctorPatientTimelinePage() {
                       )}
                     </div>
 
-                    {item.files.length > 0 && (
+                    {item.appointment_id ? (
+                      <div className="rounded-2xl bg-sky-50 p-4">
+                        <AppointmentFilesPanel
+                          appointmentId={item.appointment_id}
+                          files={item.files}
+                          enabled={timeline.files_enabled}
+                          role="doctor"
+                          onFilesChange={(files) => handleItemFilesChange(item, files)}
+                        />
+                      </div>
+                    ) : item.files.length > 0 ? (
                       <div className="rounded-2xl bg-sky-50 p-4">
                         <p className="text-xs uppercase tracking-[0.22em] text-sky-700">Archivos compartidos</p>
                         <ul className="mt-3 space-y-2">
@@ -451,11 +509,21 @@ export default function DoctorPatientTimelinePage() {
                                 {file.uploader_role === 'doctor' ? 'Médico' : 'Paciente'} ·{' '}
                                 {formatFileSize(file.bytes)}
                               </span>
+                              {file.uploader_role === 'doctor' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFileToDelete(file)}
+                                  aria-label={`Borrar ${file.original_name}`}
+                                  className="ml-auto rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
                             </li>
                           ))}
                         </ul>
                       </div>
-                    )}
+                    ) : null}
 
                     {(item.review_rating || item.review_comment) && (
                       <div className="rounded-2xl bg-violet-50 p-4">
@@ -488,6 +556,19 @@ export default function DoctorPatientTimelinePage() {
         patientName={patientProfile?.full_name || timeline.patient_email}
         profile={patientProfile}
         onSubmitted={(request) => setChangeRequests((current) => [request, ...current])}
+      />
+
+      <ConfirmDialog
+        open={fileToDelete !== null}
+        tone="danger"
+        title="¿Borrar el archivo?"
+        description={fileToDelete ? `Se eliminará "${fileToDelete.original_name}".` : undefined}
+        confirmLabel="Borrar archivo"
+        busy={deletingFile}
+        onConfirm={handleDeleteFile}
+        onCancel={() => {
+          if (!deletingFile) setFileToDelete(null)
+        }}
       />
     </div>
   )

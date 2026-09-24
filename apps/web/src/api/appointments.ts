@@ -64,6 +64,7 @@ export interface Appointment {
   payment_amount_cents: number | null
   payment_status: 'held' | 'released' | 'refunded' | null
   files: VideoSessionFile[]
+  files_enabled: boolean
 }
 
 export interface AppointmentListResponse {
@@ -226,6 +227,19 @@ export const reviewAppointment = async (appointmentId: number, payload: Appointm
 
 export const prepareAppointmentVideoSession = async (appointmentId: number): Promise<AppointmentVideoSession> => {
   const response = await client.post<AppointmentVideoSession>(`/appointments/${appointmentId}/video-session/prepare`)
+  return response.data
+}
+
+export const uploadAppointmentFile = async (
+  appointmentId: number,
+  file: File,
+): Promise<VideoSessionFile> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await client.post<VideoSessionFile>(
+    `/appointments/${appointmentId}/files`,
+    formData,
+  )
   return response.data
 }
 

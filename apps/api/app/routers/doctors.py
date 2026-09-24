@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403, require_application_reviewer
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation import Consultation
@@ -664,6 +665,7 @@ def get_patient_timeline_for_doctor(
         can_view_history=True,
         items=items,
         total=len(items),
+        files_enabled=settings.cloudinary_enabled,
     )
 
 

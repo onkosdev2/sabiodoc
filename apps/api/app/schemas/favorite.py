@@ -1,20 +1,21 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
 from datetime import datetime
-from app.schemas.specialty import SpecialtyResponse
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
+from app.schemas.doctor import DoctorCardResponse
 
 
 class FavoriteCreate(BaseModel):
-    specialty_id: int
-    action: str = "add"
+    doctor_id: int
 
 
 class FavoriteResponse(BaseModel):
     id: int
-    specialty_id: Optional[int]
+    doctor_id: int
     created_at: datetime
-    specialty: Optional[SpecialtyResponse] = None
-    
+    doctor: Optional[DoctorCardResponse] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

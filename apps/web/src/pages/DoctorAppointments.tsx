@@ -13,6 +13,8 @@ import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES } from '../utils/st
 import { getRoomAvailability } from '../utils/appointmentRoom'
 import { getApiErrorMessage } from '../utils/apiError'
 import BackButton from '../components/BackButton'
+import AppointmentFilesPanel from '../components/AppointmentFilesPanel'
+import type { VideoSessionFile } from '../api/videoSessions'
 import Pagination from '../components/Pagination'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -95,6 +97,15 @@ export default function DoctorAppointments() {
     } finally {
       setJoiningId(null)
     }
+  }
+
+  const handleAppointmentFilesChange = (
+    appointmentId: number,
+    files: VideoSessionFile[],
+  ) => {
+    setAppointments((current) =>
+      current.map((item) => (item.id === appointmentId ? { ...item, files } : item)),
+    )
   }
 
   return (
@@ -199,6 +210,16 @@ export default function DoctorAppointments() {
                       Ver historial
                     </Button>
                   </div>
+                </div>
+
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <AppointmentFilesPanel
+                    appointmentId={appointment.id}
+                    files={appointment.files}
+                    enabled={appointment.files_enabled}
+                    role="doctor"
+                    onFilesChange={(files) => handleAppointmentFilesChange(appointment.id, files)}
+                  />
                 </div>
               </div>
             )

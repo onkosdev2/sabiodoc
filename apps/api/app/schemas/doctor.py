@@ -163,6 +163,7 @@ class DoctorPatientTimelineResponse(BaseModel):
     can_view_history: bool
     items: list[DoctorPatientTimelineItemResponse]
     total: int
+    files_enabled: bool = False
 
 
 class DoctorPatientSummary(BaseModel):

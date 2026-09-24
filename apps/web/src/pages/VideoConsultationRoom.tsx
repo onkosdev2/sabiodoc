@@ -28,7 +28,6 @@ import {
 
 import {
   completeVideoSession,
-  deleteVideoSessionFile,
   generateVideoSessionIntro,
   getVideoSessionStatus,
   joinVideoSession,
@@ -50,6 +49,7 @@ import { Textarea } from '../components/ui/Field'
 import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
+import { deleteFile } from '../api/files'
 import JitsiMeeting from '../components/JitsiMeeting'
 import SessionFilesPanel from '../components/SessionFilesPanel'
 import { getApiErrorMessage } from '../utils/apiError'
@@ -335,7 +335,7 @@ export default function VideoConsultationRoom() {
     setDeletingFile(true)
     setError(null)
     try {
-      await deleteVideoSessionFile(session.video_session_id, fileToDelete.id)
+      await deleteFile(fileToDelete.id)
       setStatusData((current) =>
         current
           ? { ...current, files: current.files.filter((file) => file.id !== fileToDelete.id) }

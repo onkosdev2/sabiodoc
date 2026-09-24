@@ -167,6 +167,7 @@ export interface DoctorPatientTimeline {
   can_view_history: boolean
   items: DoctorPatientTimelineItem[]
   total: number
+  files_enabled: boolean
 }
 
 export const getDoctorsBySpecialty = async (slug: string): Promise<DoctorListResponse> => {

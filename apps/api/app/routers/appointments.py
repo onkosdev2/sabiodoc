@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403
@@ -10,6 +10,7 @@ from app.models.consultation import Consultation, ConsultationStatus
 from app.models.consultation_review import ConsultationReview
 from app.models.doctor_profile import DoctorProfile
 from app.models.user import User, UserRole
+from app.models.video_session import VideoSession, VideoSessionStatus
 from app.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentCompleteRequest,
@@ -20,7 +21,7 @@ from app.schemas.appointment import (
     AppointmentResponse,
     AppointmentReviewCreateRequest,
 )
-from app.schemas.video_session import AppointmentVideoSessionResponse
+from app.schemas.video_session import AppointmentVideoSessionResponse, VideoSessionFileResponse
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
 from app.services import session_file_service
@@ -31,6 +32,61 @@ from app.services.wallet_service import wallet_service
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 logger = get_logger(__name__)
+
+
+def _appointment_participant_role(appointment: Appointment, current_user: User) -> str:
+    """Devuelve "patient"/"doctor" si el usuario participa en la cita."""
+    if appointment.patient_id == current_user.id:
+        return "patient"
+    if appointment.doctor and appointment.doctor.user_id == current_user.id:
+        return "doctor"
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="No puedes acceder a esta cita"
+    )
+
+
+def _appointment_has_live_session(db: Session, appointment_id: int) -> bool:
+    now = datetime.now(UTC)
+    return (
+        db.query(VideoSession.id)
+        .filter(
+            VideoSession.appointment_id == appointment_id,
+            VideoSession.status == VideoSessionStatus.active,
+            VideoSession.expires_at > now,
+        )
+        .first()
+        is not None
+    )
+
+
+def _notify_file_shared(
+    db: Session,
+    appointment: Appointment,
+    uploader_role: str,
+    filename: str,
+) -> None:
+    """Avisa al otro participante de un archivo enviado fuera de la sesión."""
+    if uploader_role == "doctor":
+        doctor_name = appointment.doctor.display_name if appointment.doctor else "Tu médico"
+        notification_service.create(
+            db,
+            user_id=appointment.patient_id,
+            notification_type="appointment_file_received",
+            title="Tu médico te envió un archivo",
+            body=f"{doctor_name} compartió «{filename}» de tu cita.",
+            action_url="/me/appointments",
+            metadata={"appointment_id": appointment.id, "action_label": "Ver cita"},
+        )
+    elif appointment.doctor:
+        notification_service.create(
+            db,
+            user_id=appointment.doctor.user_id,
+            notification_type="appointment_file_received",
+            title="El paciente te envió un archivo",
+            body=f"Se compartió «{filename}» en la cita #{appointment.id}.",
+            action_url=f"/doctor/patients/{appointment.patient_id}",
+            metadata={"appointment_id": appointment.id, "action_label": "Ver paciente"},
+        )
 
 
 @router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
@@ -178,8 +234,14 @@ def get_my_doctor_appointments(
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
     appointments = query.order_by(Appointment.scheduled_at.desc()).all()
+    files_map = session_file_service.list_files_grouped_by_appointment(
+        db, [item.id for item in appointments]
+    )
     return AppointmentListResponse(
-        appointments=[appointment_service.serialize_appointment(item) for item in appointments],
+        appointments=[
+            appointment_service.serialize_appointment(item, files=files_map.get(item.id, []))
+            for item in appointments
+        ],
         total=len(appointments),
     )
 
@@ -199,6 +261,59 @@ def get_appointment(
         appointment,
         files=session_file_service.list_files_for_appointment(db, appointment.id),
     )
+
+
+@router.get("/{appointment_id}/files", response_model=list[VideoSessionFileResponse])
+def list_appointment_files(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
+    _appointment_participant_role(appointment, current_user)
+    return session_file_service.list_files_for_appointment(db, appointment_id)
+
+
+@router.post(
+    "/{appointment_id}/files",
+    response_model=VideoSessionFileResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_appointment_file(
+    appointment_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Adjunta un archivo a la cita (p. ej. el médico envía una receta)."""
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
+    participant_role = _appointment_participant_role(appointment, current_user)
+    record = session_file_service.upload_appointment_file(
+        db, appointment, current_user, participant_role, file
+    )
+    # Fuera de la sesión (no hay videollamada activa): avisamos al otro participante.
+    if not _appointment_has_live_session(db, appointment.id):
+        _notify_file_shared(db, appointment, participant_role, record.original_name)
+        db.commit()
+    return record
+
+
+@router.delete("/{appointment_id}/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_appointment_file(
+    appointment_id: int,
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
+    _appointment_participant_role(appointment, current_user)
+    session_file_service.delete_appointment_file(db, appointment, current_user, file_id)
 
 
 @router.post("/{appointment_id}/video-session/prepare", response_model=AppointmentVideoSessionResponse)

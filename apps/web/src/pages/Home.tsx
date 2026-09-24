@@ -115,7 +115,7 @@ export default function Home() {
             <Star className="h-6 w-6 text-amber-500" aria-hidden="true" />
             <div>
               <h3 className="font-semibold text-slate-800">Mis favoritos</h3>
-              <p className="text-sm text-slate-600">Especialidades guardadas</p>
+              <p className="text-sm text-slate-600">Médicos guardados</p>
             </div>
           </div>
         </Link>

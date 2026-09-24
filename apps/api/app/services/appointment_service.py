@@ -207,6 +207,7 @@ class AppointmentService:
             payment_amount_cents=payment.amount_cents if payment else None,
             payment_status=payment.status if payment else None,
             files=files or [],
+            files_enabled=settings.cloudinary_enabled,
         )
 
     def compute_bookable_slots(

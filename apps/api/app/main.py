@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.services.llm_client import llm_client
-from app.routers import admin, appointments, auth, consultations, doctors, favorites, guide, notifications, patients, specialties, triage, video_sessions, emergency, wallet
+from app.routers import admin, appointments, auth, consultations, doctors, favorites, files, guide, notifications, patients, specialties, triage, video_sessions, emergency, wallet
 
 setup_logging()
 logger = get_logger(__name__)
@@ -34,6 +34,7 @@ app.include_router(triage.router)
 app.include_router(guide.router)
 app.include_router(consultations.router)
 app.include_router(favorites.router)
+app.include_router(files.router)
 app.include_router(doctors.router)
 app.include_router(patients.router)
 app.include_router(appointments.router)

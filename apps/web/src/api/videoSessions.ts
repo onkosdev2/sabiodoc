@@ -2,7 +2,7 @@ import client from './client'
 
 export interface VideoSessionFile {
   id: number
-  video_session_id: number
+  video_session_id: number | null
   appointment_id: number | null
   uploader_id: number
   uploader_role: 'patient' | 'doctor'
@@ -81,13 +81,6 @@ export const uploadVideoSessionFile = async (
     formData,
   )
   return response.data
-}
-
-export const deleteVideoSessionFile = async (
-  videoSessionId: number,
-  fileId: number,
-): Promise<void> => {
-  await client.delete(`/video-sessions/${videoSessionId}/files/${fileId}`)
 }
 
 export const startVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {

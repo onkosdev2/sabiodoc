@@ -118,6 +118,7 @@ class AppointmentResponse(BaseModel):
     payment_status: Optional[AppointmentPaymentStatus] = None
     # Archivos compartidos durante la videoconsulta de esta cita.
     files: list[VideoSessionFileResponse] = []
+    files_enabled: bool = False
 
 
 class AppointmentListResponse(BaseModel):

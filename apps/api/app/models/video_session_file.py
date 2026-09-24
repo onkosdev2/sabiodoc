@@ -14,7 +14,7 @@ class VideoSessionFile(Base):
     __tablename__ = "video_session_files"
 
     id = Column(Integer, primary_key=True, index=True)
-    video_session_id = Column(Integer, ForeignKey("video_sessions.id"), nullable=False, index=True)
+    video_session_id = Column(Integer, ForeignKey("video_sessions.id"), nullable=True, index=True)
     appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True, index=True)
     consultation_id = Column(Integer, ForeignKey("consultations.id"), nullable=True, index=True)
     uploader_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

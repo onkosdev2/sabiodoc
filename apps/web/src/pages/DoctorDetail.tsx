@@ -14,6 +14,8 @@ import Card from '../components/ui/Card'
 
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
+import DoctorFavoriteButton from '../components/DoctorFavoriteButton'
+import { addFavorite, removeFavorite, getMyFavorites } from '../api/favorites'
 import { Select, Textarea } from '../components/ui/Field'
 import { DoctorDetail, getDoctorDetail } from '../api/doctors'
 import {
@@ -59,6 +61,8 @@ export default function DoctorDetailPage() {
   const [booking, setBooking] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [wallet, setWallet] = useState<Wallet | null>(null)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [favoriteBusy, setFavoriteBusy] = useState(false)
 
   const requestedSlug = searchParams.get('specialty')
   const consultationId = searchParams.get('consultation')
@@ -104,6 +108,38 @@ export default function DoctorDetailPage() {
       active = false
     }
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (!isAuthenticated || !doctor) return
+    let active = true
+    getMyFavorites()
+      .then((data) => {
+        if (active) setIsFavorite(data.favorites.some((fav) => fav.doctor_id === doctor.id))
+      })
+      .catch(() => {
+        if (active) setIsFavorite(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [isAuthenticated, doctor])
+
+  const handleToggleFavorite = async (doctorId: number) => {
+    setFavoriteBusy(true)
+    try {
+      if (isFavorite) {
+        await removeFavorite(doctorId)
+        setIsFavorite(false)
+      } else {
+        await addFavorite(doctorId)
+        setIsFavorite(true)
+      }
+    } catch (error) {
+      setActionError(getApiErrorMessage(error, 'No se pudo actualizar favoritos.'))
+    } finally {
+      setFavoriteBusy(false)
+    }
+  }
 
   useEffect(() => {
     const loadSlots = async () => {
@@ -215,6 +251,14 @@ export default function DoctorDetailPage() {
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-3xl font-bold text-slate-900">{doctor.display_name}</h1>
               <PresenceBadge presence={doctor.presence} />
+              {isAuthenticated && (
+                <DoctorFavoriteButton
+                  doctorId={doctor.id}
+                  active={isFavorite}
+                  onToggle={handleToggleFavorite}
+                  disabled={favoriteBusy}
+                />
+              )}
             </div>
 
             <p className="mt-1 text-lg text-slate-600">{doctor.professional_title || 'Profesional médico'}</p>
