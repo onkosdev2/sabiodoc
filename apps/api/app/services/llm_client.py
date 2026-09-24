@@ -1,5 +1,6 @@
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from openai import OpenAI
 from app.core.config import settings
@@ -194,7 +195,12 @@ class LLMClient:
         return result if isinstance(result, dict) else None
 
     def health_check(self) -> dict:
-        """Comprueba la disponibilidad de cada proveedor LLM (sin consumir tokens)."""
+        """Comprueba la disponibilidad de cada proveedor LLM (sin consumir tokens).
+
+        Se consultan en paralelo para que el tiempo total sea el del proveedor más
+        lento (no la suma), y así la petición no se eternice y Render/móvil no la
+        corte antes de responder.
+        """
         if self.is_mock or not self.providers:
             return {
                 "healthy": True,
@@ -202,29 +208,28 @@ class LLMClient:
                 "providers": [],
             }
 
-        providers_status = []
-        for name, client, model in self.providers:
+        def _check(provider: tuple[str, OpenAI, str]) -> dict:
+            name, client, model = provider
             started = time.perf_counter()
             try:
                 client.models.list(timeout=self.timeout)
-                providers_status.append(
-                    {
-                        "name": name,
-                        "model": model,
-                        "status": "ok",
-                        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
-                    }
-                )
+                return {
+                    "name": name,
+                    "model": model,
+                    "status": "ok",
+                    "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                }
             except Exception as e:  # noqa: BLE001
-                providers_status.append(
-                    {
-                        "name": name,
-                        "model": model,
-                        "status": "error",
-                        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
-                        "detail": str(e)[:200],
-                    }
-                )
+                return {
+                    "name": name,
+                    "model": model,
+                    "status": "error",
+                    "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                    "detail": str(e)[:200],
+                }
+
+        with ThreadPoolExecutor(max_workers=len(self.providers)) as executor:
+            providers_status = list(executor.map(_check, self.providers))
 
         return {
             "healthy": any(item["status"] == "ok" for item in providers_status),

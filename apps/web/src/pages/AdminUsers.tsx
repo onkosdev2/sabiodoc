@@ -469,7 +469,7 @@ export default function AdminUsers() {
                 label="Nueva contraseña"
                 value={editPassword}
                 onChange={(event) => setEditPassword(event.target.value)}
-                placeholder="Dejar en blanco para no cambiar"
+                placeholder="••••••••"
                 autoComplete="new-password"
                 minLength={8}
                 hint="Déjala en blanco para no cambiarla"
