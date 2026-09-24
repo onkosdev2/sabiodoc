@@ -54,6 +54,7 @@ const ConsultationHistory = lazy(() => import('./pages/ConsultationHistory'))
 const PatientProfilePage = lazy(() => import('./pages/PatientProfile'))
 const WalletPage = lazy(() => import('./pages/Wallet'))
 const AdminWithdrawals = lazy(() => import('./pages/AdminWithdrawals'))
+const AdminSpecialties = lazy(() => import('./pages/AdminSpecialties'))
 
 function App() {
   return (
@@ -128,6 +129,7 @@ function App() {
                 <Route path="/admin/reviewers" element={<AdminUsers />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
                 <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
+                <Route path="/admin/specialties" element={<AdminSpecialties />} />
                 <Route path="/admin/system" element={<AdminSystemHealth />} />
                 <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>

@@ -36,6 +36,7 @@ const EXACT_TITLES: Record<string, string> = {
   '/admin/reviewers': 'Revisores',
   '/admin/system': 'Estado del sistema',
   '/admin/withdrawals': 'Retiros',
+  '/admin/specialties': 'Especialidades',
   '/admin/doctor-applications': 'Postulaciones médicas',
   '/admin/notifications': 'Notificaciones',
   '/reviewer/doctor-applications': 'Postulaciones médicas',

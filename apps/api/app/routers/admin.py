@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +17,7 @@ from app.models.doctor_availability_slot import DoctorAvailabilitySlot
 from app.models.doctor_presence import DoctorPresence
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
+from app.models.specialty import Specialty
 from app.models.favorite import Favorite
 from app.models.notification import Notification, NotificationStatus
 from app.models.triage_request import TriageRequest
@@ -48,6 +51,12 @@ from app.schemas.wallet import (
     WithdrawalProcessRequest,
     WithdrawalResponse,
 )
+from app.schemas.specialty import (
+    SpecialtyCreate,
+    SpecialtyListResponse,
+    SpecialtyResponse,
+    SpecialtyUpdate,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -80,6 +89,146 @@ def _serialize_admin_user(user: User) -> AdminUserResponse:
 
 def _count_admins(db: Session) -> int:
     return db.query(User).filter(User.role == UserRole.admin).count()
+
+
+def _slugify(name: str) -> str:
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
+    return slug or "especialidad"
+
+
+@router.get("/specialties", response_model=SpecialtyListResponse)
+def list_admin_specialties(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    specialties = db.query(Specialty).order_by(Specialty.name).all()
+    return SpecialtyListResponse(
+        specialties=[SpecialtyResponse.model_validate(item) for item in specialties],
+        total=len(specialties),
+    )
+
+
+@router.post("/specialties", response_model=SpecialtyResponse, status_code=status.HTTP_201_CREATED)
+def create_admin_specialty(
+    payload: SpecialtyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    slug = (payload.slug or _slugify(payload.name)).strip().lower()
+    if db.query(Specialty).filter(Specialty.slug == slug).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe una especialidad con ese slug",
+        )
+
+    specialty = Specialty(
+        slug=slug,
+        name=payload.name.strip(),
+        description=payload.description,
+        keywords=payload.keywords or [],
+        is_top=payload.is_top,
+    )
+    db.add(specialty)
+    db.flush()
+    audit_service.log(
+        db,
+        action="specialty.created",
+        entity_type="specialty",
+        entity_id=specialty.id,
+        actor_user_id=current_user.id,
+        metadata={"slug": slug},
+    )
+    db.commit()
+    db.refresh(specialty)
+    return SpecialtyResponse.model_validate(specialty)
+
+
+@router.patch("/specialties/{specialty_id}", response_model=SpecialtyResponse)
+def update_admin_specialty(
+    specialty_id: int,
+    payload: SpecialtyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    specialty = db.query(Specialty).filter(Specialty.id == specialty_id).first()
+    if not specialty:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Especialidad no encontrada"
+        )
+
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("slug"):
+        new_slug = data["slug"].strip().lower()
+        if (
+            new_slug != specialty.slug
+            and db.query(Specialty).filter(Specialty.slug == new_slug).first()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ya existe una especialidad con ese slug",
+            )
+        specialty.slug = new_slug
+    if data.get("name"):
+        specialty.name = data["name"].strip()
+    if "description" in data:
+        specialty.description = data["description"]
+    if "keywords" in data:
+        specialty.keywords = data["keywords"] or []
+    if "is_top" in data and data["is_top"] is not None:
+        specialty.is_top = data["is_top"]
+
+    audit_service.log(
+        db,
+        action="specialty.updated",
+        entity_type="specialty",
+        entity_id=specialty.id,
+        actor_user_id=current_user.id,
+        metadata={"slug": specialty.slug},
+    )
+    db.commit()
+    db.refresh(specialty)
+    return SpecialtyResponse.model_validate(specialty)
+
+
+@router.delete("/specialties/{specialty_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_admin_specialty(
+    specialty_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    specialty = db.query(Specialty).filter(Specialty.id == specialty_id).first()
+    if not specialty:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Especialidad no encontrada"
+        )
+
+    referenced = (
+        db.query(Appointment.id).filter(Appointment.specialty_id == specialty_id).first()
+        or db.query(Consultation.id).filter(Consultation.specialty_id == specialty_id).first()
+        or db.query(DoctorSpecialty.id)
+        .filter(DoctorSpecialty.specialty_id == specialty_id)
+        .first()
+    )
+    if referenced:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "No se puede eliminar: la especialidad tiene citas, consultas o "
+                "médicos asociados."
+            ),
+        )
+
+    audit_service.log(
+        db,
+        action="specialty.deleted",
+        entity_type="specialty",
+        entity_id=specialty.id,
+        actor_user_id=current_user.id,
+        metadata={"slug": specialty.slug},
+    )
+    db.delete(specialty)
+    db.commit()
 
 
 @router.get("/marketplace/overview", response_model=AdminMarketplaceOverviewResponse)

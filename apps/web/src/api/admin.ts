@@ -1,5 +1,6 @@
 import client from './client'
 import type { AppointmentListResponse, AppointmentStatus } from './appointments'
+import type { Specialty, SpecialtyListResponse } from './specialties'
 
 export interface MarketplaceOverview {
   doctors_online: number
@@ -176,4 +177,34 @@ export interface LlmHealthResponse {
 export const getLlmHealth = async (): Promise<LlmHealthResponse> => {
   const response = await client.get<LlmHealthResponse>('/admin/ai/status')
   return response.data
+}
+
+export interface SpecialtyPayload {
+  name: string
+  slug?: string | null
+  description?: string | null
+  keywords?: string[]
+  is_top?: boolean
+}
+
+export const getAdminSpecialties = async (): Promise<SpecialtyListResponse> => {
+  const response = await client.get<SpecialtyListResponse>('/admin/specialties')
+  return response.data
+}
+
+export const createAdminSpecialty = async (payload: SpecialtyPayload): Promise<Specialty> => {
+  const response = await client.post<Specialty>('/admin/specialties', payload)
+  return response.data
+}
+
+export const updateAdminSpecialty = async (
+  specialtyId: number,
+  payload: Partial<SpecialtyPayload>,
+): Promise<Specialty> => {
+  const response = await client.patch<Specialty>(`/admin/specialties/${specialtyId}`, payload)
+  return response.data
+}
+
+export const deleteAdminSpecialty = async (specialtyId: number): Promise<void> => {
+  await client.delete(`/admin/specialties/${specialtyId}`)
 }
