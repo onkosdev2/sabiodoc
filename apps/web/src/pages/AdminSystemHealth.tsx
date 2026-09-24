@@ -170,7 +170,9 @@ export default function AdminSystemHealth() {
 
       {!loading && !health && (
         <Alert tone="danger" title="No se pudo consultar el estado">
-          Vuelve a intentarlo en unos segundos.
+          Vuelve a intentarlo en unos segundos. Si persiste, puede que un bloqueador de
+          anuncios (uBlock Origin, AdBlock…) esté bloqueando la petición: pruébalo
+          desactivándolo para este sitio.
         </Alert>
       )}
     </div>

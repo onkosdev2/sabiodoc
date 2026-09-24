@@ -101,3 +101,26 @@ def test_llm_health_endpoint_shape():
         assert body["providers"][0]["name"] == "deepseek"
     finally:
         _restore(state)
+
+
+def test_admin_ai_status_requiere_admin_y_devuelve_estado():
+    # Sin token -> no autorizado.
+    assert client.get("/admin/ai/status").status_code in (401, 403)
+
+    state = (llm_client.providers, llm_client.is_mock)
+    try:
+        _set_providers([("deepseek", _FakeClient(), "deepseek-chat")])
+        login = client.post(
+            "/auth/login",
+            json={"email": "admin.demo@sabiodoc.app", "password": "AdminDemo123!"},
+        )
+        assert login.status_code == 200, login.text
+        token = login.json()["access_token"]
+
+        response = client.get(
+            "/admin/ai/status", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        assert response.json()["providers"][0]["name"] == "deepseek"
+    finally:
+        _restore(state)

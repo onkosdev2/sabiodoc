@@ -174,6 +174,6 @@ export interface LlmHealthResponse {
 }
 
 export const getLlmHealth = async (): Promise<LlmHealthResponse> => {
-  const response = await client.get<LlmHealthResponse>('/health/llm')
+  const response = await client.get<LlmHealthResponse>('/admin/ai/status')
   return response.data
 }

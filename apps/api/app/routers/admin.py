@@ -41,6 +41,7 @@ from app.schemas.user import (
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
 from app.services.patient_profile_service import get_patient_display_name
+from app.services.llm_client import llm_client
 from app.services.wallet_service import wallet_service
 from app.schemas.wallet import (
     WithdrawalListResponse,
@@ -49,6 +50,18 @@ from app.schemas.wallet import (
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.get("/ai/status")
+def get_ai_status(current_user: User = Depends(require_admin)):
+    """Estado de los proveedores de IA (solo admin).
+
+    Vive bajo `/admin` a propósito: algunos bloqueadores (uBlock) filtran rutas
+    que empiezan por `/health` en dominios como `onrender.com`, y la petición
+    nunca llegaría al backend. No usamos `/health` para nada que consuma el
+    navegador.
+    """
+    return llm_client.health_check()
 
 
 def _serialize_admin_user(user: User) -> AdminUserResponse:
