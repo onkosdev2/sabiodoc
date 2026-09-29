@@ -1,9 +1,10 @@
 from datetime import UTC, datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403, require_application_reviewer
 from app.core.config import settings
+from app.core.labels import doctor_approval_status_label, video_session_status_label
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation import Consultation
@@ -38,6 +39,7 @@ from app.schemas.doctor import (
     DoctorPatientSummary,
     DoctorPatientTimelineItemResponse,
     DoctorPatientTimelineResponse,
+    DoctorPhotoResponse,
     DoctorPresenceResponse,
     DoctorProfileUpsertRequest,
     DoctorPresenceUpdate,
@@ -55,6 +57,7 @@ from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
 from app.services.jitsi_service import jitsi_service
 from app.services.doctor_onboarding_service import doctor_onboarding_service
+from app.services import doctor_photo_service
 from app.services.notification_service import notification_service
 from app.services.patient_profile_service import get_patient_display_name, serialize_patient_profile
 from app.services.patient_profile_change_service import (
@@ -180,6 +183,7 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
                 rating_count=rating_count,
                 is_accepting_consultations=profile.is_accepting_consultations,
                 status=profile.status,
+                photo_url=profile.photo_url,
                 presence=DoctorPresenceResponse(
                     status=resolved.status,
                     status_message=resolved.status_message,
@@ -250,6 +254,7 @@ def upsert_my_doctor_profile(
             price_per_min_cents=payload.price_per_min_cents,
             license_number=payload.license_number,
             license_country=payload.license_country,
+            specialist_registry_number=payload.specialist_registry_number,
             country=payload.country,
             city=payload.city,
             timezone=payload.timezone,
@@ -266,6 +271,7 @@ def upsert_my_doctor_profile(
     doctor_profile.price_per_min_cents = payload.price_per_min_cents
     doctor_profile.license_number = payload.license_number
     doctor_profile.license_country = payload.license_country
+    doctor_profile.specialist_registry_number = payload.specialist_registry_number
     doctor_profile.country = payload.country
     doctor_profile.city = payload.city
     doctor_profile.timezone = payload.timezone
@@ -299,8 +305,31 @@ def upsert_my_doctor_profile(
         rating_count=rating_count,
         is_accepting_consultations=doctor_profile.is_accepting_consultations,
         status=doctor_profile.status,
+        photo_url=doctor_profile.photo_url,
         presence=DoctorPresenceResponse.model_validate(presence),
     )
+
+
+@router.post("/me/photo", response_model=DoctorPhotoResponse, status_code=status.HTTP_201_CREATED)
+def upload_my_doctor_photo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Sube (o reemplaza) la foto de perfil del médico en Cloudinary."""
+    doctor_profile = get_doctor_profile_or_403(db, current_user)
+    doctor_photo_service.upload_doctor_photo(db, doctor_profile, file)
+    return DoctorPhotoResponse(photo_url=doctor_profile.photo_url)
+
+
+@router.delete("/me/photo", status_code=status.HTTP_204_NO_CONTENT)
+def delete_my_doctor_photo(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Elimina la foto de perfil del médico (Cloudinary y base de datos)."""
+    doctor_profile = get_doctor_profile_or_403(db, current_user)
+    doctor_photo_service.delete_doctor_photo(db, doctor_profile)
 
 
 @router.get("/me/application", response_model=DoctorApplicationResponse)
@@ -350,8 +379,11 @@ def update_doctor_application_status(
         db,
         user_id=doctor_profile.user_id,
         notification_type="doctor_application_reviewed",
-        title="Actualizacion de postulacion médica",
-        body=f"Tu perfil medico fue marcado como {payload.status.value}.",
+        title="Actualización de postulación médica",
+        body=(
+            "Tu perfil médico fue marcado como "
+            f"{doctor_approval_status_label(payload.status).lower()}."
+        ),
         action_url="/doctor/pending",
         metadata={"doctor_id": doctor_profile.id, "status": payload.status.value},
     )
@@ -1018,6 +1050,7 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
         years_experience=doctor_profile.years_experience,
         city=doctor_profile.city,
         country=doctor_profile.country,
+        photo_url=doctor_profile.photo_url,
         specialties=[
             DoctorSpecialtySummary(id=specialty.id, slug=specialty.slug, name=specialty.name)
             for specialty in specialties

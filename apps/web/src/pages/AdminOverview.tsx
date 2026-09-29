@@ -108,7 +108,7 @@ export default function AdminOverview() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">{session.doctor_name}</p>
                     <Badge tone={VIDEO_SESSION_STATUS_TONES[session.status] ?? 'neutral'}>
-                      {VIDEO_SESSION_STATUS_LABELS[session.status] || session.status}
+                      {VIDEO_SESSION_STATUS_LABELS[session.status] || 'Sin estado'}
                     </Badge>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
@@ -134,7 +134,7 @@ export default function AdminOverview() {
                 >
                   <p className="text-sm font-semibold text-slate-900">{incident.title}</p>
                   <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-                    {INCIDENT_TYPE_LABELS[incident.type] || incident.type} ·{' '}
+                    {INCIDENT_TYPE_LABELS[incident.type] || 'Incidente'} ·{' '}
                     {new Date(incident.created_at).toLocaleString('es-ES')}
                   </p>
                 </div>

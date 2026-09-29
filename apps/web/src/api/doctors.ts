@@ -22,6 +22,7 @@ export interface DoctorCard {
   rating_count: number
   is_accepting_consultations: boolean
   status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  photo_url: string | null
   presence: DoctorPresence
 }
 
@@ -53,6 +54,7 @@ export interface DoctorDetail {
   years_experience: number | null
   city: string | null
   country: string | null
+  photo_url: string | null
   specialties: DoctorApplicationSpecialty[]
   reviews: DoctorReview[]
 }
@@ -98,11 +100,13 @@ export interface DoctorApplication {
   price_per_min_cents: number
   license_number: string | null
   license_country: string | null
+  specialist_registry_number: string | null
   country: string | null
   city: string | null
   timezone: string | null
   government_id: string | null
   years_experience: number | null
+  photo_url: string | null
   is_accepting_consultations: boolean
   status: 'pending' | 'approved' | 'rejected' | 'suspended'
   review_notes: string | null
@@ -118,6 +122,7 @@ export interface DoctorProfileUpsertPayload {
   price_per_min_cents: number
   license_number: string
   license_country: string
+  specialist_registry_number?: string
   country: string
   city: string
   timezone: string
@@ -221,6 +226,19 @@ export const updateDoctorApplicationStatus = async (
 export const updateMyDoctorProfile = async (payload: DoctorProfileUpsertPayload): Promise<DoctorCard> => {
   const response = await client.put<DoctorCard>('/doctors/me/profile', payload)
   return response.data
+}
+
+/** Sube (o reemplaza) la foto de perfil del médico. */
+export const uploadMyDoctorPhoto = async (file: File): Promise<{ photo_url: string | null }> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await client.post<{ photo_url: string | null }>('/doctors/me/photo', formData)
+  return response.data
+}
+
+/** Elimina la foto de perfil del médico. */
+export const deleteMyDoctorPhoto = async (): Promise<void> => {
+  await client.delete('/doctors/me/photo')
 }
 
 export const getMyDoctorVideoSessions = async (): Promise<DoctorVideoSessionListResponse> => {

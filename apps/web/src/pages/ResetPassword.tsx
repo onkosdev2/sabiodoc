@@ -54,7 +54,7 @@ export default function ResetPassword() {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-slate-800">Enlace inválido</h1>
             <p className="mt-2 text-sm text-slate-600">
-              El enlace no incluye un token válido. Solicita uno nuevo.
+              El enlace no es válido o está incompleto. Solicita uno nuevo.
             </p>
             <Link
               to="/forgot-password"

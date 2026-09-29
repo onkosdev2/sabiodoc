@@ -110,12 +110,27 @@ _DUMMY_DOCTOR_NAMES = [
 ]
 
 
+def _dummy_doctor_name(serial: int):
+    """Devuelve un nombre determinista sin depender del tamaño de la lista.
+
+    El catálogo puede crecer con nuevas especialidades (2 médicos dummy por
+    cada una), por lo que se reutiliza la lista de nombres en ciclos y se
+    agrega un sufijo cuando se repite.
+    """
+    index = (serial - 1) % len(_DUMMY_DOCTOR_NAMES)
+    cycle = (serial - 1) // len(_DUMMY_DOCTOR_NAMES)
+    title, name = _DUMMY_DOCTOR_NAMES[index]
+    if cycle > 0:
+        name = f"{name} {cycle + 1}"
+    return title, name
+
+
 def _build_dummy_doctors():
     dummy_doctors = []
     for specialty_index, specialty in enumerate(SPECIALTIES_DATA):
         for variant in range(2):
             serial = specialty_index * 2 + variant + 1
-            title, name = _DUMMY_DOCTOR_NAMES[serial - 1]
+            title, name = _dummy_doctor_name(serial)
             slug = specialty["slug"]
             specialty_name = specialty["name"]
             dummy_doctors.append(

@@ -94,26 +94,46 @@ def seed_demo_reviewer():
 
 
 def seed_specialties():
+    """Sincroniza el catálogo de especialidades.
+
+    Es idempotente: agrega las especialidades que falten y actualiza nombre,
+    descripción, palabras clave y destacado de las existentes. Así las bases de
+    datos ya creadas reciben las especialidades nuevas sin duplicarlas.
+    """
     db = SessionLocal()
     try:
-        existing_count = db.query(Specialty).count()
-        if existing_count > 0:
-            print(f"Ya existen {existing_count} especialidades. Saltando seed.")
-            return
-        
+        existing = {
+            specialty.slug: specialty
+            for specialty in db.query(Specialty).all()
+        }
+        created = 0
+        updated = 0
+
         for data in SPECIALTIES_DATA:
-            specialty = Specialty(
-                slug=data["slug"],
-                name=data["name"],
-                description=data["description"],
-                keywords=data["keywords"],
-                is_top=data["is_top"]
-            )
-            db.add(specialty)
-        
+            specialty = existing.get(data["slug"])
+            if specialty is None:
+                specialty = Specialty(
+                    slug=data["slug"],
+                    name=data["name"],
+                    description=data["description"],
+                    keywords=data["keywords"],
+                    is_top=data["is_top"]
+                )
+                db.add(specialty)
+                created += 1
+            else:
+                specialty.name = data["name"]
+                specialty.description = data["description"]
+                specialty.keywords = data["keywords"]
+                specialty.is_top = data["is_top"]
+                updated += 1
+
         db.commit()
-        print(f"✅ Se insertaron {len(SPECIALTIES_DATA)} especialidades correctamente.")
-        
+        print(
+            f"✅ Especialidades sincronizadas: {created} creadas, "
+            f"{updated} actualizadas ({len(SPECIALTIES_DATA)} en total)."
+        )
+
     except Exception as e:
         db.rollback()
         print(f"❌ Error al insertar especialidades: {e}")

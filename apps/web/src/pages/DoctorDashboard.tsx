@@ -129,7 +129,7 @@ export default function DoctorDashboard() {
       setNoShowTarget(null)
       setNoShowReason('')
     } catch (requestError) {
-      toast.error(getApiErrorMessage(requestError, 'No se pudo marcar el no-show.'))
+      toast.error(getApiErrorMessage(requestError, 'No se pudo marcar la inasistencia.'))
     } finally {
       setNoShowBusy(false)
     }
@@ -249,7 +249,7 @@ export default function DoctorDashboard() {
                         leftIcon={<UserRoundX className="h-4 w-4" />}
                         className="text-rose-700 hover:bg-rose-50"
                       >
-                        Marcar no-show
+                        Marcar inasistencia
                       </Button>
                     )}
                   </div>
@@ -328,7 +328,7 @@ export default function DoctorDashboard() {
                       </p>
                       {session.patient_name && <p className="text-sm text-slate-500">{session.patient_email}</p>}
                       <p className="mt-1 text-sm text-slate-600">
-                        Estado: {VIDEO_SESSION_STATUS_LABELS[session.status] || session.status}
+                        Estado: {VIDEO_SESSION_STATUS_LABELS[session.status] || 'Sin estado'}
                       </p>
                     </div>
                     <Button
@@ -362,7 +362,7 @@ export default function DoctorDashboard() {
               Volver
             </Button>
             <Button variant="danger" loading={noShowBusy} onClick={confirmNoShow}>
-              Marcar no-show
+              Marcar inasistencia
             </Button>
           </>
         }

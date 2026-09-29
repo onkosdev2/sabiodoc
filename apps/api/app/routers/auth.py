@@ -80,7 +80,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya está registrado"
+            detail="El correo ya está registrado"
         )
     
     user = User(
@@ -117,14 +117,14 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
         if existing_user.role == UserRole.doctor:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El email ya está registrado como médico"
+                detail="El correo ya está registrado como médico"
             )
 
         # Verificamos la contraseña de la cuenta existente.
         if not verify_password(doctor_data.password, existing_user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="El email ya está registrado. Contraseña incorrecta."
+                detail="El correo ya está registrado. Contraseña incorrecta."
             )
 
         # Un paciente se promueve a doctor para habilitar su panel medico.
@@ -166,6 +166,7 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
         price_per_min_cents=doctor_data.price_per_min_cents,
         license_number=doctor_data.license_number,
         license_country=doctor_data.license_country,
+        specialist_registry_number=doctor_data.specialist_registry_number,
         country=doctor_data.country,
         city=doctor_data.city,
         timezone=doctor_data.timezone,
@@ -216,7 +217,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos"
+            detail="Correo o contraseña incorrectos"
         )
     
     logger.info("User logged in: id=%s", user.id)

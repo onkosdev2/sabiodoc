@@ -16,6 +16,7 @@ import {
   NotificationItem,
 } from '../api/notifications'
 import { getStoredToken } from '../utils/authStorage'
+import { getApiErrorMessage } from '../utils/apiError'
 import { useAuth } from './AuthContext'
 
 interface NotificationsContextType {
@@ -77,7 +78,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       setError(null)
     } catch (err: any) {
       if (!isMounted.current) return
-      setError(err.response?.data?.detail || 'No se pudieron cargar las notificaciones')
+      setError(getApiErrorMessage(err, 'No se pudieron cargar las notificaciones'))
     } finally {
       if (isMounted.current) {
         hasLoadedRef.current = true

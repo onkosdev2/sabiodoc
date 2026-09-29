@@ -196,7 +196,7 @@ export default function VideoConsultationRoom() {
         }
       } catch (statusError: any) {
         if (!cancelled) {
-          setError(statusError.response?.data?.detail || 'No se pudo consultar el estado de la videoconsulta.')
+          setError(getApiErrorMessage(statusError, 'No se pudo consultar el estado de la videoconsulta.'))
         }
       } finally {
         if (!cancelled) {
@@ -296,7 +296,7 @@ export default function VideoConsultationRoom() {
       setJoined(true)
     } catch (joinError: any) {
       console.error('Error joining video room:', joinError)
-      setError(joinError.response?.data?.detail || 'No se pudo entrar a la sala de videoconsulta.')
+      setError(getApiErrorMessage(joinError, 'No se pudo entrar a la sala de videoconsulta.'))
     } finally {
       setJoining(false)
     }
@@ -356,7 +356,7 @@ export default function VideoConsultationRoom() {
         setStatusData(updated)
       } catch (leaveError: any) {
         console.error('Error leaving video room:', leaveError)
-        setError(leaveError.response?.data?.detail || 'No se pudo registrar la salida de la sala.')
+        setError(getApiErrorMessage(leaveError, 'No se pudo registrar la salida de la sala.'))
       }
     }
     setOpenedExternally(false)
@@ -369,7 +369,7 @@ export default function VideoConsultationRoom() {
     try {
       setStatusData(await startVideoSession(statusData.video_session_id))
     } catch (requestError: any) {
-      setError(requestError.response?.data?.detail || 'No se pudo iniciar el cronómetro.')
+      setError(getApiErrorMessage(requestError, 'No se pudo iniciar el cronómetro.'))
     } finally {
       setTimerBusy(false)
     }
@@ -381,7 +381,7 @@ export default function VideoConsultationRoom() {
     try {
       setStatusData(await pauseVideoSession(statusData.video_session_id))
     } catch (requestError: any) {
-      setError(requestError.response?.data?.detail || 'No se pudo pausar el cronómetro.')
+      setError(getApiErrorMessage(requestError, 'No se pudo pausar el cronómetro.'))
     } finally {
       setTimerBusy(false)
     }
@@ -396,7 +396,7 @@ export default function VideoConsultationRoom() {
       const updated = await updateVideoSessionDoctorNote(statusData.video_session_id, { doctor_note: doctorNote })
       setStatusData(updated)
     } catch (requestError: any) {
-      setError(requestError.response?.data?.detail || 'No se pudo guardar la nota clínica.')
+      setError(getApiErrorMessage(requestError, 'No se pudo guardar la nota clínica.'))
     } finally {
       setSavingDoctorNote(false)
     }
@@ -418,7 +418,7 @@ export default function VideoConsultationRoom() {
       setOpenedExternally(false)
       setConfirmComplete(false)
     } catch (requestError: any) {
-      setError(requestError.response?.data?.detail || 'No se pudo cerrar la videoconsulta.')
+      setError(getApiErrorMessage(requestError, 'No se pudo cerrar la videoconsulta.'))
     } finally {
       setCompletingSession(false)
     }

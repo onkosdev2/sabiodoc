@@ -210,7 +210,7 @@ export default function AdminUsers() {
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Admin</p>
+        <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Administración</p>
         <h1 className="mt-2 text-3xl font-bold text-slate-950">Usuarios</h1>
         <p className="mt-2 max-w-3xl text-slate-600">
           Crea, consulta, edita y elimina cuentas de pacientes, revisores y administradores. Los médicos se
@@ -219,7 +219,7 @@ export default function AdminUsers() {
 
         <form onSubmit={handleCreate} className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] lg:items-end">
           <Input
-            label="Email"
+            label="Correo electrónico"
             type="email"
             value={createEmail}
             onChange={(event) => setCreateEmail(event.target.value)}
@@ -278,7 +278,7 @@ export default function AdminUsers() {
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Email..."
+                  placeholder="correo@clinica.com"
                 />
               </div>
               <Select
@@ -338,7 +338,7 @@ export default function AdminUsers() {
                       )}
                       {item.doctor_status && (
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-medium text-amber-800">
-                          {DOCTOR_STATUS_LABELS[item.doctor_status] || item.doctor_status}
+                          {DOCTOR_STATUS_LABELS[item.doctor_status] || 'Sin perfil'}
                         </span>
                       )}
                     </div>
@@ -403,7 +403,7 @@ export default function AdminUsers() {
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           {!selected ? (
             <div className="flex min-h-[280px] items-center justify-center text-center text-slate-500">
-              Selecciona “Editar” en un usuario para modificar su email, rol o contraseña.
+              Selecciona “Editar” en un usuario para modificar su correo, rol o contraseña.
             </div>
           ) : (
             <form onSubmit={handleSave} className="space-y-4">
@@ -423,7 +423,7 @@ export default function AdminUsers() {
               </div>
 
               <Input
-                label="Email"
+                label="Correo electrónico"
                 type="email"
                 value={editEmail}
                 onChange={(event) => setEditEmail(event.target.value)}

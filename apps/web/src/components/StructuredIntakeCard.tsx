@@ -37,7 +37,7 @@ export default function StructuredIntakeCard({
   className = '',
 }: StructuredIntakeCardProps) {
   const completeness = intake.completeness || 'partial'
-  const completenessLabel = COMPLETENESS_LABELS[completeness] || completeness
+  const completenessLabel = COMPLETENESS_LABELS[completeness] || 'Sin especificar'
 
   return (
     <section className={`rounded-2xl border border-indigo-100 bg-indigo-50 p-4 ${className}`.trim()}>

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check } from 'lucide-react'
+import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, Camera, Trash2 } from 'lucide-react'
 import { Country, getCitiesOfCountry } from '../utils/locations'
 
 import BackButton from '../components/BackButton'
@@ -9,8 +9,9 @@ import Button from '../components/ui/Button'
 import { Field, Input, PasswordInput, Select, Textarea } from '../components/ui/Field'
 import { registerDoctor } from '../api/auth'
 import { getSpecialties, Specialty } from '../api/specialties'
-import { getMyDoctorApplication, updateMyDoctorProfile } from '../api/doctors'
+import { getMyDoctorApplication, updateMyDoctorProfile, uploadMyDoctorPhoto, deleteMyDoctorPhoto } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
+import { getApiErrorMessage } from '../utils/apiError'
 
 const centsToDisplay = (value: number) => (value / 100).toFixed(2)
 
@@ -20,13 +21,48 @@ const timezones: string[] = (Intl as any).supportedValuesOf
   : ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'Europe/Madrid']
 
 // Diccionario de documentos por ISO de país
-const DOC_DATA: Record<string, { idTypes: string[], licenseTypes: string[] }> = {
-  'PE': { idTypes: ['DNI', 'CE', 'Pasaporte', 'Otro'], licenseTypes: ['CMP', 'COP', 'CEP', 'CBP', 'Otro'] },
-  'CO': { idTypes: ['CC', 'CE', 'Pasaporte', 'Otro'], licenseTypes: ['ReTHUS', 'Otro'] },
-  'MX': { idTypes: ['INE', 'Pasaporte', 'Otro'], licenseTypes: ['Cédula Prof.', 'Otro'] },
-  'CL': { idTypes: ['RUT', 'Pasaporte', 'Otro'], licenseTypes: ['Superintendencia', 'Otro'] },
-  'DEFAULT': { idTypes: ['ID', 'Pasaporte', 'Otro'], licenseTypes: ['Licencia Médica', 'Otro'] }
+interface CountryDocs {
+  idTypes: string[]
+  licenseTypes: string[]
+  // Registro nacional de la especialidad (equivalente a la licencia, pero de la especialidad).
+  specialistRegistryTypes: string[]
+  specialistRegistryLabel: string
 }
+
+const DOC_DATA: Record<string, CountryDocs> = {
+  'PE': {
+    idTypes: ['DNI', 'CE', 'Pasaporte', 'Otro'],
+    licenseTypes: ['CMP', 'COP', 'CEP', 'CBP', 'Otro'],
+    specialistRegistryTypes: ['RNE', 'Otro'],
+    specialistRegistryLabel: 'Registro Nacional de Especialistas (RNE)',
+  },
+  'CO': {
+    idTypes: ['CC', 'CE', 'Pasaporte', 'Otro'],
+    licenseTypes: ['ReTHUS', 'Otro'],
+    specialistRegistryTypes: ['Registro de Especialidad', 'Otro'],
+    specialistRegistryLabel: 'Registro de Especialidad',
+  },
+  'MX': {
+    idTypes: ['INE', 'Pasaporte', 'Otro'],
+    licenseTypes: ['Cédula Prof.', 'Otro'],
+    specialistRegistryTypes: ['Cédula de Especialidad', 'Otro'],
+    specialistRegistryLabel: 'Cédula de Especialidad',
+  },
+  'CL': {
+    idTypes: ['RUT', 'Pasaporte', 'Otro'],
+    licenseTypes: ['Superintendencia', 'Otro'],
+    specialistRegistryTypes: ['RNPI', 'Otro'],
+    specialistRegistryLabel: 'Registro Nacional de Prestadores Individuales (RNPI)',
+  },
+  'DEFAULT': {
+    idTypes: ['ID', 'Pasaporte', 'Otro'],
+    licenseTypes: ['Licencia Médica', 'Otro'],
+    specialistRegistryTypes: ['Registro de Especialista', 'Otro'],
+    specialistRegistryLabel: 'Registro de Especialista',
+  },
+}
+
+const getCountryDocs = (iso: string): CountryDocs => DOC_DATA[iso] || DOC_DATA['DEFAULT']
 
 export default function DoctorOnboarding() {
   const navigate = useNavigate()
@@ -68,6 +104,16 @@ export default function DoctorOnboarding() {
   const [licenseType, setLicenseType] = useState('CMP')
   const [customLicenseType, setCustomLicenseType] = useState('')
   const [licenseNumberVal, setLicenseNumberVal] = useState('')
+
+  const [specialistRegistryType, setSpecialistRegistryType] = useState('RNE')
+  const [customSpecialistRegistryType, setCustomSpecialistRegistryType] = useState('')
+  const [specialistRegistryNumberVal, setSpecialistRegistryNumberVal] = useState('')
+
+  // --- Foto de perfil ---
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null)
+  const [removePhoto, setRemovePhoto] = useState(false)
   
   // --- Estados de UI ---
   const [availableCities, setAvailableCities] = useState<string[]>([])
@@ -79,6 +125,17 @@ export default function DoctorOnboarding() {
   
   const [step, setStep] = useState(1)
   const totalSteps = 3
+
+  // Genera (y libera) la vista previa local de la foto seleccionada.
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview(null)
+      return
+    }
+    const objectUrl = URL.createObjectURL(photoFile)
+    setPhotoPreview(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [photoFile])
 
   useEffect(() => {
     let mounted = true
@@ -132,7 +189,7 @@ export default function DoctorOnboarding() {
           // Parsear Documento de Identidad
           const splitId = app.government_id?.split(' ') || ['DNI', '']
           const parsedIdType = splitId[0] || 'DNI'
-          if (!DOC_DATA[iso]?.idTypes.includes(parsedIdType) && parsedIdType !== 'Otro') {
+          if (!getCountryDocs(iso).idTypes.includes(parsedIdType) && parsedIdType !== 'Otro') {
              setIdType('Otro')
              setCustomIdType(parsedIdType)
           } else {
@@ -147,13 +204,28 @@ export default function DoctorOnboarding() {
 
           const splitLic = app.license_number?.split(' ') || ['CMP', '']
           const parsedLicType = splitLic[0] || 'CMP'
-          if (!DOC_DATA[licIso]?.licenseTypes.includes(parsedLicType) && parsedLicType !== 'Otro') {
+          if (!getCountryDocs(licIso).licenseTypes.includes(parsedLicType) && parsedLicType !== 'Otro') {
              setLicenseType('Otro')
              setCustomLicenseType(parsedLicType)
           } else {
              setLicenseType(parsedLicType)
           }
           setLicenseNumberVal(splitLic.slice(1).join(' ') || '')
+
+          // Parsear Registro de Especialista
+          const registryTypes = getCountryDocs(licIso).specialistRegistryTypes
+          const defaultRegistryType = registryTypes[0]
+          const splitRegistry = app.specialist_registry_number?.split(' ') || [defaultRegistryType, '']
+          const parsedRegistryType = splitRegistry[0] || defaultRegistryType
+          if (!registryTypes.includes(parsedRegistryType) && parsedRegistryType !== 'Otro') {
+             setSpecialistRegistryType('Otro')
+             setCustomSpecialistRegistryType(parsedRegistryType)
+          } else {
+             setSpecialistRegistryType(parsedRegistryType)
+          }
+          setSpecialistRegistryNumberVal(splitRegistry.slice(1).join(' ') || '')
+
+          setExistingPhotoUrl(app.photo_url || null)
         } else {
           setAvailableCities(await getCitiesOfCountry(countryIso))
         }
@@ -177,17 +249,21 @@ export default function DoctorOnboarding() {
     setCityName(cities.length > 0 ? cities[0] : 'Otra')
     
     // Actualizar documentos según el nuevo país
-    const docs = DOC_DATA[iso] || DOC_DATA['DEFAULT']
+    const docs = getCountryDocs(iso)
     setIdType(docs.idTypes[0])
     setLicenseCountryIso(iso)
     setLicenseType(docs.licenseTypes[0])
+    setSpecialistRegistryType(docs.specialistRegistryTypes[0])
+    setCustomSpecialistRegistryType('')
   }
 
   const handleLicenseCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const iso = e.target.value
     setLicenseCountryIso(iso)
-    const docs = DOC_DATA[iso] || DOC_DATA['DEFAULT']
+    const docs = getCountryDocs(iso)
     setLicenseType(docs.licenseTypes[0])
+    setSpecialistRegistryType(docs.specialistRegistryTypes[0])
+    setCustomSpecialistRegistryType('')
   }
 
   const parsedPricePerMinCents = useMemo(() => {
@@ -230,6 +306,7 @@ export default function DoctorOnboarding() {
       if (!professionalTitle) return setError('El título profesional es obligatorio.')
       if (selectedSpecialties.length === 0) return setError('Selecciona al menos una especialidad.')
       if (parsedYearsExperience === null || parsedYearsExperience < 0) return setError('Años de experiencia inválidos.')
+      if (parsedYearsExperience > 80) return setError('Los años de experiencia no pueden superar 80.')
     }
     
     // Si todo sale bien, avanzamos al siguiente paso
@@ -242,6 +319,28 @@ export default function DoctorOnboarding() {
     setStep((prev) => Math.max(prev - 1, 1))
   }
 
+  const handleRemovePhoto = () => {
+    setPhotoFile(null)
+    setRemovePhoto(true)
+  }
+
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null)
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('La foto debe ser una imagen (JPG, PNG o WEBP).')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('La foto no puede superar los 5 MB.')
+      return
+    }
+    setPhotoFile(file)
+    setRemovePhoto(false)
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
@@ -251,8 +350,10 @@ export default function DoctorOnboarding() {
     if (!professionalTitle) return setError('El título profesional es obligatorio.')
     if (parsedPricePerMinCents === null || parsedPricePerMinCents <= 0) return setError('Ingresa un costo válido.')
     if (!idNumber || !licenseNumberVal) return setError('Completa tus credenciales de identidad y médicas.')
+    if (!specialistRegistryNumberVal) return setError('Completa tu registro nacional de especialista.')
     if (idType === 'Otro' && !customIdType) return setError('Especifica el tipo de documento.')
     if (licenseType === 'Otro' && !customLicenseType) return setError('Especifica el tipo de licencia.')
+    if (specialistRegistryType === 'Otro' && !customSpecialistRegistryType) return setError('Especifica el tipo de registro de especialista.')
 
     setIsSubmitting(true)
     
@@ -263,9 +364,24 @@ export default function DoctorOnboarding() {
     
     const finalIdType = idType === 'Otro' ? customIdType : idType
     const finalLicenseType = licenseType === 'Otro' ? customLicenseType : licenseType
+    const finalSpecialistRegistryType = specialistRegistryType === 'Otro' ? customSpecialistRegistryType : specialistRegistryType
 
     const finalGovernmentId = `${finalIdType} ${idNumber}`
     const finalLicenseNumber = `${finalLicenseType} ${licenseNumberVal}`
+    const finalSpecialistRegistryNumber = `${finalSpecialistRegistryType} ${specialistRegistryNumberVal}`
+
+    const syncPhoto = async (): Promise<string | null> => {
+      if (photoFile) {
+        const result = await uploadMyDoctorPhoto(photoFile)
+        setExistingPhotoUrl(result.photo_url)
+        return result.photo_url
+      } else if (removePhoto && existingPhotoUrl) {
+        await deleteMyDoctorPhoto()
+        setExistingPhotoUrl(null)
+        return null
+      }
+      return existingPhotoUrl
+    }
 
     try {
       const payload = {
@@ -275,6 +391,7 @@ export default function DoctorOnboarding() {
         price_per_min_cents: parsedPricePerMinCents,
         license_number: finalLicenseNumber,
         license_country: finalLicenseCountryName,
+        specialist_registry_number: finalSpecialistRegistryNumber,
         country: finalCountryName,
         city: finalCity,
         timezone: doctorTimezone,
@@ -285,6 +402,17 @@ export default function DoctorOnboarding() {
 
       if (isDoctorEditing) {
         await updateMyDoctorProfile(payload)
+        // La foto se sube después de guardar el perfil (el endpoint requiere el perfil creado).
+        try {
+          await syncPhoto()
+        } catch (photoError: unknown) {
+          setPhotoFile(null)
+          await refreshUser()
+          setError(getApiErrorMessage(photoError, 'Perfil guardado, pero no se pudo actualizar la foto.'))
+          return
+        }
+        setPhotoFile(null)
+        setRemovePhoto(false)
         // Nos quedamos en la pagina para mostrar la confirmacion y permitir
         // seguir editando; antes se enviaba al dashboard y parecia un error.
         await refreshUser()
@@ -292,11 +420,17 @@ export default function DoctorOnboarding() {
       } else {
         const response = await registerDoctor({ ...payload, email, password })
         authLogin(response.access_token, response.user)
+        // La foto es opcional: si falla, la cuenta ya quedó creada y el médico
+        // puede subirla luego desde su perfil.
+        try {
+          await syncPhoto()
+        } catch (photoError) {
+          console.warn('No se pudo subir la foto del médico durante el registro.', photoError)
+        }
         navigate('/doctor/pending')
       }
     } catch (err: unknown) {
-      const reqErr = err as { response?: { data?: { detail?: string } } }
-      setError(reqErr.response?.data?.detail || 'Error al enviar la postulación médica.')
+      setError(getApiErrorMessage(err, 'Error al enviar la postulación médica.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -395,7 +529,7 @@ export default function DoctorOnboarding() {
                   <h2 className="text-xl font-semibold mb-4 text-slate-800">Datos personales y ubicación</h2>
                   <div className="grid gap-6 md:grid-cols-2">
                     <Input
-                      label="Email profesional"
+                      label="Correo profesional"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -508,6 +642,43 @@ export default function DoctorOnboarding() {
               {(isProfileRoute || step === 2) && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-semibold mb-4 text-slate-800">Especialidad y experiencia</h2>
+
+                  <div className="mb-6 flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row">
+                    <div className="h-28 w-28 flex-none overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      {photoPreview || (!removePhoto && existingPhotoUrl) ? (
+                        <img
+                          src={photoPreview || existingPhotoUrl || ''}
+                          alt="Foto de perfil del médico"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-slate-300">
+                          <Camera className="h-10 w-10" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-center gap-2 sm:items-start">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-primary-400 hover:text-primary-700">
+                          <Camera className="h-4 w-4" />
+                          {photoFile || (existingPhotoUrl && !removePhoto) ? 'Cambiar foto' : 'Subir foto'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                        </label>
+                        {(photoFile || (existingPhotoUrl && !removePhoto)) && (
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500">JPG, PNG o WEBP. Máximo 5 MB.</p>
+                    </div>
+                  </div>
+
                   <div className="grid gap-6 md:grid-cols-2 mb-6">
                     <Input
                       label="Título profesional"
@@ -598,7 +769,7 @@ export default function DoctorOnboarding() {
                           className="input-field flex-none bg-white"
                           style={{ width: '110px' }}
                         >
-                          {(DOC_DATA[countryIso] || DOC_DATA['DEFAULT']).idTypes.map((t) => (
+                          {getCountryDocs(countryIso).idTypes.map((t) => (
                             <option key={t} value={t}>{t}</option>
                           ))}
                         </select>
@@ -647,7 +818,7 @@ export default function DoctorOnboarding() {
                           className="input-field flex-none bg-white"
                           style={{ width: '110px' }}
                         >
-                          {(DOC_DATA[licenseCountryIso] || DOC_DATA['DEFAULT']).licenseTypes.map((t) => (
+                          {getCountryDocs(licenseCountryIso).licenseTypes.map((t) => (
                             <option key={t} value={t}>{t}</option>
                           ))}
                         </select>
@@ -670,6 +841,45 @@ export default function DoctorOnboarding() {
                           type="text"
                           value={licenseNumberVal}
                           onChange={(e) => setLicenseNumberVal(e.target.value)}
+                          className="input-field min-w-0 flex-1"
+                          required
+                          placeholder="Número"
+                        />
+                      </div>
+                    </Field>
+
+                    <Field label={getCountryDocs(licenseCountryIso).specialistRegistryLabel} required htmlFor="doctor-registry-number">
+                      <div className="flex flex-col gap-2 xl:flex-row">
+                        <select
+                          aria-label="Tipo de registro de especialista"
+                          value={specialistRegistryType}
+                          onChange={(e) => setSpecialistRegistryType(e.target.value)}
+                          className="input-field flex-none bg-white"
+                          style={{ width: '110px' }}
+                        >
+                          {getCountryDocs(licenseCountryIso).specialistRegistryTypes.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+
+                        {specialistRegistryType === 'Otro' && (
+                          <input
+                            type="text"
+                            aria-label="Tipo de registro de especialista personalizado"
+                            value={customSpecialistRegistryType}
+                            onChange={(e) => setCustomSpecialistRegistryType(e.target.value)}
+                            className="input-field flex-none bg-primary-50 transition-colors focus:bg-white"
+                            style={{ width: '110px' }}
+                            placeholder="Entidad"
+                            required
+                            autoFocus
+                          />
+                        )}
+                        <input
+                          id="doctor-registry-number"
+                          type="text"
+                          value={specialistRegistryNumberVal}
+                          onChange={(e) => setSpecialistRegistryNumberVal(e.target.value)}
                           className="input-field min-w-0 flex-1"
                           required
                           placeholder="Número"

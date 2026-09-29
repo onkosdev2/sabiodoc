@@ -19,6 +19,7 @@ class DoctorRegistrationCreate(BaseModel):
     price_per_min_cents: int
     license_number: str
     license_country: str
+    specialist_registry_number: Optional[str] = Field(default=None, max_length=120)
     country: str
     city: str
     timezone: str

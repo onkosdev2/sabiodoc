@@ -141,8 +141,7 @@ export default function PatientProfilePage() {
           .then(setChangeRequests)
           .catch(() => setChangeRequests([]))
       } catch (err: unknown) {
-        const requestError = err as { response?: { data?: { detail?: string } } }
-        setError(requestError.response?.data?.detail || 'No se pudo cargar tu perfil.')
+        setError(getApiErrorMessage(err, 'No se pudo cargar tu perfil.'))
       } finally {
         setLoading(false)
       }

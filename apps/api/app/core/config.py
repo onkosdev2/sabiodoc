@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
     CLOUDINARY_FOLDER: str = "sabiodoc/session-files"
+    # Carpeta para las fotos de perfil de los medicos.
+    CLOUDINARY_DOCTOR_FOLDER: str = "sabiodoc/doctors"
+    # Tamano maximo de la foto de perfil (MB).
+    DOCTOR_PHOTO_MAX_MB: int = 5
     # Maximo de archivos que cada participante puede enviar por sesion.
     SESSION_FILES_MAX: int = 10
     # Tamano maximo por archivo (MB).

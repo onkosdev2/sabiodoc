@@ -85,8 +85,7 @@ export default function DoctorDetailPage() {
         const detail = await getDoctorDetail(Number(doctorId))
         setDoctor(detail)
       } catch (err: unknown) {
-        const requestError = err as { response?: { data?: { detail?: string } } }
-        setLoadError(requestError.response?.data?.detail || 'No se pudo cargar el perfil del médico')
+        setLoadError(getApiErrorMessage(err, 'No se pudo cargar el perfil del médico'))
       } finally {
         setLoading(false)
       }
@@ -243,9 +242,18 @@ export default function DoctorDetailPage() {
       {/* Cabecera del médico */}
       <Card as="section" className="sm:p-8">
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
-          <div className="flex h-20 w-20 flex-none items-center justify-center rounded-2xl bg-primary-100 text-2xl font-bold text-primary-700">
-            {initials || 'MD'}
-          </div>
+          {doctor.photo_url ? (
+            <img
+              src={doctor.photo_url}
+              alt={`Foto de ${doctor.display_name}`}
+              loading="lazy"
+              className="h-20 w-20 flex-none rounded-2xl border border-slate-200 object-cover"
+            />
+          ) : (
+            <div className="flex h-20 w-20 flex-none items-center justify-center rounded-2xl bg-primary-100 text-2xl font-bold text-primary-700">
+              {initials || 'MD'}
+            </div>
+          )}
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-3">

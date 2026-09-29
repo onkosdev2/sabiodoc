@@ -7,6 +7,12 @@ const STYLES: Record<string, { dot: string; pill: string }> = {
   offline: { dot: 'bg-slate-400', pill: 'border-slate-200 bg-slate-50 text-slate-600' },
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  online: 'Disponible',
+  busy: 'En sesión',
+  offline: 'Desconectado',
+}
+
 interface PresenceBadgeProps {
   presence: DoctorPresence
   className?: string
@@ -15,7 +21,7 @@ interface PresenceBadgeProps {
 /** Badge de disponibilidad del médico, consistente en todas las pantallas. */
 export default function PresenceBadge({ presence, className = '' }: PresenceBadgeProps) {
   const style = STYLES[presence.status] || STYLES.offline
-  const baseLabel = presence.status_message || presence.status
+  const baseLabel = presence.status_message || STATUS_LABELS[presence.status] || 'Desconectado'
   const showLastSeen = presence.status === 'offline' && presence.last_seen_at
   const label = showLastSeen ? `${baseLabel} · ${formatRelativeTime(presence.last_seen_at)}` : baseLabel
   const title = presence.last_seen_at

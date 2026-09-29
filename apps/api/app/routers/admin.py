@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db, require_admin
+from app.core.labels import (
+    audit_action_label,
+    audit_entity_label,
+    video_session_status_label,
+)
 from app.core.security import get_password_hash
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.audit_log import AuditLog
@@ -367,7 +372,11 @@ def get_admin_incidents(
         incidents.append(
             AdminIncidentResponse(
                 type="video_session",
-                title=f"Videoconsulta {session.status.value}: {session.doctor.display_name if session.doctor else 'Medico'}",
+                title=(
+                    "Videoconsulta "
+                    f"{video_session_status_label(session.status).lower()}: "
+                    f"{session.doctor.display_name if session.doctor else 'Médico'}"
+                ),
                 created_at=session.updated_at or session.created_at,
                 action_url="/admin/doctor-applications",
                 entity_id=session.id,
@@ -385,7 +394,7 @@ def get_admin_incidents(
         incidents.append(
             AdminIncidentResponse(
                 type="appointment_no_show",
-                title=f"No-show en {appointment.specialty.name if appointment.specialty else 'consulta'} con {appointment.doctor.display_name if appointment.doctor else 'medico'}",
+                title=f"Inasistencia en {appointment.specialty.name if appointment.specialty else 'consulta'} con {appointment.doctor.display_name if appointment.doctor else 'médico'}",
                 created_at=appointment.no_show_marked_at or appointment.updated_at or appointment.created_at,
                 action_url="/admin/doctor-applications",
                 entity_id=appointment.id,
@@ -397,7 +406,7 @@ def get_admin_incidents(
         incidents.append(
             AdminIncidentResponse(
                 type="audit",
-                title=f"{audit.action} ({audit.entity_type})",
+                title=f"{audit_action_label(audit.action)} ({audit_entity_label(audit.entity_type)})",
                 created_at=audit.created_at,
                 action_url="/admin/doctor-applications",
                 entity_id=audit.entity_id,
@@ -560,7 +569,7 @@ def create_user(
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya está registrado",
+            detail="El correo ya está registrado",
         )
 
     # Un medico requiere un DoctorProfile (flujo de postulación). Se puede crear
@@ -628,7 +637,7 @@ def update_user(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El email ya está registrado por otro usuario",
+                detail="El correo ya está registrado por otro usuario",
             )
         user.email = payload.email
 

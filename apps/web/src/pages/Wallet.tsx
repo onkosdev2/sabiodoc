@@ -71,7 +71,7 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-slate-800">
-            {TRANSACTION_LABELS[transaction.type] ?? transaction.type}
+            {TRANSACTION_LABELS[transaction.type] ?? 'Movimiento'}
           </p>
           <p className="truncate text-xs text-slate-500">{transaction.description}</p>
         </div>

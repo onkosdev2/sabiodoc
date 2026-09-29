@@ -80,7 +80,7 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
   }
 
   const roleParts = new Set<string>()
-  if (user?.role) roleParts.add(ROLE_LABELS[user.role] || user.role)
+  if (user?.role) roleParts.add(ROLE_LABELS[user.role] || 'Usuario')
   if (user?.doctor_status) roleParts.add('Médico')
   const roleLabel = Array.from(roleParts).join(' · ')
 

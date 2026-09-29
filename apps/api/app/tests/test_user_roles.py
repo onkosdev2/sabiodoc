@@ -256,6 +256,32 @@ def test_doctor_can_act_as_patient():
         _delete_user(admin, user_id)
 
 
+def test_notificacion_de_postulacion_en_espanol():
+    """La notificación de aprobación no debe mostrar el valor interno en inglés."""
+    admin = _admin_headers()
+    email = _unique("notif")
+    user_id = None
+    try:
+        specialty_id = _first_specialty_id()
+        response = client.post(
+            "/auth/register/doctor",
+            json=_doctor_payload(email, "Notif123!", specialty_id),
+        )
+        assert response.status_code == 201, response.text
+        user_id = response.json()["user"]["id"]
+
+        _approve_doctor(admin, response.json()["access_token"])
+
+        headers = _auth(_login(email, "Notif123!"))
+        notifications = client.get("/notifications/my", headers=headers)
+        assert notifications.status_code == 200, notifications.text
+        bodies = [item["body"] for item in notifications.json()["notifications"]]
+        assert any("como aprobado" in body for body in bodies), bodies
+        assert all("approved" not in body.lower() for body in bodies), bodies
+    finally:
+        _delete_user(admin, user_id)
+
+
 def test_admin_user_safeguards():
     admin = _admin_headers()
     me = client.get("/auth/me", headers=admin).json()

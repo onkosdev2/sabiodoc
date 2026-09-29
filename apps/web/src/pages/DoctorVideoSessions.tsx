@@ -112,7 +112,7 @@ export default function DoctorVideoSessions() {
                   <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-xl font-semibold text-slate-900">{session.specialty_name}</h2>
                     <Badge tone={VIDEO_SESSION_STATUS_TONES[session.status] ?? 'neutral'}>
-                      {VIDEO_SESSION_STATUS_LABELS[session.status] || session.status}
+                      {VIDEO_SESSION_STATUS_LABELS[session.status] || 'Sin estado'}
                     </Badge>
                   </div>
                   <div className="mt-3 space-y-2 text-sm text-slate-600">

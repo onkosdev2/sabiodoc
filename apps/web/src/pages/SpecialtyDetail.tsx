@@ -384,7 +384,21 @@ export default function SpecialtyDetail() {
                   className="group block w-full rounded-2xl border border-slate-200 p-5 pr-16 text-left transition-all hover:border-primary-400 hover:shadow-sm"
                 >
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                  <h3 className="text-xl font-semibold text-slate-800">{doctor.display_name}</h3>
+                  <div className="flex min-w-0 items-center gap-3">
+                    {doctor.photo_url ? (
+                      <img
+                        src={doctor.photo_url}
+                        alt={`Foto de ${doctor.display_name}`}
+                        loading="lazy"
+                        className="h-12 w-12 flex-none rounded-xl border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-primary-100 text-sm font-bold text-primary-700">
+                        {doctor.display_name.replace(/^(Dr\.|Dra\.|Lic\.|Psic\.|Odont\.)\s*/i, '').slice(0, 1).toUpperCase() || 'MD'}
+                      </div>
+                    )}
+                    <h3 className="truncate text-xl font-semibold text-slate-800">{doctor.display_name}</h3>
+                  </div>
                   <PresenceBadge presence={doctor.presence} />
                 </div>
 

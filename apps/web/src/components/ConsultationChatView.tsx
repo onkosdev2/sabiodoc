@@ -19,6 +19,7 @@ import Alert from './ui/Alert'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
 import ConfirmDialog from './ConfirmDialog'
+import { getApiErrorMessage } from '../utils/apiError'
 
 interface ConsultationChatViewProps {
   consultationId: number
@@ -72,9 +73,8 @@ export default function ConsultationChatView({
         setMessages(historyData.messages)
       }
     } catch (err: unknown) {
-      const requestError = err as { response?: { data?: { detail?: string } } }
       console.error('Error loading consultation:', err)
-      setError(requestError.response?.data?.detail || 'Error al cargar la consulta')
+      setError(getApiErrorMessage(err, 'Error al cargar la consulta'))
     } finally {
       setLoading(false)
     }
@@ -158,8 +158,7 @@ export default function ConsultationChatView({
         },
       ])
     } catch (err: unknown) {
-      const requestError = err as { response?: { data?: { detail?: string } } }
-      setError(requestError.response?.data?.detail || 'Error al generar el resumen')
+      setError(getApiErrorMessage(err, 'Error al generar el resumen'))
     } finally {
       setGeneratingSummary(false)
       setConfirmAction(null)
@@ -174,8 +173,7 @@ export default function ConsultationChatView({
       const updated = await closeConsultation(consultationId)
       setConsultation(updated)
     } catch (err: unknown) {
-      const requestError = err as { response?: { data?: { detail?: string } } }
-      setError(requestError.response?.data?.detail || 'No se pudo finalizar la consulta')
+      setError(getApiErrorMessage(err, 'No se pudo finalizar la consulta'))
     } finally {
       setClosing(false)
       setConfirmAction(null)
@@ -197,10 +195,8 @@ export default function ConsultationChatView({
         navigate(-1)
       }
     } catch (err: unknown) {
-      const requestError = err as { response?: { data?: { detail?: string } } }
       setError(
-        requestError.response?.data?.detail ||
-          'No se pudo cancelar la consulta. Intenta de nuevo.',
+        getApiErrorMessage(err, 'No se pudo cancelar la consulta. Intenta de nuevo.'),
       )
       setConfirmAction(null)
     } finally {

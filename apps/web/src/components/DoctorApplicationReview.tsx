@@ -122,7 +122,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
       setApplications((current) => current.map((item) => (item.doctor_id === updated.doctor_id ? updated : item)))
       setSelectedId(updated.doctor_id)
       setReviewNotes(updated.review_notes || '')
-      toast.success(`Postulación ${STATUS_LABELS[status].toLowerCase()}.`)
+      toast.success(`Estado de la postulación: ${STATUS_LABELS[status]}.`)
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo actualizar la postulación'))
     } finally {
@@ -177,10 +177,10 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
               <input
                 type="search"
-                aria-label="Buscar postulación por nombre o email"
+                aria-label="Buscar postulación por nombre o correo"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nombre o email..."
+                placeholder="Buscar por nombre o correo..."
                 className="input-field pl-10"
               />
             </div>
@@ -220,6 +220,18 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
+                      {application.photo_url ? (
+                        <img
+                          src={application.photo_url}
+                          alt={`Foto de ${application.display_name}`}
+                          loading="lazy"
+                          className="h-12 w-12 flex-none rounded-xl border border-slate-200 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-sky-100 text-sm font-bold text-sky-700">
+                          {application.display_name.replace(/^(Dr\.|Dra\.|Lic\.|Psic\.|Odont\.)\s*/i, '').slice(0, 1).toUpperCase() || 'MD'}
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-lg font-semibold text-slate-950">{application.display_name}</p>
                         <p className="mt-1 truncate text-sm text-slate-600">
@@ -263,12 +275,25 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
           ) : (
             <div className="space-y-8">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Solicitud</p>
-                  <h2 className="mt-2 break-words text-3xl font-bold text-slate-950">
-                    {selectedApplication.display_name}
-                  </h2>
-                  <p className="mt-2 break-words text-slate-600">{selectedApplication.professional_title}</p>
+                <div className="flex min-w-0 items-start gap-4">
+                  {selectedApplication.photo_url ? (
+                    <img
+                      src={selectedApplication.photo_url}
+                      alt={`Foto de ${selectedApplication.display_name}`}
+                      className="h-20 w-20 flex-none rounded-2xl border border-slate-200 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 flex-none items-center justify-center rounded-2xl bg-sky-100 text-2xl font-bold text-sky-700">
+                      {selectedApplication.display_name.replace(/^(Dr\.|Dra\.|Lic\.|Psic\.|Odont\.)\s*/i, '').slice(0, 1).toUpperCase() || 'MD'}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Solicitud</p>
+                    <h2 className="mt-2 break-words text-3xl font-bold text-slate-950">
+                      {selectedApplication.display_name}
+                    </h2>
+                    <p className="mt-2 break-words text-slate-600">{selectedApplication.professional_title}</p>
+                  </div>
                 </div>
                 <Badge tone={STATUS_TONES[selectedApplication.status]} className="self-start">
                   Estado: {STATUS_LABELS[selectedApplication.status]}
@@ -276,10 +301,11 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <InfoBlock label="Email" value={selectedApplication.email} />
+                <InfoBlock label="Correo electrónico" value={selectedApplication.email} />
                 <InfoBlock label="Tarifa" value={currency(selectedApplication.price_per_min_cents)} />
                 <InfoBlock label="Licencia" value={selectedApplication.license_number || '-'} />
                 <InfoBlock label="País de licencia" value={selectedApplication.license_country || '-'} />
+                <InfoBlock label="Registro de especialista" value={selectedApplication.specialist_registry_number || '-'} />
                 <InfoBlock label="Ciudad" value={selectedApplication.city || '-'} />
                 <InfoBlock label="País" value={selectedApplication.country || '-'} />
                 <InfoBlock label="Documento" value={selectedApplication.government_id || '-'} />

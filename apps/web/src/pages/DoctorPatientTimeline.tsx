@@ -108,7 +108,7 @@ export default function DoctorPatientTimelinePage() {
         const response = await getDoctorPatientTimeline(Number(patientId))
         setTimeline(response)
       } catch (requestError: any) {
-        setError(requestError.response?.data?.detail || 'No se pudo cargar el historial del paciente.')
+        setError(getApiErrorMessage(requestError, 'No se pudo cargar el historial del paciente.'))
       } finally {
         setLoading(false)
       }
@@ -394,17 +394,17 @@ export default function DoctorPatientTimelinePage() {
                   <div className="flex flex-wrap gap-2">
                     {item.consultation_status && (
                       <Badge tone={CONSULTATION_STATUS_TONES[item.consultation_status] ?? 'neutral'}>
-                        {CONSULTATION_STATUS_LABELS[item.consultation_status] ?? item.consultation_status}
+                        {CONSULTATION_STATUS_LABELS[item.consultation_status] ?? 'Sin estado'}
                       </Badge>
                     )}
                     {item.appointment_status && (
                       <Badge tone={APPOINTMENT_STATUS_TONES[item.appointment_status] ?? 'neutral'}>
-                        {APPOINTMENT_STATUS_LABELS[item.appointment_status] ?? item.appointment_status}
+                        {APPOINTMENT_STATUS_LABELS[item.appointment_status] ?? 'Sin estado'}
                       </Badge>
                     )}
                     {item.video_session_status && (
                       <Badge tone={VIDEO_SESSION_STATUS_TONES[item.video_session_status] ?? 'neutral'}>
-                        {VIDEO_SESSION_STATUS_LABELS[item.video_session_status] ?? item.video_session_status}
+                        {VIDEO_SESSION_STATUS_LABELS[item.video_session_status] ?? 'Sin estado'}
                       </Badge>
                     )}
                   </div>

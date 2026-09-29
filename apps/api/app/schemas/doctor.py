@@ -22,6 +22,7 @@ class DoctorProfileUpsertRequest(BaseModel):
     price_per_min_cents: int = Field(..., ge=1)
     license_number: str = Field(..., min_length=4, max_length=120)
     license_country: str = Field(..., min_length=2, max_length=120)
+    specialist_registry_number: Optional[str] = Field(default=None, max_length=120)
     country: str = Field(..., min_length=2, max_length=120)
     city: str = Field(..., min_length=2, max_length=120)
     timezone: str = Field(..., min_length=2, max_length=120)
@@ -49,9 +50,14 @@ class DoctorCardResponse(BaseModel):
     rating_count: int
     is_accepting_consultations: bool
     status: DoctorApprovalStatus
+    photo_url: Optional[str] = None
     presence: DoctorPresenceResponse
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DoctorPhotoResponse(BaseModel):
+    photo_url: Optional[str] = None
 
 
 class DoctorListResponse(BaseModel):
@@ -95,6 +101,7 @@ class DoctorDetailResponse(BaseModel):
     years_experience: Optional[int] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    photo_url: Optional[str] = None
     specialties: list[DoctorSpecialtySummary]
     reviews: list[DoctorReviewResponse]
 
@@ -109,11 +116,13 @@ class DoctorApplicationResponse(BaseModel):
     price_per_min_cents: int
     license_number: str | None = None
     license_country: str | None = None
+    specialist_registry_number: str | None = None
     country: str | None = None
     city: str | None = None
     timezone: str | None = None
     government_id: str | None = None
     years_experience: int | None = None
+    photo_url: str | None = None
     is_accepting_consultations: bool
     status: DoctorApprovalStatus
     review_notes: str | None = None

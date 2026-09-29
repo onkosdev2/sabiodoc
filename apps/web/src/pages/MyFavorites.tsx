@@ -106,6 +106,18 @@ export default function MyFavorites() {
             return (
               <Card key={favorite.id}>
                 <div className="flex items-start justify-between gap-3">
+                  {doctor.photo_url ? (
+                    <img
+                      src={doctor.photo_url}
+                      alt={`Foto de ${doctor.display_name}`}
+                      loading="lazy"
+                      className="h-12 w-12 flex-none rounded-xl border border-slate-200 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-primary-100 text-sm font-bold text-primary-700">
+                      {doctor.display_name.replace(/^(Dr\.|Dra\.|Lic\.|Psic\.|Odont\.)\s*/i, '').slice(0, 1).toUpperCase() || 'MD'}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold text-slate-800">{doctor.display_name}</h3>

@@ -464,13 +464,13 @@ def mark_appointment_no_show(
     is_admin = current_user.role == UserRole.admin
     is_doctor_of_appointment = appointment.doctor is not None and appointment.doctor.user_id == current_user.id
     if not is_admin and not is_doctor_of_appointment:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el medico de la cita o un admin pueden marcar no-show")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico de la cita o un administrador pueden marcar la inasistencia")
     if appointment.status != AppointmentStatus.scheduled:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se puede marcar no-show sobre citas programadas")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se puede marcar la inasistencia sobre citas programadas")
 
     grace_time = appointment.scheduled_at + appointment_service.get_no_show_grace_delta()
     if datetime.now(UTC) < grace_time:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aun no termina el margen para marcar no-show")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aún no termina el margen para marcar la inasistencia")
 
     appointment.status = AppointmentStatus.no_show
     appointment.no_show_marked_at = datetime.now(UTC)
@@ -481,7 +481,7 @@ def mark_appointment_no_show(
         db,
         user_id=appointment.patient_id,
         notification_type="appointment_no_show",
-        title="Cita marcada como no-show",
+        title="Cita marcada como inasistencia",
         body="La cita fue cerrada por ausencia. Puedes reagendar cuando quieras.",
         action_url="/me/appointments",
         metadata={"appointment_id": appointment.id, "action_label": "Revisar cita"},
