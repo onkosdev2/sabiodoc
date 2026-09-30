@@ -138,6 +138,22 @@ class Settings(BaseSettings):
         return list(dict.fromkeys(configured + _DEV_ORIGINS))
 
     @model_validator(mode="after")
+    def _normalize_database_url(self):
+        """Fuerza el driver psycopg2 (el instalado) en la URL de la base de datos.
+
+        SQLAlchemy nuevo puede elegir `psycopg` (v3) por defecto para
+        `postgresql://`, pero el proyecto instala `psycopg2-binary`. Además
+        normaliza el esquema legado `postgres://` que entrega Render.
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql+psycopg2://" + url[len("postgres://"):]
+        elif url.startswith("postgresql://"):
+            url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+        self.DATABASE_URL = url
+        return self
+
+    @model_validator(mode="after")
     def _validate_production_settings(self):
         """Evita arrancar en producción con secretos inseguros o sin CORS."""
         if not self.is_production:
