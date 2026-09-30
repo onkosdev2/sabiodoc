@@ -3,6 +3,7 @@ const HOME_TITLE = `${BRAND} - Orientación Médica Inteligente`
 
 const EXACT_TITLES: Record<string, string> = {
   '/specialties': 'Especialidades',
+  '/como-funciona': 'Cómo funciona',
   '/triage': 'Describir mi caso',
   '/guide': 'Guía de especialidades',
   '/emergency': 'Emergencias',
@@ -10,6 +11,7 @@ const EXACT_TITLES: Record<string, string> = {
   '/register': 'Crear cuenta',
   '/forgot-password': 'Recuperar contraseña',
   '/reset-password': 'Nueva contraseña',
+  '/verify-email': 'Verificar correo',
   '/doctor/apply': 'Postular como médico',
   '/notifications': 'Notificaciones',
   '/me/consultations': 'Consultas IA',
@@ -37,6 +39,7 @@ const EXACT_TITLES: Record<string, string> = {
   '/admin/system': 'Estado del sistema',
   '/admin/withdrawals': 'Retiros',
   '/admin/specialties': 'Especialidades',
+  '/admin/reviews': 'Moderación de reseñas',
   '/admin/doctor-applications': 'Postulaciones médicas',
   '/admin/notifications': 'Notificaciones',
   '/reviewer/doctor-applications': 'Postulaciones médicas',

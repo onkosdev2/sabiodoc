@@ -25,6 +25,7 @@ from app.models.doctor_specialty import DoctorSpecialty
 from app.models.specialty import Specialty
 from app.models.favorite import Favorite
 from app.models.notification import Notification, NotificationStatus
+from app.models.review_report import ReviewReport, ReviewReportStatus
 from app.models.triage_request import TriageRequest
 from app.models.user import User, UserRole
 from app.models.video_session import VideoSession, VideoSessionStatus
@@ -46,10 +47,19 @@ from app.schemas.user import (
     ReviewerListResponse,
     ReviewerResponse,
 )
+from app.schemas.doctor import (
+    AdminReviewItem,
+    AdminReviewListResponse,
+    AdminReviewReportItem,
+    AdminReviewReportListResponse,
+    ReviewModerationRequest,
+    ReviewReportStatusUpdate,
+)
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
 from app.services.patient_profile_service import get_patient_display_name
 from app.services.llm_client import llm_client
+from app.services import review_service
 from app.services.wallet_service import wallet_service
 from app.schemas.wallet import (
     WithdrawalListResponse,
@@ -859,3 +869,141 @@ def process_withdrawal(
     response = WithdrawalResponse.model_validate(withdrawal)
     db.commit()
     return response
+
+
+# --- Moderación de reseñas ---------------------------------------------------
+
+
+def _serialize_admin_review(review: ConsultationReview) -> AdminReviewItem:
+    return AdminReviewItem(
+        id=review.id,
+        rating=review.rating,
+        comment=review.comment,
+        doctor_id=review.doctor_id,
+        doctor_name=review.doctor.display_name if review.doctor else None,
+        is_hidden=bool(review.is_hidden),
+        hidden_reason=review.hidden_reason,
+        reports_count=len(review.reports) if review.reports else 0,
+        created_at=review.created_at,
+    )
+
+
+def _serialize_admin_report(report: ReviewReport) -> AdminReviewReportItem:
+    return AdminReviewReportItem(
+        id=report.id,
+        review_id=report.review_id,
+        reporter_email=report.reporter.email if report.reporter else "",
+        reason=report.reason,
+        status=report.status,
+        created_at=report.created_at,
+        resolved_at=report.resolved_at,
+        review=_serialize_admin_review(report.review),
+    )
+
+
+@router.get("/review-reports", response_model=AdminReviewReportListResponse)
+def list_review_reports(
+    report_status: ReviewReportStatus | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    query = (
+        db.query(ReviewReport)
+        .options(
+            joinedload(ReviewReport.review).joinedload(ConsultationReview.doctor),
+            joinedload(ReviewReport.reporter),
+        )
+        .order_by(ReviewReport.created_at.desc())
+    )
+    if report_status is not None:
+        query = query.filter(ReviewReport.status == report_status)
+    reports = query.limit(200).all()
+    return AdminReviewReportListResponse(
+        reports=[_serialize_admin_report(report) for report in reports],
+        total=len(reports),
+    )
+
+
+@router.post("/review-reports/{report_id}/status", response_model=AdminReviewReportItem)
+def update_review_report_status(
+    report_id: int,
+    payload: ReviewReportStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    report = db.query(ReviewReport).filter(ReviewReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reporte no encontrado")
+    review_service.resolve_report(
+        db, report=report, moderator=current_user, new_status=payload.status
+    )
+    db.refresh(report)
+    return _serialize_admin_report(report)
+
+
+@router.get("/reviews", response_model=AdminReviewListResponse)
+def list_reviews_for_moderation(
+    hidden: bool | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    query = (
+        db.query(ConsultationReview)
+        .options(joinedload(ConsultationReview.doctor))
+        .order_by(ConsultationReview.created_at.desc())
+    )
+    if hidden is not None:
+        query = query.filter(ConsultationReview.is_hidden == hidden)
+    reviews = query.limit(100).all()
+    return AdminReviewListResponse(
+        reviews=[_serialize_admin_review(review) for review in reviews],
+        total=len(reviews),
+    )
+
+
+@router.post("/reviews/{review_id}/hide", response_model=AdminReviewItem)
+def hide_review(
+    review_id: int,
+    payload: ReviewModerationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    review = db.query(ConsultationReview).filter(ConsultationReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseña no encontrada")
+    review_service.hide_review(
+        db, review=review, moderator=current_user, reason=payload.reason
+    )
+    audit_service.log(
+        db,
+        action="review.hidden",
+        entity_type="consultation_review",
+        entity_id=review.id,
+        actor_user_id=current_user.id,
+        metadata={"reason": payload.reason},
+    )
+    db.commit()
+    db.refresh(review)
+    return _serialize_admin_review(review)
+
+
+@router.post("/reviews/{review_id}/unhide", response_model=AdminReviewItem)
+def unhide_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    review = db.query(ConsultationReview).filter(ConsultationReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseña no encontrada")
+    review_service.unhide_review(db, review=review)
+    audit_service.log(
+        db,
+        action="review.unhidden",
+        entity_type="consultation_review",
+        entity_id=review.id,
+        actor_user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(review)
+    return _serialize_admin_review(review)

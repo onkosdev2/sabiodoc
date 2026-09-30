@@ -41,6 +41,10 @@ TEST_DATABASE_URL = _test_database_url()
 # Debe fijarse ANTES de importar cualquier módulo de `app` (settings es singleton).
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.setdefault("ENVIRONMENT", "development")
+# Los tests no envían correos: desactivamos la verificación por correo para que
+# los registros devuelvan token directamente. El flujo de verificación se cubre
+# aparte monkeypatcheando este flag (ver test_email_verification.py).
+os.environ["EMAIL_VERIFICATION_REQUIRED"] = "false"
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402

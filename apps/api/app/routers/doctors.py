@@ -32,6 +32,7 @@ from app.schemas.doctor import (
     DoctorApplicationListResponse,
     DoctorApplicationResponse,
     DoctorApplicationStatusUpdate,
+    DoctorAvailabilityPreview,
     DoctorCardResponse,
     DoctorDetailResponse,
     DoctorListResponse,
@@ -91,7 +92,10 @@ def _rating_aggregates(db: Session, doctor_ids: list[int]) -> dict[int, tuple[fl
             func.avg(ConsultationReview.rating),
             func.count(ConsultationReview.id),
         )
-        .filter(ConsultationReview.doctor_id.in_(doctor_ids))
+        .filter(
+            ConsultationReview.doctor_id.in_(doctor_ids),
+            ConsultationReview.is_hidden.is_(False),
+        )
         .group_by(ConsultationReview.doctor_id)
         .all()
     )
@@ -168,9 +172,18 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
     )
 
     doctors = []
+    preview_days = 5
+    preview_duration = 30
+    preview_limit = 8
     for profile in doctor_profiles:
         rating_avg, rating_count = aggregates.get(profile.id, (0.0, 0))
         resolved = resolve_presence(db, profile, has_active_session=profile.id in active_doctor_ids)
+        preview = appointment_service.compute_bookable_slots(
+            db,
+            doctor_profile=profile,
+            days=preview_days,
+            duration_minutes=preview_duration,
+        )[:preview_limit]
         doctors.append(
             DoctorCardResponse(
                 id=profile.id,
@@ -184,6 +197,17 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
                 is_accepting_consultations=profile.is_accepting_consultations,
                 status=profile.status,
                 photo_url=profile.photo_url,
+                address=profile.address,
+                is_verified=profile.status == DoctorApprovalStatus.approved,
+                next_available_at=preview[0][0] if preview else None,
+                availability_preview=[
+                    DoctorAvailabilityPreview(
+                        starts_at=starts_at,
+                        ends_at=ends_at,
+                        duration_minutes=preview_duration,
+                    )
+                    for starts_at, ends_at in preview
+                ],
                 presence=DoctorPresenceResponse(
                     status=resolved.status,
                     status_message=resolved.status_message,
@@ -257,6 +281,7 @@ def upsert_my_doctor_profile(
             specialist_registry_number=payload.specialist_registry_number,
             country=payload.country,
             city=payload.city,
+            address=payload.address,
             timezone=payload.timezone,
             government_id=payload.government_id,
             years_experience=payload.years_experience,
@@ -274,6 +299,7 @@ def upsert_my_doctor_profile(
     doctor_profile.specialist_registry_number = payload.specialist_registry_number
     doctor_profile.country = payload.country
     doctor_profile.city = payload.city
+    doctor_profile.address = payload.address
     doctor_profile.timezone = payload.timezone
     doctor_profile.government_id = payload.government_id
     doctor_profile.years_experience = payload.years_experience
@@ -306,6 +332,8 @@ def upsert_my_doctor_profile(
         is_accepting_consultations=doctor_profile.is_accepting_consultations,
         status=doctor_profile.status,
         photo_url=doctor_profile.photo_url,
+        address=doctor_profile.address,
+        is_verified=doctor_profile.status == DoctorApprovalStatus.approved,
         presence=DoctorPresenceResponse.model_validate(presence),
     )
 
@@ -992,6 +1020,8 @@ def get_my_reviews(
                 rating=review.rating,
                 comment=review.comment,
                 patient_label="Paciente verificado",
+                is_verified=True,
+                is_hidden=bool(review.is_hidden),
                 created_at=review.created_at,
             )
             for review in reviews
@@ -1028,7 +1058,10 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
 
     reviews = (
         db.query(ConsultationReview)
-        .filter(ConsultationReview.doctor_id == doctor_id)
+        .filter(
+            ConsultationReview.doctor_id == doctor_id,
+            ConsultationReview.is_hidden.is_(False),
+        )
         .order_by(ConsultationReview.created_at.desc())
         .limit(30)
         .all()
@@ -1051,6 +1084,11 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
         city=doctor_profile.city,
         country=doctor_profile.country,
         photo_url=doctor_profile.photo_url,
+        address=doctor_profile.address,
+        license_number=doctor_profile.license_number,
+        license_country=doctor_profile.license_country,
+        specialist_registry_number=doctor_profile.specialist_registry_number,
+        is_verified=doctor_profile.status == DoctorApprovalStatus.approved,
         specialties=[
             DoctorSpecialtySummary(id=specialty.id, slug=specialty.slug, name=specialty.name)
             for specialty in specialties

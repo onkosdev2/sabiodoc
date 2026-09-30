@@ -22,6 +22,7 @@ class DoctorRegistrationCreate(BaseModel):
     specialist_registry_number: Optional[str] = Field(default=None, max_length=120)
     country: str
     city: str
+    address: Optional[str] = Field(default=None, max_length=255)
     timezone: str
     government_id: str
     years_experience: int
@@ -42,6 +43,14 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=256)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
 class MessageResponse(BaseModel):
     message: str
 
@@ -52,6 +61,7 @@ class UserResponse(BaseModel):
     role: UserRole
     doctor_status: Optional[DoctorApprovalStatus] = None
     is_reviewer: bool = False
+    is_email_verified: bool = True
     display_name: Optional[str] = None
     doctor_display_name: Optional[str] = None
     patient_display_name: Optional[str] = None
@@ -115,3 +125,17 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class RegisterResponse(BaseModel):
+    """Respuesta de registro.
+
+    Si la verificación de correo está activa, no se emite token: el usuario debe
+    confirmar su correo antes de iniciar sesión.
+    """
+
+    message: str
+    verification_required: bool = False
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    user: Optional[UserResponse] = None

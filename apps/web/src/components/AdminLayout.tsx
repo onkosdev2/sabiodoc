@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import { Activity, Banknote, CalendarDays, ClipboardCheck, LayoutDashboard, ShieldCheck, Stethoscope, Users } from 'lucide-react'
+import { Activity, Banknote, CalendarDays, ClipboardCheck, Flag, LayoutDashboard, ShieldCheck, Stethoscope, Users } from 'lucide-react'
 
 import PanelLayout from './PanelLayout'
 
@@ -16,6 +16,7 @@ export default function AdminLayout() {
           { to: '/admin/doctor-applications', label: 'Postulaciones médicas', icon: ClipboardCheck },
           { to: '/admin/users', label: 'Usuarios', icon: Users },
           { to: '/admin/specialties', label: 'Especialidades', icon: Stethoscope },
+          { to: '/admin/reviews', label: 'Reseñas', icon: Flag },
           { to: '/admin/withdrawals', label: 'Retiros', icon: Banknote },
         ],
         // Supervisión y monitoreo.

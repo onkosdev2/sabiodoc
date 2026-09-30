@@ -6,6 +6,7 @@ from app.models.doctor_presence import DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus
 from app.models.appointment import AppointmentStatus
 from app.models.consultation import ConsultationStatus
+from app.models.review_report import ReviewReportStatus
 from app.schemas.consultation import ConsultationStructuredIntake
 from app.schemas.video_session import VideoSessionFileResponse
 
@@ -25,6 +26,7 @@ class DoctorProfileUpsertRequest(BaseModel):
     specialist_registry_number: Optional[str] = Field(default=None, max_length=120)
     country: str = Field(..., min_length=2, max_length=120)
     city: str = Field(..., min_length=2, max_length=120)
+    address: Optional[str] = Field(default=None, max_length=255)
     timezone: str = Field(..., min_length=2, max_length=120)
     government_id: str = Field(..., min_length=4, max_length=120)
     years_experience: int = Field(..., ge=0, le=80)
@@ -39,6 +41,14 @@ class DoctorPresenceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DoctorAvailabilityPreview(BaseModel):
+    """Franja concreta disponible, para mostrar horarios en el listado."""
+
+    starts_at: datetime
+    ends_at: datetime
+    duration_minutes: int = 30
+
+
 class DoctorCardResponse(BaseModel):
     id: int
     user_id: int
@@ -51,6 +61,10 @@ class DoctorCardResponse(BaseModel):
     is_accepting_consultations: bool
     status: DoctorApprovalStatus
     photo_url: Optional[str] = None
+    address: Optional[str] = None
+    is_verified: bool = False
+    next_available_at: Optional[datetime] = None
+    availability_preview: list[DoctorAvailabilityPreview] = Field(default_factory=list)
     presence: DoctorPresenceResponse
 
     model_config = ConfigDict(from_attributes=True)
@@ -76,6 +90,9 @@ class DoctorReviewResponse(BaseModel):
     rating: int
     comment: Optional[str] = None
     patient_label: str = "Paciente verificado"
+    # Toda reseña proviene de una cita completada; se muestra como verificada.
+    is_verified: bool = True
+    is_hidden: bool = False
     created_at: datetime
 
 
@@ -101,7 +118,12 @@ class DoctorDetailResponse(BaseModel):
     years_experience: Optional[int] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    address: Optional[str] = None
     photo_url: Optional[str] = None
+    license_number: Optional[str] = None
+    license_country: Optional[str] = None
+    specialist_registry_number: Optional[str] = None
+    is_verified: bool = False
     specialties: list[DoctorSpecialtySummary]
     reviews: list[DoctorReviewResponse]
 
@@ -119,6 +141,7 @@ class DoctorApplicationResponse(BaseModel):
     specialist_registry_number: str | None = None
     country: str | None = None
     city: str | None = None
+    address: str | None = None
     timezone: str | None = None
     government_id: str | None = None
     years_experience: int | None = None
@@ -190,3 +213,58 @@ class DoctorPatientSummary(BaseModel):
 class DoctorPatientListResponse(BaseModel):
     patients: list[DoctorPatientSummary]
     total: int
+
+
+class ReviewReportCreate(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ReviewReportResponse(BaseModel):
+    id: int
+    review_id: int
+    reason: Optional[str] = None
+    status: ReviewReportStatus
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminReviewItem(BaseModel):
+    id: int
+    rating: int
+    comment: Optional[str] = None
+    doctor_id: int
+    doctor_name: Optional[str] = None
+    is_hidden: bool = False
+    hidden_reason: Optional[str] = None
+    reports_count: int = 0
+    created_at: datetime
+
+
+class AdminReviewReportItem(BaseModel):
+    id: int
+    review_id: int
+    reporter_email: str
+    reason: Optional[str] = None
+    status: ReviewReportStatus
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    review: AdminReviewItem
+
+
+class AdminReviewReportListResponse(BaseModel):
+    reports: list[AdminReviewReportItem]
+    total: int
+
+
+class AdminReviewListResponse(BaseModel):
+    reviews: list[AdminReviewItem]
+    total: int
+
+
+class ReviewModerationRequest(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ReviewReportStatusUpdate(BaseModel):
+    status: ReviewReportStatus

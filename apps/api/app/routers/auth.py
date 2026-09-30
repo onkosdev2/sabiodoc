@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.deps import get_db, get_current_user
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import UserRole
 from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
@@ -17,16 +18,22 @@ from app.schemas.user import (
     DoctorRegistrationCreate,
     ForgotPasswordRequest,
     MessageResponse,
+    RegisterResponse,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     TokenResponse,
     UserCreate,
     UserLogin,
     UserResponse,
+    VerifyEmailRequest,
 )
 from app.core.logging import get_logger
 from app.core.rate_limit import enforce_rate_limit, rate_limit_dependency
 from app.services.doctor_onboarding_service import doctor_onboarding_service
-from app.services.email_service import send_password_reset_email
+from app.services.email_service import (
+    send_email_verification_email,
+    send_password_reset_email,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger(__name__)
@@ -36,6 +43,8 @@ register_rate_limit = rate_limit_dependency("auth:register", max_requests=10, wi
 login_rate_limit = rate_limit_dependency("auth:login", max_requests=10, window_seconds=300)
 forgot_password_rate_limit = rate_limit_dependency("auth:forgot-password", max_requests=5, window_seconds=3600)
 reset_password_rate_limit = rate_limit_dependency("auth:reset-password", max_requests=10, window_seconds=3600)
+verify_email_rate_limit = rate_limit_dependency("auth:verify-email", max_requests=20, window_seconds=3600)
+resend_verification_rate_limit = rate_limit_dependency("auth:resend-verification", max_requests=5, window_seconds=3600)
 # Además del límite por IP, limitamos por cuenta para frenar ataques dirigidos.
 LOGIN_MAX_ATTEMPTS_PER_EMAIL = 5
 LOGIN_EMAIL_WINDOW_SECONDS = 300
@@ -44,6 +53,46 @@ LOGIN_EMAIL_WINDOW_SECONDS = 300
 def _issue_access_token(user: User) -> str:
     """Token con el id del usuario y su versión de sesión (para revocación)."""
     return create_access_token(data={"sub": str(user.id), "ver": user.session_version or 1})
+
+
+def _hash_email_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _create_email_verification_token(db: Session, user: User) -> str:
+    token = secrets.token_urlsafe(32)
+    db.add(
+        EmailVerificationToken(
+            user_id=user.id,
+            token_hash=_hash_email_token(token),
+            expires_at=datetime.now(UTC)
+            + timedelta(minutes=settings.EMAIL_VERIFICATION_TOKEN_MINUTES),
+        )
+    )
+    db.flush()
+    return token
+
+
+def _send_email_verification(user: User, token: str) -> None:
+    verify_url = f"{settings.primary_frontend_origin}/verify-email?token={token}"
+    send_email_verification_email(user.email, verify_url)
+
+
+VERIFICATION_EMAIL_MESSAGE = (
+    "Te enviamos un correo para verificar tu cuenta. Revisa tu bandeja de entrada "
+    "(y la carpeta de spam) y confirma tu correo antes de iniciar sesión."
+)
+
+
+def _build_register_response(user: User, message: str) -> RegisterResponse:
+    if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
+        return RegisterResponse(message=message, verification_required=True)
+    return RegisterResponse(
+        message=message,
+        verification_required=False,
+        access_token=_issue_access_token(user),
+        user=build_user_response(user),
+    )
 
 
 def build_user_response(user: User) -> UserResponse:
@@ -63,6 +112,7 @@ def build_user_response(user: User) -> UserResponse:
         role=user.role,
         doctor_status=doctor_profile.status if doctor_profile else None,
         is_reviewer=bool(user.is_reviewer),
+        is_email_verified=bool(user.is_email_verified),
         display_name=doctor_name or patient_name,
         doctor_display_name=doctor_name,
         patient_display_name=patient_name,
@@ -71,7 +121,7 @@ def build_user_response(user: User) -> UserResponse:
 
 @router.post(
     "/register",
-    response_model=TokenResponse,
+    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(register_rate_limit)],
 )
@@ -82,28 +132,34 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El correo ya está registrado"
         )
-    
+
+    email_verification_required = settings.EMAIL_VERIFICATION_REQUIRED
     user = User(
         email=user_data.email,
-        password_hash=get_password_hash(user_data.password)
+        password_hash=get_password_hash(user_data.password),
+        is_email_verified=not email_verification_required,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
     logger.info("New user registered: id=%s", user.id)
-    
-    access_token = _issue_access_token(user)
-    
-    return TokenResponse(
-        access_token=access_token,
-        user=build_user_response(user)
-    )
+
+    if email_verification_required:
+        token = _create_email_verification_token(db, user)
+        db.commit()
+        _send_email_verification(user, token)
+        return RegisterResponse(
+            message=VERIFICATION_EMAIL_MESSAGE,
+            verification_required=True,
+        )
+
+    return _build_register_response(user, "Cuenta creada correctamente.")
 
 
 @router.post(
     "/register/doctor",
-    response_model=TokenResponse,
+    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(register_rate_limit)],
 )
@@ -139,6 +195,7 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
             email=doctor_data.email,
             password_hash=get_password_hash(doctor_data.password),
             role=UserRole.doctor,
+            is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED,
         )
         db.add(user)
     
@@ -148,6 +205,15 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     # Evitamos duplicar el perfil si una cuenta admin/revisor vuelve a postularse.
     existing_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == user.id).first()
     if existing_profile:
+        # Si la cuenta aún no verificó su correo, reenviamos el enlace en lugar de fallar.
+        if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
+            token = _create_email_verification_token(db, user)
+            db.commit()
+            _send_email_verification(user, token)
+            return RegisterResponse(
+                message=VERIFICATION_EMAIL_MESSAGE,
+                verification_required=True,
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ya existe un perfil médico para esta cuenta",
@@ -169,6 +235,7 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
         specialist_registry_number=doctor_data.specialist_registry_number,
         country=doctor_data.country,
         city=doctor_data.city,
+        address=doctor_data.address,
         timezone=doctor_data.timezone,
         government_id=doctor_data.government_id,
         years_experience=doctor_data.years_experience,
@@ -196,12 +263,16 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
 
     logger.info(f"New doctor application registered/upgraded: {user.email}")
 
-    access_token = _issue_access_token(user)
+    if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
+        token = _create_email_verification_token(db, user)
+        db.commit()
+        _send_email_verification(user, token)
+        return RegisterResponse(
+            message=VERIFICATION_EMAIL_MESSAGE,
+            verification_required=True,
+        )
 
-    return TokenResponse(
-        access_token=access_token,
-        user=build_user_response(user)
-    )
+    return _build_register_response(user, "Postulación enviada correctamente.")
 
 
 @router.post("/login", response_model=TokenResponse, dependencies=[Depends(login_rate_limit)])
@@ -219,6 +290,15 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos"
         )
+
+    if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Debes verificar tu correo electrónico antes de iniciar sesión. "
+                "Revisa tu bandeja de entrada o solicita un nuevo enlace."
+            ),
+        )
     
     logger.info("User logged in: id=%s", user.id)
     
@@ -233,6 +313,61 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return build_user_response(current_user)
+
+
+@router.post(
+    "/verify-email",
+    response_model=MessageResponse,
+    dependencies=[Depends(verify_email_rate_limit)],
+)
+def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """Confirma el correo con el token enviado al registrarse."""
+    token_hash = _hash_email_token(payload.token)
+    record = (
+        db.query(EmailVerificationToken)
+        .filter(EmailVerificationToken.token_hash == token_hash)
+        .with_for_update()
+        .first()
+    )
+    now = datetime.now(UTC)
+    if not record or record.used_at is not None or record.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de verificación es inválido o expiró.",
+        )
+
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de verificación es inválido o expiró.",
+        )
+
+    user.is_email_verified = True
+    db.query(EmailVerificationToken).filter(
+        EmailVerificationToken.user_id == user.id,
+        EmailVerificationToken.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
+    db.commit()
+    logger.info("Email verified: id=%s", user.id)
+    return MessageResponse(message="¡Correo verificado! Ya puedes iniciar sesión.")
+
+
+@router.post(
+    "/resend-verification",
+    response_model=MessageResponse,
+    dependencies=[Depends(resend_verification_rate_limit)],
+)
+def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
+    """Reenvía el enlace de verificación. Responde igual exista o no el correo."""
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user and not user.is_email_verified:
+        token = _create_email_verification_token(db, user)
+        db.commit()
+        _send_email_verification(user, token)
+    return MessageResponse(
+        message="Si tu correo está pendiente de verificación, te reenviamos el enlace."
+    )
 
 
 PASSWORD_RESET_MESSAGE = (

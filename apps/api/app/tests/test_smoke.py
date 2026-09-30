@@ -103,6 +103,23 @@ def test_search_specialties():
     assert "specialties" in response.json()
 
 
+def test_doctor_listing_incluye_disponibilidad():
+    """El listado por especialidad debe exponer horarios para reservar de un vistazo."""
+    response = client.get("/doctors/specialty/cardiologia")
+    assert response.status_code == 200, response.text
+    doctors = response.json()["doctors"]
+    assert doctors
+    assert all("availability_preview" in doctor for doctor in doctors)
+    assert all(doctor["is_verified"] for doctor in doctors)
+    with_availability = [doctor for doctor in doctors if doctor["availability_preview"]]
+    assert with_availability, "los médicos demo con agenda deberían mostrar horarios"
+    for doctor in with_availability:
+        assert doctor["next_available_at"]
+        first = doctor["availability_preview"][0]
+        assert first["starts_at"] <= first["ends_at"]
+        assert first["duration_minutes"] >= 15
+
+
 def test_triage_endpoint():
     response = client.post("/ai/triage", json={
         "symptoms_text": "Tengo dolor de cabeza desde hace 3 días y me siento mareado"

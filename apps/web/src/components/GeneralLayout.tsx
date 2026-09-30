@@ -97,6 +97,13 @@ export default function GeneralLayout() {
               ) : (
                 <>
                   <Link
+                    to="/como-funciona"
+                    replace={isAuthPage}
+                    className="hidden font-medium text-slate-600 transition-colors hover:text-primary-600 md:inline-flex"
+                  >
+                    ¿Cómo funciona?
+                  </Link>
+                  <Link
                     to="/doctor/apply"
                     replace={isAuthPage}
                     className="hidden font-medium text-slate-600 transition-colors hover:text-primary-600 md:inline-flex"

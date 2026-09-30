@@ -208,3 +208,70 @@ export const updateAdminSpecialty = async (
 export const deleteAdminSpecialty = async (specialtyId: number): Promise<void> => {
   await client.delete(`/admin/specialties/${specialtyId}`)
 }
+
+export interface AdminReviewItem {
+  id: number
+  rating: number
+  comment: string | null
+  doctor_id: number
+  doctor_name: string | null
+  is_hidden: boolean
+  hidden_reason: string | null
+  reports_count: number
+  created_at: string
+}
+
+export interface AdminReviewReportItem {
+  id: number
+  review_id: number
+  reporter_email: string
+  reason: string | null
+  status: 'pending' | 'resolved' | 'dismissed'
+  created_at: string
+  resolved_at: string | null
+  review: AdminReviewItem
+}
+
+export interface AdminReviewReportListResponse {
+  reports: AdminReviewReportItem[]
+  total: number
+}
+
+export interface AdminReviewListResponse {
+  reviews: AdminReviewItem[]
+  total: number
+}
+
+export type ReviewReportStatus = 'pending' | 'resolved' | 'dismissed'
+
+export const getReviewReports = async (
+  status?: ReviewReportStatus,
+): Promise<AdminReviewReportListResponse> => {
+  const response = await client.get<AdminReviewReportListResponse>('/admin/review-reports', {
+    params: status ? { report_status: status } : {},
+  })
+  return response.data
+}
+
+export const updateReviewReportStatus = async (
+  reportId: number,
+  status: Exclude<ReviewReportStatus, 'pending'>,
+): Promise<AdminReviewReportItem> => {
+  const response = await client.post<AdminReviewReportItem>(
+    `/admin/review-reports/${reportId}/status`,
+    { status },
+  )
+  return response.data
+}
+
+export const hideReview = async (reviewId: number, reason?: string): Promise<AdminReviewItem> => {
+  const response = await client.post<AdminReviewItem>(`/admin/reviews/${reviewId}/hide`, {
+    reason: reason?.trim() || null,
+  })
+  return response.data
+}
+
+export const unhideReview = async (reviewId: number): Promise<AdminReviewItem> => {
+  const response = await client.post<AdminReviewItem>(`/admin/reviews/${reviewId}/unhide`)
+  return response.data
+}

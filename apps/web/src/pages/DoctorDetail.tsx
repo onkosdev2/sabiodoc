@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Award,
+  BadgeCheck,
   CalendarPlus,
   CircleDollarSign,
   Loader2,
@@ -17,7 +18,7 @@ import PresenceBadge from '../components/PresenceBadge'
 import DoctorFavoriteButton from '../components/DoctorFavoriteButton'
 import { addFavorite, removeFavorite, getMyFavorites } from '../api/favorites'
 import { Select, Textarea } from '../components/ui/Field'
-import { DoctorDetail, getDoctorDetail } from '../api/doctors'
+import { DoctorDetail, DoctorReview, getDoctorDetail } from '../api/doctors'
 import {
   BookableSlot,
   createAppointment,
@@ -26,6 +27,9 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { getMyWallet, Wallet } from '../api/wallet'
 import { getApiErrorMessage } from '../utils/apiError'
+import { reportReview } from '../api/reviews'
+import Modal from '../components/ui/Modal'
+import { useToast } from '../context/ToastContext'
 import { formatMoney as currency } from '../utils/format'
 
 function Stars({ value, className = 'h-4 w-4' }: { value: number; className?: string }) {
@@ -46,6 +50,7 @@ export default function DoctorDetailPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
+  const toast = useToast()
 
   const [doctor, setDoctor] = useState<DoctorDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,9 +68,13 @@ export default function DoctorDetailPage() {
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [favoriteBusy, setFavoriteBusy] = useState(false)
+  const [reportTarget, setReportTarget] = useState<DoctorReview | null>(null)
+  const [reportReason, setReportReason] = useState('')
+  const [reportBusy, setReportBusy] = useState(false)
 
   const requestedSlug = searchParams.get('specialty')
   const consultationId = searchParams.get('consultation')
+  const requestedSlot = searchParams.get('slot')
   const duration = Math.min(120, Math.max(15, Number(durationMinutes) || 30))
   const selectedSpecialty = useMemo(() => {
     if (!doctor) return null
@@ -147,7 +156,10 @@ export default function DoctorDetailPage() {
       try {
         const response = await getDoctorBookableSlots(doctor.id, 14, duration)
         setSlots(response.slots)
-        if (response.slots.length > 0) {
+        const requested = requestedSlot && response.slots.find((slot) => slot.starts_at === requestedSlot)
+        if (requested) {
+          setSelectedSlot(requested.starts_at)
+        } else if (response.slots.length > 0) {
           setSelectedSlot(response.slots[0].starts_at)
         }
       } catch {
@@ -157,7 +169,14 @@ export default function DoctorDetailPage() {
       }
     }
     loadSlots()
-  }, [doctor, duration])
+  }, [doctor, duration, requestedSlot])
+
+  // Si llega con un horario preseleccionado desde el listado, lleva al usuario a la agenda.
+  useEffect(() => {
+    if (!requestedSlot || loading || slotsLoading || slots.length === 0) return
+    const target = document.getElementById('agendar')
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [requestedSlot, loading, slotsLoading, slots.length])
 
   const groupedSlots = useMemo(() => {
     return slots.reduce<Record<string, BookableSlot[]>>((accumulator, slot) => {
@@ -173,6 +192,39 @@ export default function DoctorDetailPage() {
   }, [slots])
 
   const ratingAverage = doctor ? Number(doctor.rating_avg) : 0
+
+  // Datos estructurados (schema.org) para que Google muestre reseñas y especialidad.
+  const structuredData = useMemo(() => {
+    if (!doctor) return null
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'Physician',
+      name: doctor.display_name,
+      medicalSpecialty: doctor.specialties.map((specialty) => specialty.name),
+      ...(doctor.professional_title ? { description: doctor.professional_title } : {}),
+      ...(doctor.city || doctor.country
+        ? {
+            address: {
+              '@type': 'PostalAddress',
+              ...(doctor.city ? { addressLocality: doctor.city } : {}),
+              ...(doctor.country ? { addressCountry: doctor.country } : {}),
+            },
+          }
+        : {}),
+      ...(doctor.photo_url ? { image: doctor.photo_url } : {}),
+      ...(doctor.rating_count > 0
+        ? {
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: Number(ratingAverage.toFixed(1)),
+              reviewCount: doctor.rating_count,
+              bestRating: 5,
+              worstRating: 1,
+            },
+          }
+        : {}),
+    }
+  }, [doctor, ratingAverage])
 
   const handleBook = async () => {
     if (!isAuthenticated) {
@@ -235,8 +287,29 @@ export default function DoctorDetailPage() {
 
   const backTo = selectedSpecialty ? `/specialties/${selectedSpecialty.slug}` : '/specialties'
 
+  const submitReport = async () => {
+    if (!reportTarget) return
+    setReportBusy(true)
+    try {
+      await reportReview(reportTarget.id, reportReason)
+      toast.success('Gracias. Revisaremos esta reseña.')
+      setReportTarget(null)
+      setReportReason('')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo enviar el reporte.'))
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+      )}
       <BackButton to={backTo} label="Volver a especialidades" />
 
       {/* Cabecera del médico */}
@@ -258,6 +331,15 @@ export default function DoctorDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-3xl font-bold text-slate-900">{doctor.display_name}</h1>
+              {doctor.is_verified && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                  title="Perfil revisado y aprobado por SabioDoc"
+                >
+                  <BadgeCheck className="h-4 w-4" />
+                  Verificado
+                </span>
+              )}
               <PresenceBadge presence={doctor.presence} />
               {isAuthenticated && (
                 <DoctorFavoriteButton
@@ -300,7 +382,21 @@ export default function DoctorDetailPage() {
                   {[doctor.city, doctor.country].filter(Boolean).join(', ')}
                 </span>
               )}
+              {(doctor.license_number || doctor.specialist_registry_number) && (
+                <span className="inline-flex items-center gap-1.5">
+                  <BadgeCheck className="h-4 w-4 text-emerald-600" />
+                  Núm. de colegiatura:{' '}
+                  {[doctor.license_number, doctor.specialist_registry_number].filter(Boolean).join(' · ')}
+                </span>
+              )}
             </div>
+
+            {doctor.address && (
+              <p className="mt-3 inline-flex items-start gap-1.5 text-sm text-slate-600">
+                <MapPin className="mt-0.5 h-4 w-4 flex-none text-rose-500" />
+                {doctor.address}
+              </p>
+            )}
 
             {doctor.specialties.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
@@ -366,7 +462,29 @@ export default function DoctorDetailPage() {
                     </span>
                   </div>
                   {review.comment && <p className="mt-3 leading-relaxed text-slate-700">{review.comment}</p>}
-                  <p className="mt-3 text-sm font-medium text-slate-500">{review.patient_label}</p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-slate-500">{review.patient_label}</p>
+                      {review.is_verified && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                          Cita verificada
+                        </span>
+                      )}
+                    </div>
+                    {isAuthenticated && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReportTarget(review)
+                          setReportReason('')
+                        }}
+                        className="text-xs font-medium text-slate-400 transition-colors hover:text-red-600"
+                      >
+                        Reportar
+                      </button>
+                    )}
+                  </div>
                 </article>
               ))
             )}
@@ -375,7 +493,7 @@ export default function DoctorDetailPage() {
 
         {/* Acciones: agendar o videoconsulta inmediata */}
         <aside className="space-y-6">
-          <Card as="section">
+          <Card as="section" id="agendar">
             <h2 className="text-xl font-semibold text-slate-900">Agendar una cita</h2>
             <p className="mt-1 text-sm text-slate-600">Elige un horario disponible en la agenda del médico.</p>
 
@@ -518,6 +636,35 @@ export default function DoctorDetailPage() {
           </Card>
         </aside>
       </div>
+
+      <Modal
+        open={reportTarget !== null}
+        onClose={() => {
+          if (!reportBusy) {
+            setReportTarget(null)
+            setReportReason('')
+          }
+        }}
+        title="Reportar reseña"
+        description="Cuéntanos por qué crees que esta reseña no debería publicarse. Un administrador la revisará."
+      >
+        <Textarea
+          label="Motivo (opcional)"
+          value={reportReason}
+          onChange={(event) => setReportReason(event.target.value)}
+          className="min-h-24"
+          maxLength={1000}
+          placeholder="Ej: lenguaje ofensivo, información falsa, spam..."
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setReportTarget(null)} disabled={reportBusy}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={submitReport} loading={reportBusy}>
+            Enviar reporte
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -19,6 +19,7 @@ import NotFound from './pages/NotFound'
 
 // Páginas con carga diferida (code-splitting por ruta).
 const Home = lazyWithRetry(() => import('./pages/Home'))
+const ComoFunciona = lazyWithRetry(() => import('./pages/ComoFunciona'))
 const Specialties = lazyWithRetry(() => import('./pages/Specialties'))
 const SpecialtyDetail = lazyWithRetry(() => import('./pages/SpecialtyDetail'))
 const DoctorDetailPage = lazyWithRetry(() => import('./pages/DoctorDetail'))
@@ -31,6 +32,7 @@ const Login = lazyWithRetry(() => import('./pages/Login'))
 const Register = lazyWithRetry(() => import('./pages/Register'))
 const ForgotPassword = lazyWithRetry(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'))
+const VerifyEmail = lazyWithRetry(() => import('./pages/VerifyEmail'))
 const DoctorOnboarding = lazyWithRetry(() => import('./pages/DoctorOnboarding'))
 const AdminDoctorApplications = lazyWithRetry(() => import('./pages/AdminDoctorApplications'))
 const AdminOverview = lazyWithRetry(() => import('./pages/AdminOverview'))
@@ -56,6 +58,7 @@ const PatientProfilePage = lazyWithRetry(() => import('./pages/PatientProfile'))
 const WalletPage = lazyWithRetry(() => import('./pages/Wallet'))
 const AdminWithdrawals = lazyWithRetry(() => import('./pages/AdminWithdrawals'))
 const AdminSpecialties = lazyWithRetry(() => import('./pages/AdminSpecialties'))
+const AdminReviews = lazyWithRetry(() => import('./pages/AdminReviews'))
 
 function App() {
   return (
@@ -68,6 +71,7 @@ function App() {
             {/* Portal general (paciente + páginas públicas) */}
             <Route element={<GeneralLayout />}>
               <Route path="/" element={<Home />} />
+              <Route path="/como-funciona" element={<ComoFunciona />} />
               <Route path="/specialties" element={<Specialties />} />
               <Route path="/specialties/:slug" element={<SpecialtyDetail />} />
               <Route path="/doctors/:doctorId" element={<DoctorDetailPage />} />
@@ -78,6 +82,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/doctor/apply" element={<DoctorOnboarding />} />
 
               <Route element={<PatientRoute />}>
@@ -131,6 +136,7 @@ function App() {
                 <Route path="/admin/users" element={<AdminUsers />} />
                 <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
                 <Route path="/admin/specialties" element={<AdminSpecialties />} />
+                <Route path="/admin/reviews" element={<AdminReviews />} />
                 <Route path="/admin/system" element={<AdminSystemHealth />} />
                 <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>

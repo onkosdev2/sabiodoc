@@ -109,7 +109,14 @@ export default function DoctorReviews() {
                     </span>
                   </div>
                   {review.comment && <p className="mt-3 leading-relaxed text-slate-700">{review.comment}</p>}
-                  <p className="mt-3 text-sm font-medium text-slate-500">{review.patient_label}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium text-slate-500">{review.patient_label}</p>
+                    {review.is_hidden && (
+                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Oculta por moderación
+                      </span>
+                    )}
+                  </div>
                 </article>
               ))}
               <Pagination

@@ -6,6 +6,7 @@ export interface User {
   role: 'patient' | 'doctor' | 'reviewer' | 'admin'
   doctor_status?: 'pending' | 'approved' | 'rejected' | 'suspended' | null
   is_reviewer?: boolean
+  is_email_verified?: boolean
   display_name?: string | null
   doctor_display_name?: string | null
   patient_display_name?: string | null
@@ -18,8 +19,17 @@ export interface AuthResponse {
   user: User
 }
 
-export const register = async (email: string, password: string): Promise<AuthResponse> => {
-  const response = await client.post<AuthResponse>('/auth/register', { email, password })
+/** Respuesta de registro: si exige verificación, no trae token ni usuario. */
+export interface RegisterResponse {
+  message: string
+  verification_required: boolean
+  access_token?: string | null
+  token_type?: string
+  user?: User | null
+}
+
+export const register = async (email: string, password: string): Promise<RegisterResponse> => {
+  const response = await client.post<RegisterResponse>('/auth/register', { email, password })
   return response.data
 }
 
@@ -40,8 +50,8 @@ export interface DoctorRegistrationPayload {
   specialty_ids: number[]
 }
 
-export const registerDoctor = async (payload: DoctorRegistrationPayload): Promise<AuthResponse> => {
-  const response = await client.post<AuthResponse>('/auth/register/doctor', payload)
+export const registerDoctor = async (payload: DoctorRegistrationPayload): Promise<RegisterResponse> => {
+  const response = await client.post<RegisterResponse>('/auth/register/doctor', payload)
   return response.data
 }
 
@@ -69,5 +79,17 @@ export const resetPassword = async (token: string, newPassword: string): Promise
     token,
     new_password: newPassword,
   })
+  return response.data
+}
+
+/** Confirma el correo con el token enviado al registrarse. */
+export const verifyEmail = async (token: string): Promise<MessageResponse> => {
+  const response = await client.post<MessageResponse>('/auth/verify-email', { token })
+  return response.data
+}
+
+/** Reenvía el enlace de verificación de correo. */
+export const resendVerification = async (email: string): Promise<MessageResponse> => {
+  const response = await client.post<MessageResponse>('/auth/resend-verification', { email })
   return response.data
 }

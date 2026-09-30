@@ -11,6 +11,12 @@ export interface DoctorPresence {
   last_seen_at: string | null
 }
 
+export interface DoctorAvailabilityPreview {
+  starts_at: string
+  ends_at: string
+  duration_minutes: number
+}
+
 export interface DoctorCard {
   id: number
   user_id: number
@@ -23,6 +29,10 @@ export interface DoctorCard {
   is_accepting_consultations: boolean
   status: 'pending' | 'approved' | 'rejected' | 'suspended'
   photo_url: string | null
+  address: string | null
+  is_verified: boolean
+  next_available_at: string | null
+  availability_preview: DoctorAvailabilityPreview[]
   presence: DoctorPresence
 }
 
@@ -36,6 +46,8 @@ export interface DoctorReview {
   rating: number
   comment: string | null
   patient_label: string
+  is_verified: boolean
+  is_hidden: boolean
   created_at: string
 }
 
@@ -54,7 +66,12 @@ export interface DoctorDetail {
   years_experience: number | null
   city: string | null
   country: string | null
+  address: string | null
   photo_url: string | null
+  license_number: string | null
+  license_country: string | null
+  specialist_registry_number: string | null
+  is_verified: boolean
   specialties: DoctorApplicationSpecialty[]
   reviews: DoctorReview[]
 }
@@ -103,6 +120,7 @@ export interface DoctorApplication {
   specialist_registry_number: string | null
   country: string | null
   city: string | null
+  address: string | null
   timezone: string | null
   government_id: string | null
   years_experience: number | null
@@ -125,6 +143,7 @@ export interface DoctorProfileUpsertPayload {
   specialist_registry_number?: string
   country: string
   city: string
+  address?: string
   timezone: string
   government_id: string
   years_experience: number

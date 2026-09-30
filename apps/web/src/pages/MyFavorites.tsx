@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronRight, CircleDollarSign, Heart, Star, Trash2 } from 'lucide-react'
+import { BadgeCheck, ChevronRight, CircleDollarSign, Heart, Star, Trash2 } from 'lucide-react'
 
 import { getMyFavorites, removeFavorite, Favorite } from '../api/favorites'
 import { useAuth } from '../context/AuthContext'
@@ -121,6 +121,11 @@ export default function MyFavorites() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold text-slate-800">{doctor.display_name}</h3>
+                      {doctor.is_verified && (
+                        <span title="Perfil verificado" className="text-emerald-600">
+                          <BadgeCheck className="h-4 w-4" />
+                        </span>
+                      )}
                       <PresenceBadge presence={doctor.presence} />
                     </div>
                     {doctor.professional_title && (

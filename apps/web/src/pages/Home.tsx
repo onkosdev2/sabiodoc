@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
+  ArrowRight,
   BookOpenText,
   Briefcase,
   FileText,
@@ -54,6 +55,13 @@ export default function Home() {
         <p className="mt-2 text-sm text-slate-500">
           Te ayudamos a encontrar la especialidad médica adecuada para tus necesidades
         </p>
+        <Link
+          to="/como-funciona"
+          className="mt-4 inline-flex items-center gap-1 font-medium text-primary-600 hover:underline"
+        >
+          Conoce cómo funciona SabioDoc
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
       </div>
 
       <div className="mb-8 grid gap-6 md:grid-cols-2">

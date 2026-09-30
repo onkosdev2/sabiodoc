@@ -26,6 +26,7 @@ class DoctorProfile(Base):
     specialist_registry_number = Column(String(120), nullable=True)
     country = Column(String(120), nullable=True)
     city = Column(String(120), nullable=True)
+    address = Column(String(255), nullable=True)
     timezone = Column(String(120), nullable=True, server_default="UTC")
     government_id = Column(String(120), nullable=True)
     years_experience = Column(Integer, nullable=True)

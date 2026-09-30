@@ -5,6 +5,7 @@ import { UserPlus } from 'lucide-react'
 import { register } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
+import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { Input, PasswordInput } from '../components/ui/Field'
@@ -26,6 +27,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   const validate = (): boolean => {
@@ -47,14 +49,31 @@ export default function Register() {
     setLoading(true)
     try {
       const response = await register(email.trim(), password)
-      authLogin(response.access_token, response.user)
-      // Un usuario nuevo empieza completando su perfil de paciente.
-      navigate('/me/profile', { replace: true, state: { fromRegistration: true } })
+      if (response.verification_required) {
+        setPendingEmail(email.trim())
+        return
+      }
+      if (response.access_token && response.user) {
+        authLogin(response.access_token, response.user)
+        // Un usuario nuevo empieza completando su perfil de paciente.
+        navigate('/me/profile', { replace: true, state: { fromRegistration: true } })
+      }
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No pudimos crear tu cuenta. Intenta de nuevo.'))
     } finally {
       setLoading(false)
     }
+  }
+
+  if (pendingEmail) {
+    return (
+      <div className="mx-auto max-w-md">
+        <BackButton useHistoryBack />
+        <div className="card">
+          <CheckEmailNotice email={pendingEmail} />
+        </div>
+      </div>
+    )
   }
 
   return (

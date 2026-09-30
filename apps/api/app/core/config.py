@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: Optional[str] = None
     SMTP_USE_TLS: bool = True
+    # Verificación de correo al registrarse (paciente y médico).
+    EMAIL_VERIFICATION_REQUIRED: bool = True
+    # Vigencia del enlace de verificación (24 h por defecto).
+    EMAIL_VERIFICATION_TOKEN_MINUTES: int = 60 * 24
     
     # DeepSeek AI Integration
     DEEPSEEK_API_KEY: Optional[str] = None

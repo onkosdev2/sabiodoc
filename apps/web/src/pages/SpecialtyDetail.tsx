@@ -1,18 +1,48 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Star, Calendar, Loader2, ChevronRight, CircleDollarSign, RefreshCcw, Search } from 'lucide-react'
+import { Star, Calendar, Loader2, ChevronRight, CircleDollarSign, RefreshCcw, Search, BadgeCheck } from 'lucide-react'
 import Button from '../components/ui/Button'
 import { getSpecialtyBySlug, Specialty } from '../api/specialties'
 import { createConsultation, getMyConsultations } from '../api/consultations'
 import { addFavorite, removeFavorite, getMyFavorites } from '../api/favorites'
 import DoctorFavoriteButton from '../components/DoctorFavoriteButton'
-import { DoctorCard, getDoctorsBySpecialty } from '../api/doctors'
+import { DoctorAvailabilityPreview, DoctorCard, getDoctorsBySpecialty } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
 import { formatMoney } from '../utils/format'
 
 type DoctorSort = 'availability' | 'rating' | 'name' | 'price_asc' | 'price_desc'
+
+/** Agrupa los próximos horarios por día para mostrarlos en la tarjeta. */
+function groupAvailability(preview: DoctorAvailabilityPreview[]) {
+  const groups: { key: string; label: string; slots: DoctorAvailabilityPreview[] }[] = []
+  const now = new Date()
+  const tomorrow = new Date(now)
+  tomorrow.setDate(now.getDate() + 1)
+  for (const slot of preview) {
+    const date = new Date(slot.starts_at)
+    const key = date.toDateString()
+    let group = groups.find((item) => item.key === key)
+    if (!group) {
+      const day = date.toLocaleDateString('es-ES', { day: 'numeric' })
+      const isToday = key === now.toDateString()
+      const isTomorrow = key === tomorrow.toDateString()
+      const label = isToday
+        ? `Hoy ${day}`
+        : isTomorrow
+          ? `Mañana ${day}`
+          : `${date.toLocaleDateString('es-ES', { weekday: 'short' })} ${day}`
+      group = { key, label, slots: [] }
+      groups.push(group)
+    }
+    group.slots.push(slot)
+  }
+  return groups.map((group) => ({ ...group, slots: group.slots.slice(0, 3) })).slice(0, 4)
+}
+
+const formatSlotTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 
 export default function SpecialtyDetail() {
   const { slug } = useParams<{ slug: string }>()
@@ -33,6 +63,7 @@ export default function SpecialtyDetail() {
   >([])
   const [doctorSearch, setDoctorSearch] = useState('')
   const [doctorSort, setDoctorSort] = useState<DoctorSort>('rating')
+  const [onlyAvailable, setOnlyAvailable] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!slug) return
@@ -157,7 +188,7 @@ export default function SpecialtyDetail() {
   // Filtrado y ordenamiento de médicos (búsqueda por nombre/título + criterio).
   const visibleDoctors = useMemo(() => {
     const term = doctorSearch.trim().toLowerCase()
-    const filtered = term
+    const searched = term
       ? doctors.filter(
           (doctor) =>
             doctor.display_name.toLowerCase().includes(term) ||
@@ -165,6 +196,10 @@ export default function SpecialtyDetail() {
             (doctor.bio_short || '').toLowerCase().includes(term),
         )
       : doctors
+
+    const filtered = onlyAvailable
+      ? searched.filter((doctor) => (doctor.availability_preview?.length ?? 0) > 0)
+      : searched
 
     const sorted = [...filtered]
     const availabilityRank = (status?: string) =>
@@ -198,7 +233,7 @@ export default function SpecialtyDetail() {
         break
     }
     return sorted
-  }, [doctors, doctorSearch, doctorSort])
+  }, [doctors, doctorSearch, doctorSort, onlyAvailable])
 
   if (loading) {
     return (
@@ -363,6 +398,25 @@ export default function SpecialtyDetail() {
                   <option value="price_desc">Mayor costo por minuto</option>
                 </select>
               </div>
+              <button
+                type="button"
+                onClick={() => setOnlyAvailable((value) => !value)}
+                aria-pressed={onlyAvailable}
+                className={`inline-flex h-[42px] items-center gap-2 self-end rounded-lg border px-4 text-sm font-medium transition-colors ${
+                  onlyAvailable
+                    ? 'border-primary-500 bg-primary-50 text-primary-700'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                }`}
+              >
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
+                    onlyAvailable ? 'border-primary-500 bg-primary-500 text-white' : 'border-slate-300'
+                  }`}
+                >
+                  {onlyAvailable ? '✓' : ''}
+                </span>
+                Solo con disponibilidad
+              </button>
             </div>
           )}
         </div>
@@ -377,12 +431,12 @@ export default function SpecialtyDetail() {
           </div>
         ) : (
           <div className="space-y-4">
-            {visibleDoctors.map((doctor) => (
+            {visibleDoctors.map((doctor) => {
+              const detailUrl = `/doctors/${doctor.id}?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`
+              const previewGroups = groupAvailability(doctor.availability_preview ?? [])
+              return (
               <div key={doctor.id} className="relative">
-                <Link
-                  to={`/doctors/${doctor.id}?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`}
-                  className="group block w-full rounded-2xl border border-slate-200 p-5 pr-16 text-left transition-all hover:border-primary-400 hover:shadow-sm"
-                >
+                <div className="group w-full rounded-2xl border border-slate-200 p-5 pr-16 text-left transition-all hover:border-primary-400 hover:shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                   <div className="flex min-w-0 items-center gap-3">
                     {doctor.photo_url ? (
@@ -397,12 +451,43 @@ export default function SpecialtyDetail() {
                         {doctor.display_name.replace(/^(Dr\.|Dra\.|Lic\.|Psic\.|Odont\.)\s*/i, '').slice(0, 1).toUpperCase() || 'MD'}
                       </div>
                     )}
-                    <h3 className="truncate text-xl font-semibold text-slate-800">{doctor.display_name}</h3>
+                    <Link to={detailUrl} className="truncate text-xl font-semibold text-slate-800 hover:text-primary-700">
+                      {doctor.display_name}
+                    </Link>
+                    {doctor.is_verified && (
+                      <span title="Perfil verificado" className="flex-none text-emerald-600">
+                        <BadgeCheck className="h-5 w-5" />
+                      </span>
+                    )}
                   </div>
                   <PresenceBadge presence={doctor.presence} />
                 </div>
 
                   <p className="text-slate-600">{doctor.bio_short || 'Sin descripción corta disponible.'}</p>
+
+                  {previewGroups.length > 0 && (
+                    <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Próximos horarios</p>
+                      <div className="flex gap-4 overflow-x-auto pb-1">
+                        {previewGroups.map((group) => (
+                          <div key={group.key} className="min-w-[84px] flex-none">
+                            <p className="mb-1 text-xs font-semibold text-slate-600">{group.label}</p>
+                            <div className="flex flex-col gap-1">
+                              {group.slots.map((slot) => (
+                                <Link
+                                  key={slot.starts_at}
+                                  to={`${detailUrl}&slot=${encodeURIComponent(slot.starts_at)}`}
+                                  className="rounded-md border border-primary-200 bg-white px-2 py-1 text-center text-xs font-medium text-primary-700 transition-colors hover:border-primary-400 hover:bg-primary-50"
+                                >
+                                  {formatSlotTime(slot.starts_at)}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-700">
                     <div className="flex flex-wrap items-center gap-5">
@@ -423,12 +508,15 @@ export default function SpecialtyDetail() {
                         <span className="font-medium">{formatPrice(doctor.price_per_min_cents)}</span>/min
                       </span>
                     </div>
-                    <span className="inline-flex items-center gap-1 font-medium text-primary-600 group-hover:gap-2 transition-all">
+                    <Link
+                      to={detailUrl}
+                      className="inline-flex items-center gap-1 font-medium text-primary-600 transition-all hover:gap-2"
+                    >
                       Ver perfil y agendar
                       <ChevronRight className="w-4 h-4" />
-                    </span>
+                    </Link>
                   </div>
-                </Link>
+                </div>
                 {isAuthenticated && (
                   <DoctorFavoriteButton
                     doctorId={doctor.id}
@@ -439,7 +527,7 @@ export default function SpecialtyDetail() {
                   />
                 )}
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>

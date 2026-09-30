@@ -190,6 +190,7 @@ def seed_demo_doctors():
             profile.license_country = doctor_data["license_country"]
             profile.country = doctor_data["country"]
             profile.city = doctor_data["city"]
+            profile.address = doctor_data.get("address")
             profile.timezone = doctor_data["timezone"]
             profile.government_id = doctor_data["government_id"]
             profile.years_experience = doctor_data["years_experience"]

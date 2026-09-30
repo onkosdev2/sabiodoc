@@ -6,6 +6,7 @@ import { login } from '../api/auth'
 import { getMyPatientProfile } from '../api/patients'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
+import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import Checkbox from '../components/ui/Checkbox'
@@ -38,6 +39,7 @@ export default function Login() {
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   const validate = (): boolean => {
@@ -71,10 +73,26 @@ export default function Login() {
         navigate(await getPatientLandingPath())
       }
     } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 403) {
+        setUnverifiedEmail(email.trim())
+        return
+      }
       setError(getApiErrorMessage(err, 'No pudimos iniciar sesión. Revisa tus datos.'))
     } finally {
       setLoading(false)
     }
+  }
+
+  if (unverifiedEmail) {
+    return (
+      <div className="mx-auto max-w-md">
+        <BackButton useHistoryBack />
+        <div className="card">
+          <CheckEmailNotice email={unverifiedEmail} />
+        </div>
+      </div>
+    )
   }
 
   return (

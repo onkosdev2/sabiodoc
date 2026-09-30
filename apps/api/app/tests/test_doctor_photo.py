@@ -76,6 +76,39 @@ def test_registro_medico_guarda_registro_de_especialista():
     assert body["photo_url"] is None
 
 
+def test_registro_y_perfil_publico_exponen_direccion_y_verificacion():
+    """La dirección se guarda y el perfil aprobado se muestra verificado."""
+    data = _register_doctor(address="Av. Prueba 123, Oficina 4")
+    headers = _auth_headers(data["access_token"])
+
+    application = client.get("/doctors/me/application", headers=headers)
+    assert application.status_code == 200, application.text
+    body = application.json()
+    assert body["address"] == "Av. Prueba 123, Oficina 4"
+    doctor_id = body["doctor_id"]
+
+    login = client.post(
+        "/auth/login",
+        json={"email": "admin.demo@sabiodoc.app", "password": "AdminDemo123!"},
+    )
+    assert login.status_code == 200, login.text
+    admin = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    reviewed = client.post(
+        f"/doctors/applications/{doctor_id}/status",
+        json={"status": "approved"},
+        headers=admin,
+    )
+    assert reviewed.status_code == 200, reviewed.text
+
+    detail = client.get(f"/doctors/{doctor_id}")
+    assert detail.status_code == 200, detail.text
+    public = detail.json()
+    assert public["address"] == "Av. Prueba 123, Oficina 4"
+    assert public["is_verified"] is True
+    assert public["specialist_registry_number"] == "RNE 67890"
+    assert public["license_number"] == "CMP 12345"
+
+
 def test_actualizar_perfil_guarda_registro_de_especialista():
     data = _register_doctor()
     headers = _auth_headers(data["access_token"])

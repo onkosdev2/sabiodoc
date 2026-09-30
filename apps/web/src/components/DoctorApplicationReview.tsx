@@ -307,6 +307,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                 <InfoBlock label="País de licencia" value={selectedApplication.license_country || '-'} />
                 <InfoBlock label="Registro de especialista" value={selectedApplication.specialist_registry_number || '-'} />
                 <InfoBlock label="Ciudad" value={selectedApplication.city || '-'} />
+                <InfoBlock label="Dirección" value={selectedApplication.address || '-'} />
                 <InfoBlock label="País" value={selectedApplication.country || '-'} />
                 <InfoBlock label="Documento" value={selectedApplication.government_id || '-'} />
                 <InfoBlock label="Experiencia" value={`${selectedApplication.years_experience ?? 0} años`} />

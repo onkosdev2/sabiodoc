@@ -35,6 +35,8 @@ def _serialize_doctor_card(db: Session, profile: DoctorProfile) -> DoctorCardRes
         is_accepting_consultations=profile.is_accepting_consultations,
         status=profile.status,
         photo_url=profile.photo_url,
+        address=profile.address,
+        is_verified=profile.status == DoctorApprovalStatus.approved,
         presence=DoctorPresenceResponse(
             status=resolved.status,
             status_message=resolved.status_message,

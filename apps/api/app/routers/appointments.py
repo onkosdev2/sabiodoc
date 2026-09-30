@@ -27,6 +27,7 @@ from app.services.audit_service import audit_service
 from app.services import session_file_service
 from app.services.notification_service import notification_service
 from app.services.reminder_service import reminder_service
+from app.services import review_service
 from app.services.video_session_service import video_session_service
 from app.services.wallet_service import wallet_service
 
@@ -567,11 +568,7 @@ def create_review(
         comment=payload.comment,
     )
     db.add(review)
-    doctor_profile = appointment.doctor
-    total_reviews = doctor_profile.rating_count or 0
-    current_average = float(doctor_profile.rating_avg or 0)
-    doctor_profile.rating_avg = ((current_average * total_reviews) + payload.rating) / (total_reviews + 1)
-    doctor_profile.rating_count = total_reviews + 1
+    review_service.recompute_doctor_rating(db, appointment.doctor_id)
 
     notification_service.create(
         db,

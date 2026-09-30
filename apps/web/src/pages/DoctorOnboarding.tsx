@@ -4,6 +4,7 @@ import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, Camera, Trash
 import { Country, getCitiesOfCountry } from '../utils/locations'
 
 import BackButton from '../components/BackButton'
+import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { Field, Input, PasswordInput, Select, Textarea } from '../components/ui/Field'
@@ -83,6 +84,7 @@ export default function DoctorOnboarding() {
   const [countryIso, setCountryIso] = useState('PE')
   const [cityName, setCityName] = useState('Lima')
   const [customCity, setCustomCity] = useState('') 
+  const [address, setAddress] = useState('')
   
   const [doctorTimezone, setDoctorTimezone] = useState('America/Lima')
 
@@ -122,6 +124,7 @@ export default function DoctorOnboarding() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
   
   const [step, setStep] = useState(1)
   const totalSteps = 3
@@ -185,6 +188,7 @@ export default function DoctorOnboarding() {
             setCityName('Otra')
             setCustomCity(app.city || '')
           }
+          setAddress(app.address || '')
 
           // Parsear Documento de Identidad
           const splitId = app.government_id?.split(' ') || ['DNI', '']
@@ -394,6 +398,7 @@ export default function DoctorOnboarding() {
         specialist_registry_number: finalSpecialistRegistryNumber,
         country: finalCountryName,
         city: finalCity,
+        address: address.trim() || undefined,
         timezone: doctorTimezone,
         government_id: finalGovernmentId,
         years_experience: parsedYearsExperience as number,
@@ -419,15 +424,21 @@ export default function DoctorOnboarding() {
         setSuccess('Perfil actualizado correctamente. Puedes seguir editando o volver al panel.')
       } else {
         const response = await registerDoctor({ ...payload, email, password })
-        authLogin(response.access_token, response.user)
-        // La foto es opcional: si falla, la cuenta ya quedó creada y el médico
-        // puede subirla luego desde su perfil.
-        try {
-          await syncPhoto()
-        } catch (photoError) {
-          console.warn('No se pudo subir la foto del médico durante el registro.', photoError)
+        if (response.verification_required) {
+          setPendingVerificationEmail(email)
+          return
         }
-        navigate('/doctor/pending')
+        if (response.access_token && response.user) {
+          authLogin(response.access_token, response.user)
+          // La foto es opcional: si falla, la cuenta ya quedó creada y el médico
+          // puede subirla luego desde su perfil.
+          try {
+            await syncPhoto()
+          } catch (photoError) {
+            console.warn('No se pudo subir la foto del médico durante el registro.', photoError)
+          }
+          navigate('/doctor/pending')
+        }
       }
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Error al enviar la postulación médica.'))
@@ -459,6 +470,17 @@ export default function DoctorOnboarding() {
   // puede seguir usando /doctor/profile para actualizar sus datos.
   if (!authLoading && isAuthenticated && user?.doctor_status === 'approved' && !isProfileRoute) {
     return <Navigate to="/doctor/profile" replace />
+  }
+
+  if (pendingVerificationEmail) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <BackButton useHistoryBack />
+        <div className="card shadow-sm border border-slate-100 rounded-2xl bg-white p-6 sm:p-8">
+          <CheckEmailNotice email={pendingVerificationEmail} />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -621,6 +643,19 @@ export default function DoctorOnboarding() {
                         placeholder="Escribe tu ciudad"
                       />
                     )}
+
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Dirección del consultorio o domicilio profesional"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Ej: Av. Javier Prado Este 1234, Oficina 502"
+                        maxLength={255}
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Opcional. Ayuda a los pacientes a ubicar tu práctica.
+                      </p>
+                    </div>
 
                     <div className="md:col-span-2">
                       <Select

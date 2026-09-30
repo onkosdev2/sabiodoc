@@ -60,6 +60,7 @@ class DoctorOnboardingService:
             specialist_registry_number=doctor_profile.specialist_registry_number,
             country=doctor_profile.country,
             city=doctor_profile.city,
+            address=doctor_profile.address,
             timezone=doctor_profile.timezone,
             government_id=doctor_profile.government_id,
             years_experience=doctor_profile.years_experience,
