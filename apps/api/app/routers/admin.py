@@ -22,6 +22,10 @@ from app.models.doctor_availability_slot import DoctorAvailabilitySlot
 from app.models.doctor_presence import DoctorPresence
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
+from app.models.email_verification_token import EmailVerificationToken
+from app.models.password_reset_token import PasswordResetToken
+from app.models.patient_profile import PatientProfile
+from app.models.patient_profile_change_request import PatientProfileChangeRequest
 from app.models.specialty import Specialty
 from app.models.favorite import Favorite
 from app.models.notification import Notification, NotificationStatus
@@ -29,6 +33,7 @@ from app.models.review_report import ReviewReport, ReviewReportStatus
 from app.models.triage_request import TriageRequest
 from app.models.user import User, UserRole
 from app.models.video_session import VideoSession, VideoSessionStatus
+from app.models.video_session_file import VideoSessionFile
 from app.models.wallet import Wallet, WalletTransaction, Withdrawal, WithdrawalStatus
 from app.schemas.appointment import (
     AdminIncidentListResponse,
@@ -739,6 +744,7 @@ def delete_user(
         or db.query(Consultation.id).filter(Consultation.user_id == user.id).first()
         or db.query(ConsultationReview.id).filter(ConsultationReview.patient_id == user.id).first()
         or db.query(VideoSession.id).filter(VideoSession.patient_id == user.id).first()
+        or db.query(VideoSessionFile.id).filter(VideoSessionFile.uploader_id == user.id).first()
     )
     if not has_history and profile:
         has_history = (
@@ -757,6 +763,7 @@ def delete_user(
     has_wallet_movement = (
         db.query(WalletTransaction.id).filter(WalletTransaction.user_id == user.id).first()
         is not None
+        or db.query(Withdrawal.id).filter(Withdrawal.user_id == user.id).first() is not None
     )
     if wallet_row is not None and (has_wallet_movement or (wallet_row.balance_cents or 0) != 0):
         raise HTTPException(
@@ -767,9 +774,37 @@ def delete_user(
     db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.user_id == user.id).delete(synchronize_session=False)
     db.query(TriageRequest).filter(TriageRequest.user_id == user.id).delete(synchronize_session=False)
+    db.query(EmailVerificationToken).filter(
+        EmailVerificationToken.user_id == user.id
+    ).delete(synchronize_session=False)
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id
+    ).delete(synchronize_session=False)
+    db.query(PatientProfileChangeRequest).filter(
+        PatientProfileChangeRequest.patient_id == user.id
+    ).delete(synchronize_session=False)
+    db.query(PatientProfile).filter(PatientProfile.user_id == user.id).delete(
+        synchronize_session=False
+    )
+    db.query(ReviewReport).filter(ReviewReport.reporter_id == user.id).delete(
+        synchronize_session=False
+    )
+    db.query(ReviewReport).filter(ReviewReport.resolved_by_id == user.id).update(
+        {ReviewReport.resolved_by_id: None}, synchronize_session=False
+    )
+    db.query(ConsultationReview).filter(ConsultationReview.hidden_by_id == user.id).update(
+        {ConsultationReview.hidden_by_id: None}, synchronize_session=False
+    )
     if wallet_row is not None:
         db.delete(wallet_row)
     if profile:
+        # Quitamos referencias al perfil médico antes de borrarlo.
+        db.query(Favorite).filter(Favorite.doctor_id == profile.id).delete(
+            synchronize_session=False
+        )
+        db.query(PatientProfileChangeRequest).filter(
+            PatientProfileChangeRequest.doctor_profile_id == profile.id
+        ).delete(synchronize_session=False)
         db.query(DoctorSpecialty).filter(DoctorSpecialty.doctor_id == profile.id).delete(synchronize_session=False)
         db.query(DoctorAvailabilitySlot).filter(DoctorAvailabilitySlot.doctor_id == profile.id).delete(synchronize_session=False)
         db.query(DoctorPresence).filter(DoctorPresence.doctor_id == profile.id).delete(synchronize_session=False)

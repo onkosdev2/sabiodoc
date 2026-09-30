@@ -113,3 +113,48 @@ def test_registro_sin_verificacion_devuelve_token(monkeypatch):
         assert body["user"]["email"] == email
     finally:
         _cleanup_users([email])
+
+
+def test_admin_puede_eliminar_usuario_con_tokens_de_verificacion():
+    """El borrado de cuentas no debe fallar por tokens de verificación pendientes."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.email_verification_token import EmailVerificationToken
+    from app.models.user import UserRole
+
+    db = SessionLocal()
+    try:
+        user = User(
+            email=f"deltok_{uuid.uuid4().hex[:8]}@example.com",
+            password_hash="x",
+            role=UserRole.patient,
+            is_email_verified=False,
+        )
+        db.add(user)
+        db.flush()
+        db.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+        )
+        db.commit()
+        user_id = user.id
+    finally:
+        db.close()
+
+    login = client.post(
+        "/auth/login", json={"email": "admin.demo@sabiodoc.app", "password": "AdminDemo123!"}
+    )
+    assert login.status_code == 200, login.text
+    admin = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    response = client.delete(f"/admin/users/{user_id}", headers=admin)
+    assert response.status_code == 204, response.text
+
+    db = SessionLocal()
+    try:
+        assert db.query(User).filter(User.id == user_id).first() is None
+    finally:
+        db.close()

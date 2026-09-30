@@ -49,9 +49,19 @@ app.include_router(emergency.router)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    # FastAPI asigna este handler al ServerErrorMiddleware, que queda por fuera
+    # del CORSMiddleware. Agregamos las cabeceras CORS a mano para que el
+    # navegador pueda leer el 500 en lugar de reportar un error de CORS.
+    headers: dict[str, str] = {}
+    origin = request.headers.get("origin")
+    if origin and origin in settings.cors_origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
     return JSONResponse(
         status_code=500,
-        content={"detail": "Error interno del servidor"}
+        content={"detail": "Error interno del servidor"},
+        headers=headers,
     )
 
 
