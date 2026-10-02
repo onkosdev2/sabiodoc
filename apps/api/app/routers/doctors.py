@@ -199,6 +199,9 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
                 photo_url=profile.photo_url,
                 address=profile.address,
                 is_verified=profile.status == DoctorApprovalStatus.approved,
+                years_experience=profile.years_experience,
+                city=profile.city,
+                country=profile.country,
                 next_available_at=preview[0][0] if preview else None,
                 availability_preview=[
                     DoctorAvailabilityPreview(

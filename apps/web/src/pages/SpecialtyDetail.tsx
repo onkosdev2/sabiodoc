@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Star, Calendar, Loader2, ChevronRight, CircleDollarSign, RefreshCcw, Search, BadgeCheck } from 'lucide-react'
+import { Star, Calendar, Loader2, ChevronRight, CircleDollarSign, RefreshCcw, Search, BadgeCheck, SlidersHorizontal } from 'lucide-react'
 import Button from '../components/ui/Button'
+import { Select } from '../components/ui/Field'
 import { getSpecialtyBySlug, Specialty } from '../api/specialties'
 import { createConsultation, getMyConsultations } from '../api/consultations'
 import { addFavorite, removeFavorite, getMyFavorites } from '../api/favorites'
 import DoctorFavoriteButton from '../components/DoctorFavoriteButton'
 import { DoctorAvailabilityPreview, DoctorCard, getDoctorsBySpecialty } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
+import { useSeo } from '../hooks/useSeo'
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
 import { formatMoney } from '../utils/format'
@@ -64,6 +66,11 @@ export default function SpecialtyDetail() {
   const [doctorSearch, setDoctorSearch] = useState('')
   const [doctorSort, setDoctorSort] = useState<DoctorSort>('rating')
   const [onlyAvailable, setOnlyAvailable] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [minExperience, setMinExperience] = useState('')
+  const [maxPrice, setMaxPrice] = useState('')
+  const [minRating, setMinRating] = useState('')
+  const [cityFilter, setCityFilter] = useState('')
 
   const loadData = useCallback(async () => {
     if (!slug) return
@@ -201,7 +208,15 @@ export default function SpecialtyDetail() {
       ? searched.filter((doctor) => (doctor.availability_preview?.length ?? 0) > 0)
       : searched
 
-    const sorted = [...filtered]
+    const byFilters = filtered.filter((doctor) => {
+      if (minExperience && (doctor.years_experience ?? 0) < Number(minExperience)) return false
+      if (maxPrice && doctor.price_per_min_cents > Number(maxPrice)) return false
+      if (minRating && Number(doctor.rating_avg) < Number(minRating)) return false
+      if (cityFilter && (doctor.city ?? '') !== cityFilter) return false
+      return true
+    })
+
+    const sorted = [...byFilters]
     const availabilityRank = (status?: string) =>
       status === 'online' ? 0 : status === 'busy' ? 1 : 2
     switch (doctorSort) {
@@ -233,7 +248,42 @@ export default function SpecialtyDetail() {
         break
     }
     return sorted
-  }, [doctors, doctorSearch, doctorSort, onlyAvailable])
+  }, [
+    doctors,
+    doctorSearch,
+    doctorSort,
+    onlyAvailable,
+    minExperience,
+    maxPrice,
+    minRating,
+    cityFilter,
+  ])
+
+  const doctorCities = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          doctors
+            .map((doctor) => doctor.city)
+            .filter((city): city is string => Boolean(city)),
+        ),
+      ).sort((a, b) => a.localeCompare(b, 'es')),
+    [doctors],
+  )
+
+  const activeFilterCount = [minExperience, maxPrice, minRating, cityFilter].filter(Boolean).length
+
+  const clearFilters = () => {
+    setMinExperience('')
+    setMaxPrice('')
+    setMinRating('')
+    setCityFilter('')
+  }
+
+  useSeo({
+    title: specialty ? `${specialty.name} · SabioDoc` : undefined,
+    description: specialty?.description ?? undefined,
+  })
 
   if (loading) {
     return (
@@ -363,61 +413,141 @@ export default function SpecialtyDetail() {
           </div>
 
           {doctors.length > 0 && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="relative flex-1">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={doctorSearch}
-                  onChange={(event) => setDoctorSearch(event.target.value)}
-                  placeholder="Buscar por nombre o título..."
-                  aria-label="Buscar médicos"
-                  className="input-field pl-10"
-                />
-              </div>
-              <div className="sm:w-60">
-                <label
-                  htmlFor="doctor-sort"
-                  className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
-                >
-                  Ordenar por
-                </label>
-                <select
-                  id="doctor-sort"
-                  value={doctorSort}
-                  onChange={(event) => setDoctorSort(event.target.value as DoctorSort)}
-                  className="input-field"
-                >
-                  <option value="availability">Disponibilidad</option>
-                  <option value="rating">Mejor valoración</option>
-                  <option value="name">Nombre (A–Z)</option>
-                  <option value="price_asc">Menor costo por minuto</option>
-                  <option value="price_desc">Mayor costo por minuto</option>
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOnlyAvailable((value) => !value)}
-                aria-pressed={onlyAvailable}
-                className={`inline-flex h-[42px] items-center gap-2 self-end rounded-lg border px-4 text-sm font-medium transition-colors ${
-                  onlyAvailable
-                    ? 'border-primary-500 bg-primary-50 text-primary-700'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-                }`}
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
-                    onlyAvailable ? 'border-primary-500 bg-primary-500 text-white' : 'border-slate-300'
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="relative flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    value={doctorSearch}
+                    onChange={(event) => setDoctorSearch(event.target.value)}
+                    placeholder="Buscar por nombre o título..."
+                    aria-label="Buscar médicos"
+                    className="input-field pl-10"
+                  />
+                </div>
+                <div className="sm:w-60">
+                  <label
+                    htmlFor="doctor-sort"
+                    className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
+                  >
+                    Ordenar por
+                  </label>
+                  <select
+                    id="doctor-sort"
+                    value={doctorSort}
+                    onChange={(event) => setDoctorSort(event.target.value as DoctorSort)}
+                    className="input-field"
+                  >
+                    <option value="availability">Disponibilidad</option>
+                    <option value="rating">Mejor valoración</option>
+                    <option value="name">Nombre (A–Z)</option>
+                    <option value="price_asc">Menor costo por minuto</option>
+                    <option value="price_desc">Mayor costo por minuto</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOnlyAvailable((value) => !value)}
+                  aria-pressed={onlyAvailable}
+                  className={`inline-flex h-[42px] items-center gap-2 self-end rounded-lg border px-4 text-sm font-medium transition-colors ${
+                    onlyAvailable
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                   }`}
                 >
-                  {onlyAvailable ? '✓' : ''}
-                </span>
-                Solo con disponibilidad
-              </button>
-            </div>
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${
+                      onlyAvailable ? 'border-primary-500 bg-primary-500 text-white' : 'border-slate-300'
+                    }`}
+                  >
+                    {onlyAvailable ? '✓' : ''}
+                  </span>
+                  Solo con disponibilidad
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters((value) => !value)}
+                  aria-expanded={showFilters}
+                  className={`inline-flex h-[42px] items-center gap-2 self-end rounded-lg border px-4 text-sm font-medium transition-colors ${
+                    activeFilterCount > 0
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                  }`}
+                >
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  Más filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                </button>
+              </div>
+
+              {showFilters && (
+                <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Select
+                    id="doctor-filter-experience"
+                    label="Experiencia mínima"
+                    value={minExperience}
+                    onChange={(event) => setMinExperience(event.target.value)}
+                  >
+                    <option value="">Cualquiera</option>
+                    <option value="1">1+ años</option>
+                    <option value="5">5+ años</option>
+                    <option value="10">10+ años</option>
+                    <option value="15">15+ años</option>
+                    <option value="20">20+ años</option>
+                  </Select>
+                  <Select
+                    id="doctor-filter-price"
+                    label="Precio máximo por minuto"
+                    value={maxPrice}
+                    onChange={(event) => setMaxPrice(event.target.value)}
+                  >
+                    <option value="">Cualquiera</option>
+                    <option value="500">Hasta US$ 5/min</option>
+                    <option value="1000">Hasta US$ 10/min</option>
+                    <option value="1500">Hasta US$ 15/min</option>
+                    <option value="2000">Hasta US$ 20/min</option>
+                    <option value="3000">Hasta US$ 30/min</option>
+                  </Select>
+                  <Select
+                    id="doctor-filter-rating"
+                    label="Valoración mínima"
+                    value={minRating}
+                    onChange={(event) => setMinRating(event.target.value)}
+                  >
+                    <option value="">Cualquiera</option>
+                    <option value="4">4+ estrellas</option>
+                    <option value="4.5">4.5+ estrellas</option>
+                  </Select>
+                  {doctorCities.length > 1 && (
+                    <Select
+                      id="doctor-filter-city"
+                      label="Ciudad"
+                      value={cityFilter}
+                      onChange={(event) => setCityFilter(event.target.value)}
+                    >
+                      <option value="">Todas</option>
+                      {doctorCities.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <div className="flex justify-end sm:col-span-2 lg:col-span-4">
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="text-sm font-medium text-primary-600 hover:underline"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

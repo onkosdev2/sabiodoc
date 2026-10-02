@@ -652,9 +652,6 @@ export default function DoctorOnboarding() {
                         placeholder="Ej: Av. Javier Prado Este 1234, Oficina 502"
                         maxLength={255}
                       />
-                      <p className="mt-1 text-xs text-slate-500">
-                        Opcional. Ayuda a los pacientes a ubicar tu práctica.
-                      </p>
                     </div>
 
                     <div className="md:col-span-2">

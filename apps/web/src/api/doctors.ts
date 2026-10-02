@@ -31,6 +31,9 @@ export interface DoctorCard {
   photo_url: string | null
   address: string | null
   is_verified: boolean
+  years_experience: number | null
+  city: string | null
+  country: string | null
   next_available_at: string | null
   availability_preview: DoctorAvailabilityPreview[]
   presence: DoctorPresence

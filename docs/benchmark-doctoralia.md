@@ -56,18 +56,22 @@ Ecosistema:
 
 1. **Listado orientado a conversión**: horarios, precio por minuto y CTA de
    reserva en la tarjeta. *(hecho)*
-2. **Filtros**: disponibilidad, idioma, sexo, experiencia y precio.
-   *(disponibilidad: hecho)*
+2. **Filtros**: disponibilidad, experiencia, precio, valoración y ciudad.
+   *(hecho; idioma y sexo: pendientes, requieren campos nuevos)*
 3. **Mapa y "cerca de mí"** (aunque la consulta sea online, ayuda a filtrar por
    ciudad/cobertura horaria).
 4. **SEO**: prerender/SSR de rutas públicas, JSON-LD, sitemap dinámico y
-   páginas de enfermedades/síntomas/Q&A. *(JSON-LD básico: hecho)*
+   páginas de enfermedades/síntomas/Q&A. *(JSON-LD, sitemap dinámico, meta por
+   ruta y meta inyectadas en HTML para crawlers: hecho; prerender/SSR del
+   contenido: pendiente)*
 5. **Confianza**: badges de verificación, moderación de reseñas y documentos,
    exposición del número de colegiatura. *(verificación, colegiatura, reseñas verificadas y reportes: hecho)*
 6. **Perfil rico**: subespecialidades, idiomas, certificaciones, media y
    enfermedades tratadas.
-7. **Comunicación**: chat persistente paciente–médico, recordatorios
-   email/push y lista de espera.
+7. **Comunicación**: chat persistente paciente–médico, recordatorios por
+   push (PWA) y lista de espera.
+   > Los recordatorios por **email están en pausa** por el límite del plan
+   > gratuito de Brevo. Alternativa: notificaciones **push** de la PWA.
 8. **Monetización**: compra de créditos, pagos reales y comprobantes.
 
 ### Lo que NO aplica a SabioDoc
@@ -102,10 +106,13 @@ Ecosistema:
 
 **1–2 meses**
 
-6. Prerender/SSR de rutas públicas y sitemap dinámico.
-7. Recordatorios por email/push y lista de espera.
+6. Prerender/SSR del contenido de rutas públicas. *(sitemap dinámico y meta
+   inyectadas en HTML: hecho)*
+7. Recordatorios por **push (PWA)** y lista de espera. *(email en pausa por
+   el límite gratuito de Brevo)*
 8. Moderación de reseñas + filtros positivas/negativas. *(reportes y ocultamiento: hecho)*
-9. Filtros avanzados (idioma, sexo, experiencia, rango de precio/min).
+9. Filtros avanzados. *(experiencia, rango de precio/min, valoración y ciudad:
+   hecho; idioma y sexo: pendientes, requieren campos nuevos)*
 
 **3–6 meses**
 

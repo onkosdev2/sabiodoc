@@ -25,6 +25,7 @@ import {
   getDoctorBookableSlots,
 } from '../api/appointments'
 import { useAuth } from '../context/AuthContext'
+import { useSeo } from '../hooks/useSeo'
 import { getMyWallet, Wallet } from '../api/wallet'
 import { getApiErrorMessage } from '../utils/apiError'
 import { reportReview } from '../api/reviews'
@@ -225,6 +226,17 @@ export default function DoctorDetailPage() {
         : {}),
     }
   }, [doctor, ratingAverage])
+
+  useSeo({
+    title: doctor ? `${doctor.display_name} · SabioDoc` : undefined,
+    description: doctor
+      ? [doctor.professional_title, doctor.bio_short]
+          .filter(Boolean)
+          .join(' — ')
+          .slice(0, 300) || undefined
+      : undefined,
+    image: doctor?.photo_url ?? undefined,
+  })
 
   const handleBook = async () => {
     if (!isAuthenticated) {

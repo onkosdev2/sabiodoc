@@ -63,6 +63,9 @@ class DoctorCardResponse(BaseModel):
     photo_url: Optional[str] = None
     address: Optional[str] = None
     is_verified: bool = False
+    years_experience: Optional[int] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
     next_available_at: Optional[datetime] = None
     availability_preview: list[DoctorAvailabilityPreview] = Field(default_factory=list)
     presence: DoctorPresenceResponse
