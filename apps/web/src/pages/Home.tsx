@@ -10,8 +10,7 @@ import {
   History,
   MessageSquare,
   Search,
-  Star,
-  Image as ImageIcon // Solo para el placeholder de la ilustración
+  Star
 } from 'lucide-react'
 import heroImage from '../assets/home-hero.jpeg'
 
