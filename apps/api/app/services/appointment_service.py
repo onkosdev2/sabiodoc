@@ -115,11 +115,20 @@ class AppointmentService:
             if current_protected_start < protected_end and current_protected_end > protected_start:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El medico ya tiene una cita en ese horario")
 
-    def build_ai_summary_snapshot(self, db: Session, consultation: Consultation | None) -> str | None:
+    def build_ai_snapshots(
+        self, db: Session, consultation: Consultation | None
+    ) -> tuple[str | None, dict | None]:
+        """Genera (o reutiliza) el resumen y la ficha estructurada de la cita.
+
+        La ficha estructurada es la fuente de verdad y se obtiene con una única
+        llamada al LLM; el resumen se deriva de ella, así que ambos bloques
+        siempre son coherentes.
+        """
         if consultation is None:
-            return None
-        if consultation.summary:
-            return consultation.summary
+            return None, None
+
+        if consultation.summary and consultation.intake_json:
+            return consultation.summary, consultation.intake_json
 
         messages = (
             db.query(ChatMessage)
@@ -128,43 +137,19 @@ class AppointmentService:
             .all()
         )
         if len(messages) < 2 or consultation.specialty is None:
-            return None
+            return consultation.summary, consultation.intake_json
 
         formatted_messages = [{"role": message.role.value, "content": message.content} for message in messages]
-        summary = specialist_assistant.generate_summary(
+        summary, intake = specialist_assistant.generate_summary_and_intake(
             specialty_slug=consultation.specialty.slug,
             specialty_name=consultation.specialty.name,
             messages=formatted_messages,
             consultation_date=consultation.created_at,
         )
         consultation.summary = summary
-        db.flush()
-        return summary
-
-    def build_ai_intake_snapshot(self, db: Session, consultation: Consultation | None) -> dict | None:
-        if consultation is None:
-            return None
-        if consultation.intake_json:
-            return consultation.intake_json
-
-        messages = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.consultation_id == consultation.id)
-            .order_by(ChatMessage.created_at.asc())
-            .all()
-        )
-        if len(messages) < 2 or consultation.specialty is None:
-            return None
-
-        formatted_messages = [{"role": message.role.value, "content": message.content} for message in messages]
-        intake = specialist_assistant.generate_structured_intake(
-            specialty_slug=consultation.specialty.slug,
-            specialty_name=consultation.specialty.name,
-            messages=formatted_messages,
-        )
         consultation.intake_json = intake
         db.flush()
-        return intake
+        return summary, intake
 
     def _patient_display_name(self, appointment: Appointment) -> str | None:
         """Nombre del paciente desde su perfil, si lo completo."""
@@ -174,6 +159,12 @@ class AppointmentService:
         review = appointment.review[0] if appointment.review else None
         payment = getattr(appointment, "payment", None)
         from app.schemas.appointment import AppointmentResponse
+
+        # La consulta vinculada es la fuente de verdad: si su resumen o ficha
+        # cambió después de agendar, mostramos el vigente en vez del snapshot.
+        consultation = getattr(appointment, "consultation", None)
+        current_summary = (consultation.summary if consultation else None) or appointment.ai_summary_snapshot
+        current_intake = (consultation.intake_json if consultation else None) or appointment.ai_intake_snapshot_json
 
         return AppointmentResponse(
             id=appointment.id,
@@ -189,8 +180,8 @@ class AppointmentService:
             scheduled_at=appointment.scheduled_at,
             duration_minutes=appointment.duration_minutes,
             patient_note=appointment.patient_note,
-            ai_summary_snapshot=sanitize_summary_text(appointment.ai_summary_snapshot),
-            ai_intake_snapshot=appointment.ai_intake_snapshot_json,
+            ai_summary_snapshot=sanitize_summary_text(current_summary),
+            ai_intake_snapshot=current_intake,
             doctor_note=appointment.doctor_note,
             followup_instructions=appointment.followup_instructions,
             cancellation_reason=appointment.cancellation_reason,

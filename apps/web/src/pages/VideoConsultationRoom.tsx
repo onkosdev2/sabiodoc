@@ -46,7 +46,6 @@ import { formatMoney } from '../utils/format'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Button from '../components/ui/Button'
 import { Textarea } from '../components/ui/Field'
-import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 import { deleteFile } from '../api/files'
@@ -783,7 +782,7 @@ export default function VideoConsultationRoom() {
             const key = historyItemKey(item)
             const isExpanded = expandedHistoryItems.has(key)
             const preview = historyPreview(item)
-            const hasDetails = Boolean(item.summary || item.intake || item.doctor_note)
+            const hasDetails = Boolean(item.intake || item.doctor_note)
 
             return (
               <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -809,11 +808,6 @@ export default function VideoConsultationRoom() {
 
                 {isExpanded && hasDetails && (
                   <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
-                    {item.summary && (
-                      <div className="max-h-40 overflow-y-auto rounded-lg bg-white p-3">
-                        <RichText text={item.summary} className="text-sm text-slate-700" />
-                      </div>
-                    )}
                     {item.intake && (
                       <StructuredIntakeCard intake={item.intake} title="Ficha clínica estructurada" />
                     )}

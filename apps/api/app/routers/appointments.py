@@ -139,8 +139,7 @@ def create_appointment(
         duration_minutes=payload.duration_minutes,
     )
 
-    ai_summary_snapshot = appointment_service.build_ai_summary_snapshot(db, consultation)
-    ai_intake_snapshot = appointment_service.build_ai_intake_snapshot(db, consultation)
+    ai_summary_snapshot, ai_intake_snapshot = appointment_service.build_ai_snapshots(db, consultation)
     appointment = Appointment(
         consultation_id=consultation.id if consultation else None,
         specialty_id=specialty_id,

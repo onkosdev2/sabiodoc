@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CalendarClock, FileText, Filter, MessageSquareText, Pencil, Stethoscope, Trash2, Video } from 'lucide-react'
 
 import Pagination from '../components/Pagination'
-import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 import Alert from '../components/ui/Alert'
@@ -358,8 +357,7 @@ export default function DoctorPatientTimelinePage() {
             const preview =
               item.intake?.chief_complaint || (item.summary ? summaryPreview(item.summary) : null)
             const hasDetails = Boolean(
-              item.summary ||
-                item.intake ||
+              item.intake ||
                 item.patient_note ||
                 item.doctor_note ||
                 item.followup_instructions ||
@@ -422,17 +420,9 @@ export default function DoctorPatientTimelinePage() {
 
                 {isExpanded && hasDetails && (
                   <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
-                    {item.summary && (
-                      <div className="rounded-2xl bg-primary-50 p-4">
-                        <div className="flex items-center gap-2 text-primary-700">
-                          <FileText className="h-4 w-4" aria-hidden="true" />
-                          <p className="text-xs uppercase tracking-[0.22em]">Resumen clínico</p>
-                        </div>
-                        <RichText text={item.summary} className="mt-3 text-sm text-primary-950" />
-                      </div>
+                    {item.intake && (
+                      <StructuredIntakeCard intake={item.intake} title="Ficha clínica estructurada" />
                     )}
-
-                    {item.intake && <StructuredIntakeCard intake={item.intake} title="Ficha estructurada" />}
 
                     <div className="grid gap-4 lg:grid-cols-2">
                       {item.patient_note && (

@@ -6,7 +6,7 @@ antes de la videoconsulta con el médico real.
 import json
 import re
 import unicodedata
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from app.services.llm_client import llm_client
 from app.core.logging import get_logger
@@ -490,6 +490,54 @@ def sanitize_summary_text(summary: Optional[str]) -> Optional[str]:
     return re.sub(r"\n{3,}", "\n\n", cleaned)
 
 
+def _render_summary_section(title: str, items: List[str]) -> str:
+    bullets = "\n".join(f"- {item}" for item in items)
+    return f"## {title}\n{bullets}"
+
+
+def render_summary_from_intake(intake: Dict[str, Any]) -> str:
+    """Construye el resumen Markdown a partir de la ficha estructurada.
+
+    El resumen y la ficha son dos vistas del mismo análisis. Al derivar el
+    resumen de la ficha, nunca se contradicen y solo hace falta una llamada al
+    LLM (la que genera la ficha).
+    """
+    blocks: List[str] = []
+
+    chief_complaint = (intake.get("chief_complaint") or "").strip()
+    if chief_complaint:
+        blocks.append(f"## Motivo de consulta\n{chief_complaint}")
+
+    if intake.get("symptom_summary"):
+        blocks.append(_render_summary_section("Síntomas principales", intake["symptom_summary"]))
+
+    duration = (intake.get("duration_and_evolution") or "").strip()
+    if duration:
+        blocks.append(f"## Duración y evolución\n{duration}")
+
+    if intake.get("relevant_history"):
+        blocks.append(_render_summary_section("Antecedentes relevantes", intake["relevant_history"]))
+
+    if intake.get("current_medications"):
+        blocks.append(_render_summary_section("Medicamentos actuales", intake["current_medications"]))
+
+    if intake.get("risk_factors"):
+        blocks.append(_render_summary_section("Factores de riesgo", intake["risk_factors"]))
+
+    if intake.get("red_flags"):
+        blocks.append(_render_summary_section("Señales de alerta", intake["red_flags"]))
+
+    if intake.get("patient_questions_or_goals"):
+        blocks.append(
+            _render_summary_section("Dudas u objetivos del paciente", intake["patient_questions_or_goals"])
+        )
+
+    if not blocks:
+        return "No se pudo generar el resumen automático. El médico revisará el historial de chat."
+
+    return "\n\n".join(blocks)
+
+
 def is_affirmative(message: str) -> bool:
     """Detecta una respuesta corta de confirmación ('sí', 'claro, por favor', etc.)."""
     normalized = _normalize_intent_text(message)
@@ -600,6 +648,27 @@ Tu objetivo es recopilar información que ayude al médico a entender mejor el c
             return OFF_TOPIC_REPLY
         return None
     
+    def generate_summary_and_intake(
+        self,
+        specialty_slug: str,
+        specialty_name: str,
+        messages: List[Dict[str, str]],
+        consultation_date: Optional[datetime] = None,
+    ) -> tuple[str, Dict[str, Any]]:
+        """Genera en una sola pasada el resumen y la ficha estructurada.
+
+        La ficha estructurada es la fuente de verdad (la única llamada al LLM)
+        y el resumen Markdown se deriva de ella, de modo que ambos bloques
+        nunca se contradicen entre sí.
+
+        Returns:
+            Tupla ``(resumen_markdown, ficha_estructurada)``.
+        """
+        intake, summary = self._generate_intake_and_summary(specialty_slug, specialty_name, messages)
+        if not summary:
+            summary = render_summary_from_intake(intake)
+        return summary, intake
+
     def generate_summary(
         self,
         specialty_slug: str,
@@ -607,84 +676,38 @@ Tu objetivo es recopilar información que ayude al médico a entender mejor el c
         messages: List[Dict[str, str]],
         consultation_date: Optional[datetime] = None,
     ) -> str:
+        """Devuelve solo el resumen Markdown derivado de la ficha estructurada.
+
+        Se mantiene por compatibilidad. El flujo actual usa
+        ``generate_summary_and_intake`` para obtener ambos en una sola llamada.
         """
-        Genera un resumen de la pre-consulta para el médico.
-        
-        Args:
-            specialty_slug: Slug de la especialidad
-            specialty_name: Nombre de la especialidad
-            messages: Historial completo de mensajes
-            consultation_date: Fecha de la consulta (se incluye en el resumen)
-        
-        Returns:
-            Resumen estructurado para el médico
-        """
-        if self.is_mock:
-            return self._get_mock_summary(specialty_name)
+        summary, _ = self.generate_summary_and_intake(
+            specialty_slug, specialty_name, messages, consultation_date
+        )
+        return summary
 
-        date_text = (consultation_date or datetime.now(UTC)).strftime("%d/%m/%Y")
-
-        try:
-            summary_prompt = f"""Eres un asistente médico. Analiza la siguiente conversación de pre-consulta 
-con un paciente que va a ver a un {specialty_name.lower()} y genera un RESUMEN ESTRUCTURADO para el médico.
-
-La pre-consulta se realizó el {date_text}. Usa esa fecha si necesitas mencionarla.
-
-El resumen debe incluir:
-1. **Motivo de consulta**: Razón principal por la que consulta
-2. **Síntomas principales**: Lista de síntomas mencionados
-3. **Duración y evolución**: Tiempo y cómo han evolucionado los síntomas
-4. **Antecedentes relevantes**: Enfermedades, medicamentos, alergias mencionadas
-5. **Información adicional**: Cualquier otro dato relevante
-6. **Señales de alerta**: Si se detectaron síntomas preocupantes
-
-Reglas de formato:
-- Usa Markdown simple (encabezados con ##, **negritas** y viñetas con -).
-- NUNCA escribas marcadores de posición ni textos entre corchetes (por ejemplo "[fecha de la consulta]").
-- No inventes datos: si un dato no aparece en la conversación, omite esa sección.
-
-Sé conciso pero completo. Este resumen ayudará al médico a prepararse para la videoconsulta."""
-
-            conversation_text = "\n".join([
-                f"{'Paciente' if m['role'] == 'user' else 'Asistente'}: {m['content']}"
-                for m in messages
-            ])
-            
-            summary = llm_client.chat_text(
-                messages=[
-                    {"role": "system", "content": summary_prompt},
-                    {"role": "user", "content": f"CONVERSACIÓN:\n{conversation_text}"}
-                ],
-                temperature=0.3,
-                max_tokens=800
-            )
-            if not summary:
-                raise RuntimeError("ningun proveedor LLM disponible")
-
-            logger.info(f"Summary generated for consultation with {specialty_slug}")
-            return sanitize_summary_text(summary)
-            
-        except Exception as e:
-            logger.error(f"Summary generation error: {e}")
-            return "No se pudo generar el resumen automático. El médico revisará el historial de chat."
-
-    def generate_structured_intake(
+    def _generate_intake_and_summary(
         self,
         specialty_slug: str,
         specialty_name: str,
         messages: List[Dict[str, str]],
-    ) -> Dict[str, Any]:
-        """
-        Extrae una ficha estructurada de intake clínico desde la pre-consulta.
+    ) -> tuple[Dict[str, Any], Optional[str]]:
+        """Una sola llamada al LLM que devuelve la ficha y un resumen narrativo.
+
+        Es la única generación clínica de la pre-consulta: la ficha estructurada
+        y el resumen para el médico salen del mismo análisis, por lo que nunca se
+        contradicen. El resumen es opcional; si el modelo no lo entrega (o falla
+        la llamada) se deriva de la ficha con ``render_summary_from_intake``.
         """
         if self.is_mock:
-            return self._build_heuristic_intake(specialty_slug, specialty_name, messages)
+            return self._build_heuristic_intake(specialty_slug, specialty_name, messages), None
 
         try:
             intake_prompt = f"""Eres un asistente médico de preconsulta. Analiza la conversación con un paciente que será atendido por {specialty_name.lower()}.
 
 Debes responder SOLO JSON válido con esta estructura exacta:
 {{
+  "summary": "string en Markdown o null",
   "chief_complaint": "string o null",
   "symptom_summary": ["string"],
   "duration_and_evolution": "string o null",
@@ -701,6 +724,7 @@ Reglas:
 - No inventes datos.
 - Si un campo no aparece, usa null o [].
 - Resume en español clínico claro.
+- `summary` es el resumen narrativo para el médico, en Markdown (encabezados con ## y viñetas con -). Debe ser detallado y en español clínico claro, y organizarse en estas secciones cuando exista información: Motivo de consulta, Síntomas principales, Duración y evolución, Antecedentes relevantes, Medicamentos actuales, Factores de riesgo, Señales de alerta, Dudas u objetivos del paciente e Información adicional. No inventes datos ni incluyas el foco sugerido para el médico.
 - `symptom_summary` debe listar los síntomas o molestias principales.
 - `recommended_focus_for_doctor` debe orientar al médico sobre qué confirmar o profundizar.
 - `red_flags` solo si fueron mencionados o se infieren de forma clara por la conversación.
@@ -713,16 +737,28 @@ Reglas:
                 system_prompt=intake_prompt,
                 user_message=f"CONVERSACIÓN:\n{conversation_text}",
                 temperature=0.2,
-                max_tokens=900,
+                max_tokens=1800,
             )
             if not parsed:
                 raise RuntimeError("ningun proveedor LLM disponible")
             normalized = self._normalize_intake_payload(parsed)
+            raw_summary = parsed.get("summary")
+            summary = sanitize_summary_text(raw_summary) if isinstance(raw_summary, str) else None
             logger.info(f"Structured intake generated for consultation with {specialty_slug}")
-            return normalized
+            return normalized, (summary or None)
         except Exception as e:
             logger.error(f"Structured intake generation error: {e}")
-            return self._build_heuristic_intake(specialty_slug, specialty_name, messages)
+            return self._build_heuristic_intake(specialty_slug, specialty_name, messages), None
+
+    def generate_structured_intake(
+        self,
+        specialty_slug: str,
+        specialty_name: str,
+        messages: List[Dict[str, str]],
+    ) -> Dict[str, Any]:
+        """Extrae la ficha estructurada de intake clínico desde la pre-consulta."""
+        intake, _ = self._generate_intake_and_summary(specialty_slug, specialty_name, messages)
+        return intake
     
     def _get_mock_response(self, specialty_name: str, messages: List[Dict[str, str]]) -> str:
         """Respuesta mock para modo sin API."""
@@ -755,20 +791,6 @@ Reglas:
                f"Por favor, cuéntame más sobre el motivo de tu consulta con {specialty_name.lower()} "
                f"y haré lo posible por ayudarte a preparar tu cita.")
     
-    def _get_mock_summary(self, specialty_name: str) -> str:
-        """Resumen mock para modo sin API."""
-        return f"""## Resumen de Pre-consulta - {specialty_name}
-
-**Motivo de consulta**: El paciente describió sus síntomas durante la pre-consulta.
-
-**Síntomas principales**: Información recopilada durante el chat.
-
-**Duración**: Información proporcionada por el paciente.
-
-**Antecedentes**: Se consultó sobre medicamentos y condiciones previas.
-
-**Nota**: Este es un resumen automático. Por favor revise el historial completo del chat para más detalles."""
-
     def _sanitize_summary(self, summary: str) -> str:
         """Compatibilidad: delega en `sanitize_summary_text`."""
         return sanitize_summary_text(summary)

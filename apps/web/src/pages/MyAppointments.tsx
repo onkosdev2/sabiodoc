@@ -20,7 +20,6 @@ import Pagination from '../components/Pagination'
 import Skeleton from '../components/ui/Skeleton'
 import { Textarea } from '../components/ui/Field'
 import RichText from '../components/RichText'
-import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 import AppointmentFilesPanel from '../components/AppointmentFilesPanel'
 import type { VideoSessionFile } from '../api/videoSessions'
@@ -219,9 +218,7 @@ export default function MyAppointments() {
         <div className="space-y-4">
           {pageItems.map((appointment) => {
             const roomAvailability = getRoomAvailability(appointment)
-            const hasPreConsultation = Boolean(
-              appointment.ai_summary_snapshot || appointment.ai_intake_snapshot,
-            )
+            const hasPreConsultation = Boolean(appointment.ai_summary_snapshot)
             const isExpanded = expandedAppointments.has(appointment.id)
             const preview = appointment.ai_intake_snapshot?.chief_complaint
               ? appointment.ai_intake_snapshot.chief_complaint
@@ -315,19 +312,14 @@ export default function MyAppointments() {
                             <p className="text-xs uppercase tracking-[0.22em] text-primary-700">
                               Resumen para el médico
                             </p>
+                            <p className="mt-1 text-xs text-primary-800/80">
+                              Resumen narrativo de la pre-consulta que verá tu especialista.
+                            </p>
                             <RichText
                               text={appointment.ai_summary_snapshot}
                               className="mt-2 text-sm text-primary-900"
                             />
                           </div>
-                        )}
-
-                        {appointment.ai_intake_snapshot && (
-                          <StructuredIntakeCard
-                            intake={appointment.ai_intake_snapshot}
-                            title="Ficha clínica estructurada"
-                            description="Datos clave de la pre-consulta que se comparten con el médico."
-                          />
                         )}
                       </div>
                     )}

@@ -14,24 +14,21 @@ function renderPage() {
 }
 
 describe('ComoFunciona', () => {
-  it('muestra los beneficios y pasos para pacientes por defecto', () => {
+  it('muestra los beneficios y la infografía de pasos para pacientes por defecto', () => {
     renderPage()
-    expect(screen.getByText('Encuentra tu especialidad con IA')).toBeInTheDocument()
-    expect(screen.getByText('Resumen con los puntos clave')).toBeInTheDocument()
-    expect(screen.getByText('Así funciona para pacientes')).toBeInTheDocument()
-    expect(screen.getByText('Cuenta tu caso')).toBeInTheDocument()
+    expect(screen.getByText('Orientación con IA')).toBeInTheDocument()
+    expect(screen.getByText('Resumen e historial')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /pasos para el paciente/i })).toBeInTheDocument()
   })
 
-  it('cambia a la pestaña de médicos con sus propios pasos', async () => {
+  it('cambia a la pestaña de médicos con su propia infografía', async () => {
     renderPage()
-    await userEvent.click(screen.getByRole('tab', { name: 'Para médicos' }))
-    expect(screen.getByText('Consigue más pacientes')).toBeInTheDocument()
-    expect(screen.getByText('Resumen automático de cada consulta')).toBeInTheDocument()
-    expect(screen.getByText('Así funciona para médicos')).toBeInTheDocument()
-    expect(screen.getByText('Postúlate y verifica tu perfil')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Médicos' }))
+    expect(screen.getByText('Más pacientes')).toBeInTheDocument()
+    expect(screen.getByText('Resumen automático')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /pasos para el médico/i })).toBeInTheDocument()
     // Los contenidos de paciente ya no deben verse
-    expect(screen.queryByText('Encuentra tu especialidad con IA')).not.toBeInTheDocument()
-    expect(screen.queryByText('Así funciona para pacientes')).not.toBeInTheDocument()
-    expect(screen.queryByText('Cuenta tu caso')).not.toBeInTheDocument()
+    expect(screen.queryByText('Orientación con IA')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /pasos para el paciente/i })).not.toBeInTheDocument()
   })
 })

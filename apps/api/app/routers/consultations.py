@@ -69,16 +69,11 @@ def generate_and_close_consultation(
     message_history = [{"role": m.role.value, "content": m.content} for m in messages]
     specialty = consultation.specialty
 
-    summary = specialist_assistant.generate_summary(
+    summary, intake = specialist_assistant.generate_summary_and_intake(
         specialty_slug=specialty.slug,
         specialty_name=specialty.name,
         messages=message_history,
         consultation_date=consultation.created_at,
-    )
-    intake = specialist_assistant.generate_structured_intake(
-        specialty_slug=specialty.slug,
-        specialty_name=specialty.name,
-        messages=message_history,
     )
 
     # Guardar resultados en la consulta y finalizarla (la pre-consulta terminó).

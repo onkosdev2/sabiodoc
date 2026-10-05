@@ -24,7 +24,6 @@ import BackButton from '../components/BackButton'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Pagination from '../components/Pagination'
 import RichText from '../components/RichText'
-import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 import Skeleton from '../components/ui/Skeleton'
 import { formatRelativeTime } from '../utils/relativeTime'
@@ -270,7 +269,7 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
   const badge = STATUS_BADGES[statusKey]
   const specialtyName = consultation.specialty?.name || 'Especialidad'
   const specialtyLink = consultation.specialty ? `/specialties/${consultation.specialty.slug}` : '/specialties'
-  const hasDetails = Boolean(consultation.summary || consultation.intake)
+  const hasDetails = Boolean(consultation.summary)
   const canClose = consultation.status !== 'closed'
   const canDelete = consultation.status === 'created'
 
@@ -376,16 +375,12 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
         <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
           {consultation.summary && (
             <div>
-              <h4 className="mb-2 text-sm font-medium text-slate-700">Resumen para el médico</h4>
+              <h4 className="mb-1 text-sm font-medium text-slate-700">Resumen para el médico</h4>
+              <p className="mb-2 text-xs text-slate-500">
+                Resumen narrativo que la IA preparó para tu especialista a partir de la conversación.
+              </p>
               <RichText text={consultation.summary} className="text-sm text-slate-600" />
             </div>
-          )}
-          {consultation.intake && (
-            <StructuredIntakeCard
-              intake={consultation.intake}
-              title="Ficha clínica estructurada"
-              description="Datos clave extraídos de la conversación para que el médico los revise de un vistazo."
-            />
           )}
         </div>
       )}

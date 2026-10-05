@@ -87,19 +87,17 @@ def test_accepting_summary_offer_closes_consultation(monkeypatch):
     try:
         got_summary = {"called": False}
 
-        def fake_generate_summary(**_kwargs):
+        def fake_generate_summary_and_intake(**_kwargs):
             got_summary["called"] = True
-            return "Resumen de prueba para el medico"
+            return (
+                "Resumen de prueba para el medico",
+                {"chief_complaint": "picazon", "completeness": "partial"},
+            )
 
         monkeypatch.setattr(
             assistant_module.specialist_assistant,
-            "generate_summary",
-            fake_generate_summary,
-        )
-        monkeypatch.setattr(
-            assistant_module.specialist_assistant,
-            "generate_structured_intake",
-            lambda **_kwargs: {"chief_complaint": "picazon", "completeness": "partial"},
+            "generate_summary_and_intake",
+            fake_generate_summary_and_intake,
         )
 
         response = client.post(
@@ -121,6 +119,7 @@ def test_accepting_summary_offer_closes_consultation(monkeypatch):
             assert updated.status == ConsultationStatus.closed
             assert updated.closed_at is not None
             assert updated.summary == "Resumen de prueba para el medico"
+            assert updated.intake_json is not None
         finally:
             db.close()
     finally:

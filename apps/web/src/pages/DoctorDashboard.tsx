@@ -21,7 +21,6 @@ import Modal from '../components/ui/Modal'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import { Textarea } from '../components/ui/Field'
-import RichText from '../components/RichText'
 import StructuredIntakeCard from '../components/StructuredIntakeCard'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 
@@ -254,9 +253,7 @@ export default function DoctorDashboard() {
                     )}
                   </div>
                   {(() => {
-                    const hasPreConsultation = Boolean(
-                      appointment.ai_summary_snapshot || appointment.ai_intake_snapshot,
-                    )
+                    const hasPreConsultation = Boolean(appointment.ai_intake_snapshot)
                     if (!hasPreConsultation) return null
                     const isExpanded = expandedAppointments.has(appointment.id)
                     const chiefComplaint = appointment.ai_intake_snapshot?.chief_complaint
@@ -284,14 +281,6 @@ export default function DoctorDashboard() {
 
                         {isExpanded && (
                           <div className="mt-4 space-y-4">
-                            {appointment.ai_summary_snapshot && (
-                              <div className="rounded-2xl bg-primary-50 p-4 text-sm text-primary-900">
-                                <p className="mb-2 text-xs uppercase tracking-[0.22em] text-primary-700">
-                                  Resumen para el médico
-                                </p>
-                                <RichText text={appointment.ai_summary_snapshot} />
-                              </div>
-                            )}
                             {appointment.ai_intake_snapshot && (
                               <StructuredIntakeCard
                                 intake={appointment.ai_intake_snapshot}

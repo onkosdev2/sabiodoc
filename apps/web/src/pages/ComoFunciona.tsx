@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   BadgeCheck,
   CalendarDays,
+  ChevronDown,
   CircleDollarSign,
   ClipboardList,
   FileText,
@@ -15,270 +16,250 @@ import {
   Stethoscope,
   Video,
 } from 'lucide-react'
-
-import Card from '../components/ui/Card'
+import heroImage from '../assets/comofunciona-hero.webp'
+import flujoMedico from '../assets/flujo-medico.webp'
+import flujoPaciente from '../assets/flujo-paciente.webp'
 
 type Audience = 'patients' | 'doctors'
 
-const PATIENT_FEATURES = [
-  {
-    icon: Sparkles,
-    title: 'Encuentra tu especialidad con IA',
-    description:
-      'Describe tus síntomas o responde unas preguntas sencillas y te orientamos hacia la especialidad adecuada.',
+const CONTENT = {
+  patients: {
+    features: [
+      { icon: Sparkles, title: 'Orientación con IA', description: 'Describe cómo te sientes y te sugerimos la especialidad adecuada.' },
+      { icon: ClipboardList, title: 'Pre-consulta lista', description: 'Tu médico recibe tus síntomas, antecedentes y medicamentos ya ordenados.' },
+      { icon: Video, title: 'Pagas por minuto', description: 'Videoconsulta desde donde estés, sin paquetes ni costos ocultos.' },
+      { icon: FileText, title: 'Resumen e historial', description: 'Consultas, indicaciones y archivos compartidos, siempre disponibles.' },
+      { icon: CalendarDays, title: 'Agenda flexible', description: 'Elige un horario real del médico y cámbialo si surge un imprevisto.' },
+      { icon: Star, title: 'Reseñas reales', description: 'Opiniones de pacientes que ya se atendieron con ese especialista.' },
+    ],
+    faqs: [
+      { q: '¿Cuánto cuesta una videoconsulta?', a: 'Pagas solo por los minutos que dura tu videoconsulta. Cada médico define su tarifa por minuto y no hay paquetes ni costos ocultos.' },
+      { q: '¿Necesito instalar algo?', a: 'No. Entras a una sala segura desde tu navegador, en computadora o celular.' },
+      { q: '¿La IA reemplaza al médico?', a: 'No. La IA te orienta, ordena tu información y resume la consulta. El diagnóstico y las indicaciones los da tu médico.' },
+      { q: '¿Cómo sé que el médico es real?', a: 'Revisamos la identidad y el registro profesional (CMP/RNE) de cada especialista antes de habilitar su perfil.' },
+      { q: '¿Puedo reprogramar o cancelar mi cita?', a: 'Sí, puedes reprogramar o cancelar tu cita sin complicaciones.' },
+    ],
   },
-  {
-    icon: ClipboardList,
-    title: 'Llega a la consulta con tu historia lista',
-    description:
-      'La pre-consulta con IA arma una ficha clara con tus síntomas, antecedentes y medicamentos para el médico.',
+  doctors: {
+    features: [
+      { icon: Search, title: 'Más pacientes', description: 'Tu perfil verificado aparece en búsquedas por especialidad y ciudad.' },
+      { icon: ClipboardList, title: 'Consultas más ágiles', description: 'Llegas a la videollamada con los puntos clave del caso.' },
+      { icon: Video, title: 'Videoconsulta integrada', description: 'Sala segura y control de tiempo, sin instalar nada.' },
+      { icon: FileText, title: 'Resumen automático', description: 'Conclusiones e indicaciones listas al terminar cada consulta.' },
+      { icon: LayoutDashboard, title: 'Panel completo', description: 'Agenda, pacientes, reseñas y cartera en un solo lugar.' },
+      { icon: CircleDollarSign, title: 'Tú fijas tu tarifa', description: 'Cobras por minuto de videoconsulta, sin costos fijos.' },
+    ],
+    faqs: [
+      { q: '¿Cuánto cuesta empezar?', a: 'No hay costos fijos para empezar. Cobras por minuto de videoconsulta con la tarifa que tú defines.' },
+      { q: '¿Cómo verifican mi perfil?', a: 'Validamos tu identidad y tu número de colegiatura (CMP/RNE) antes de publicar tu perfil.' },
+      { q: '¿Qué es la pre-consulta?', a: 'Es un resumen con los síntomas, antecedentes y medicamentos del paciente, que recibes antes de la videollamada.' },
+      { q: '¿Necesito instalar algo?', a: 'No. La videoconsulta se realiza en una sala segura desde el navegador.' },
+      { q: '¿Qué incluye el resumen de la consulta?', a: 'Conclusiones e indicaciones para que el paciente las revise al terminar la videollamada.' },
+    ],
   },
-  {
-    icon: Video,
-    title: 'Videoconsulta segura',
-    description:
-      'Atiéndete por videollamada desde donde estés y paga solo por los minutos que uses. Sin paquetes ni costos ocultos.',
-  },
-  {
-    icon: FileText,
-    title: 'Resumen con los puntos clave',
-    description:
-      'Al terminar la videoconsulta, la IA la resume para que tú y tu médico revisen conclusiones e indicaciones.',
-  },
-  {
-    icon: CalendarDays,
-    title: 'Agenda como quieras',
-    description: 'Elige un horario real del médico, reprograma o cancela sin complicaciones.',
-  },
-  {
-    icon: Heart,
-    title: 'Todo tu historial en un lugar',
-    description: 'Consultas, citas, indicaciones y archivos compartidos, siempre disponibles.',
-  },
-  {
-    icon: Star,
-    title: 'Opiniones de pacientes reales',
-    description: 'Decide con reseñas de personas que ya se atendieron con ese especialista.',
-  },
-]
-
-const DOCTOR_FEATURES = [
-  {
-    icon: Search,
-    title: 'Consigue más pacientes',
-    description: 'Tu perfil público verificado aparece en las búsquedas por especialidad y ciudad.',
-  },
-  {
-    icon: ClipboardList,
-    title: 'Consulta más rápida',
-    description:
-      'Antes de la videollamada recibes un resumen de pre-consulta con los puntos clave del paciente.',
-  },
-  {
-    icon: Video,
-    title: 'Videoconsulta integrada',
-    description: 'Atiende sin instalar nada, con sala segura y control de tiempo.',
-  },
-  {
-    icon: FileText,
-    title: 'Resumen automático de cada consulta',
-    description:
-      'Al terminar la videollamada, la IA genera un resumen con conclusiones e indicaciones para el paciente.',
-  },
-  {
-    icon: LayoutDashboard,
-    title: 'Panel completo',
-    description: 'Agenda, pacientes, reseñas y cartera en un solo lugar.',
-  },
-  {
-    icon: BadgeCheck,
-    title: 'Perfil verificado',
-    description: 'Validamos tu identidad y número de colegiatura (CMP/RNE) para dar confianza a los pacientes.',
-  },
-  {
-    icon: CircleDollarSign,
-    title: 'Tú defines tu tarifa',
-    description: 'Cobras por minuto de videoconsulta. Sin costos fijos para empezar.',
-  },
-]
-
-const PATIENT_STEPS = [
-  {
-    title: 'Cuenta tu caso',
-    description: 'La IA te guía con preguntas sencillas y ordena tu información clínica.',
-  },
-  {
-    title: 'Elige especialista y horario',
-    description: 'Compara perfiles, reseñas y disponibilidad real, y agenda en segundos.',
-  },
-  {
-    title: 'Conéctate a la videoconsulta',
-    description: 'Entra a la sala segura desde tu navegador, sin descargas.',
-  },
-  {
-    title: 'Recibe tu resumen',
-    description: 'La IA resume la consulta con los puntos clave para ti y tu médico.',
-  },
-]
-
-const DOCTOR_STEPS = [
-  {
-    title: 'Postúlate y verifica tu perfil',
-    description: 'Completas tus datos profesionales y validamos tu identidad y colegiatura.',
-  },
-  {
-    title: 'Configura tu agenda y tarifa',
-    description: 'Defines tus horarios de atención y cuánto cobras por minuto de videoconsulta.',
-  },
-  {
-    title: 'Atiende videoconsultas',
-    description: 'Recibes al paciente con su ficha de pre-consulta ya resumida.',
-  },
-  {
-    title: 'Cierra con seguimiento',
-    description: 'La IA resume conclusiones e indicaciones para que el paciente las revise.',
-  },
-]
+} as const
 
 const TABS: { id: Audience; label: string; icon: typeof Heart }[] = [
-  { id: 'patients', label: 'Para pacientes', icon: Heart },
-  { id: 'doctors', label: 'Para médicos', icon: Stethoscope },
+  { id: 'patients', label: 'Pacientes', icon: Heart },
+  { id: 'doctors', label: 'Médicos', icon: Stethoscope },
 ]
+
+const TRUST = [
+  { icon: BadgeCheck, color: 'text-emerald-600', title: 'Médicos verificados', text: 'Revisamos identidad y registro profesional antes de habilitar cada perfil.' },
+  { icon: Star, color: 'text-amber-500', title: 'Reseñas de citas reales', text: 'Las opiniones vienen de pacientes que completaron una consulta.' },
+  { icon: ShieldCheck, color: 'text-sky-600', title: 'Privacidad y seguridad', text: 'Tus datos clínicos son confidenciales y las videoconsultas, privadas.' },
+]
+
+// Infografías con los pasos resumidos (una por audiencia)
+const FLOW_IMAGE = {
+  patients: {
+    src: flujoPaciente,
+    alt: 'Infografía con los pasos para el paciente: cuenta tu caso, elige especialista y horario, conéctate a la videoconsulta y recibe tu resumen.',
+  },
+  doctors: {
+    src: flujoMedico,
+    alt: 'Infografía con los pasos para el médico: postula y verifica tu perfil, configura agenda y tarifa, atiende videoconsultas y cierra con seguimiento.',
+  },
+} as const
+
+const CLOSING = {
+  patients: { title: 'Crea tu cuenta hoy', text: 'Regístrate gratis y empieza a orientarte con IA en pocos minutos.', label: 'Registrarse', to: '/register' },
+  doctors: { title: 'Atiende pacientes a tu manera', text: 'Postula, define tu tarifa y empieza cuando quieras.', label: 'Postular como médico', to: '/doctor/apply' },
+}
+
+const ANIMATION_CSS = `
+@keyframes panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.panel-in { animation: panel-in 300ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .panel-in { animation: none; } }
+`
 
 export default function ComoFunciona() {
   const [audience, setAudience] = useState<Audience>('patients')
-  const features = audience === 'patients' ? PATIENT_FEATURES : DOCTOR_FEATURES
-  const steps = audience === 'patients' ? PATIENT_STEPS : DOCTOR_STEPS
-  const stepsTitle = audience === 'patients' ? 'Así funciona para pacientes' : 'Así funciona para médicos'
+  const { features, faqs } = CONTENT[audience]
+  const flow = FLOW_IMAGE[audience]
+  const closing = CLOSING[audience]
+
+  const handleTabKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const next: Audience = audience === 'patients' ? 'doctors' : 'patients'
+    setAudience(next)
+    document.getElementById(`tab-${next}`)?.focus()
+  }
 
   return (
-    <div className="space-y-10">
-      {/* Hero: solo dos llamados a la acción, uno por audiencia */}
-      <section className="overflow-hidden rounded-3xl border border-primary-100 bg-gradient-to-br from-primary-50 via-white to-emerald-50 p-8 sm:p-12">
-        <div className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-primary-700">
-            <Stethoscope className="h-4 w-4" /> Cómo funciona SabioDoc
-          </span>
-          <h1 className="mt-4 text-3xl font-bold text-slate-900 sm:text-4xl">
-            Orientación médica con IA y videoconsultas, en un solo lugar
-          </h1>
-          <p className="mt-4 text-lg text-slate-600">
-            Te ayudamos a encontrar la especialidad correcta, llegas a la consulta con tu historia lista y te
-            atiendes por videollamada pagando solo por minuto.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link to="/specialties" className="btn-primary">
-              Buscar especialista
-            </Link>
-            <Link to="/doctor/apply" className="btn-secondary">
-              Soy médico
-            </Link>
+    <div className="space-y-14 py-8">
+      {/* 1. Hero: propuesta de valor + imagen del producto */}
+      <section className="px-6 sm:px-12">
+        <div className="grid items-center gap-10 lg:grid-cols-2">
+          <div className="text-center lg:text-left">
+            <h1 className="text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+              Orientación médica con IA y videoconsultas, en un solo lugar
+            </h1>
+            <p className="mt-4 text-lg text-slate-600">
+              Te ayudamos a encontrar la especialidad correcta, llegas a la consulta con tu historia lista y te
+              atiendes por videollamada pagando solo por minuto.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+              <Link to="/register" className="btn-primary">
+                Registrarse
+              </Link>
+              <Link to="/doctor/apply" className="btn-secondary">
+                Soy médico
+              </Link>
+            </div>
+          </div>
+          <div className="hidden flex-1 pointer-events-none md:flex md:items-center md:justify-end">
+            <img
+              src={heroImage}
+              alt="Paciente en videoconsulta con su médico desde el computador"
+              className="h-auto w-full max-w-[700px] mix-blend-multiply scale-[1.8] origin-center [clip-path:inset(10%_8%_10%_8%)]"
+            />
           </div>
         </div>
       </section>
 
-      {/* Pestañas por audiencia: beneficios + pasos propios de cada una */}
-      <section>
-        <div
-          role="tablist"
-          aria-label="Beneficios por tipo de usuario"
-          className="mx-auto flex w-fit rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
-        >
-          {TABS.map((tab) => {
-            const Icon = tab.icon
-            const active = audience === tab.id
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                id={`tab-${tab.id}`}
-                aria-selected={active}
-                aria-controls={`panel-${tab.id}`}
-                onClick={() => setAudience(tab.id)}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
-                  active ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
+      {/* 2. Confianza: antes de pedir que el usuario siga leyendo */}
+      <section aria-label="Confianza y seguridad">
+        <ul className="grid gap-6 rounded-3xl bg-slate-50 p-6 sm:p-8 md:grid-cols-3 md:gap-8">
+          {TRUST.map(({ icon: Icon, color, title, text }) => (
+            <li key={title} className="flex items-start gap-3">
+              <Icon className={`mt-0.5 h-6 w-6 flex-none ${color}`} aria-hidden="true" />
+              <div>
+                <h3 className="font-semibold text-slate-900">{title}</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-        <div
-          role="tabpanel"
-          id={`panel-${audience}`}
-          aria-labelledby={`tab-${audience}`}
-          className="mt-8 space-y-10"
-        >
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => {
-              const Icon = feature.icon
+      {/* 3. Contenido por audiencia */}
+      <section>
+        <div className="text-center">
+          <p className="text-sm font-medium text-slate-500">¿Cómo quieres usar SabioDoc?</p>
+          <div
+            role="tablist"
+            aria-label="Tipo de usuario"
+            onKeyDown={handleTabKeys}
+            className="relative mt-3 inline-grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
+          >
+            {/* Píldora que se desliza entre pestañas */}
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-xl bg-primary-600 transition-transform duration-300 ease-out motion-reduce:transition-none"
+              style={{ transform: audience === 'doctors' ? 'translateX(100%)' : 'translateX(0)' }}
+            />
+            {TABS.map((tab) => {
+              const Icon = tab.icon
+              const active = audience === tab.id
               return (
-                <Card key={feature.title} className="h-full">
-                  <span className="inline-flex rounded-xl bg-primary-100 p-2.5 text-primary-700">
-                    <Icon className="h-6 w-6" aria-hidden="true" />
-                  </span>
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{feature.description}</p>
-                </Card>
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`tab-${tab.id}`}
+                  aria-selected={active}
+                  aria-controls={active ? `panel-${tab.id}` : undefined}
+                  tabIndex={active ? 0 : -1}
+                  onClick={() => setAudience(tab.id)}
+                  className={`relative z-10 inline-flex items-center justify-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 motion-reduce:transition-none ${
+                    active ? 'text-white' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {tab.label}
+                </button>
               )
             })}
           </div>
+        </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-8 sm:p-10">
-            <h2 className="text-center text-2xl font-bold text-slate-900">{stepsTitle}</h2>
-            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {steps.map((step, index) => (
-                <div key={step.title}>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600 text-lg font-bold text-white">
-                    {index + 1}
+        {/* key={audience} remonta el panel y reinicia la animación de entrada */}
+        <div
+          key={audience}
+          role="tabpanel"
+          id={`panel-${audience}`}
+          aria-labelledby={`tab-${audience}`}
+          className="panel-in mt-12 space-y-16"
+        >
+          <div>
+            <img
+              src={flow.src}
+              alt={flow.alt}
+              loading="lazy"
+              decoding="async"
+              className="mx-auto w-full rounded-2xl border border-slate-200 bg-white"
+            />
+          </div>
+
+          <ul className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => {
+              const Icon = feature.icon
+              return (
+                <li key={feature.title} className="flex items-start gap-4">
+                  <span className="inline-flex flex-none rounded-xl bg-primary-100 p-2.5 text-primary-700">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{feature.title}</h3>
+                    <p className="mt-0.5 text-sm leading-6 text-slate-600">{feature.description}</p>
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-slate-900">{step.title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{step.description}</p>
-                </div>
+                </li>
+              )
+            })}
+          </ul>
+
+          <div className="mx-auto max-w-3xl">
+            <h2 className="text-center text-2xl font-bold text-slate-900">Preguntas frecuentes</h2>
+            <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+              {faqs.map((faq) => (
+                <details key={faq.q} className="group px-5 py-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-md font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden">
+                    {faq.q}
+                    <ChevronDown
+                      className="h-5 w-5 flex-none text-slate-400 transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
+                  </summary>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{faq.a}</p>
+                </details>
               ))}
             </div>
+          </div>
+
+          {/* 4. Cierre: un solo llamado a la acción acorde a la pestaña activa */}
+          <div className="rounded-3xl bg-primary-50 px-6 py-10 text-center">
+            <h2 className="text-2xl font-bold text-slate-900">{closing.title}</h2>
+            <p className="mt-2 text-slate-600">{closing.text}</p>
+            <Link to={closing.to} className="btn-primary mt-6 inline-flex">
+              {closing.label}
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Confianza (sin botones, para no competir con los CTAs) */}
-      <section className="grid gap-4 md:grid-cols-3">
-        <Card className="flex items-start gap-3">
-          <BadgeCheck className="mt-0.5 h-6 w-6 flex-none text-emerald-600" aria-hidden="true" />
-          <div>
-            <h3 className="font-semibold text-slate-900">Médicos verificados</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Revisamos la identidad y el registro profesional de cada especialista antes de habilitar su perfil.
-            </p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <Star className="mt-0.5 h-6 w-6 flex-none text-amber-500" aria-hidden="true" />
-          <div>
-            <h3 className="font-semibold text-slate-900">Reseñas de citas reales</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Las opiniones provienen de pacientes que completaron una consulta.
-            </p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-6 w-6 flex-none text-sky-600" aria-hidden="true" />
-          <div>
-            <h3 className="font-semibold text-slate-900">Privacidad y seguridad</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Tus datos clínicos se tratan de forma confidencial y las videoconsultas son privadas.
-            </p>
-          </div>
-        </Card>
-      </section>
-
-      <p className="text-center text-xs text-slate-500">
-        La IA orienta, no reemplaza una consulta médica profesional.
-      </p>
+      <style>{ANIMATION_CSS}</style>
     </div>
   )
 }

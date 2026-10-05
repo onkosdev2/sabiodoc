@@ -12,7 +12,7 @@ import {
   Search,
   Star
 } from 'lucide-react'
-import heroImage from '../assets/home-hero.jpeg'
+import heroImage from '../assets/home-hero.webp'
 
 import { useAuth } from '../context/AuthContext'
 import Alert from '../components/ui/Alert'
