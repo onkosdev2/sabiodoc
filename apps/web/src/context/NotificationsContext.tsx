@@ -17,7 +17,9 @@ import {
 } from '../api/notifications'
 import { getStoredToken } from '../utils/authStorage'
 import { getApiErrorMessage } from '../utils/apiError'
+import { getNotificationMeta } from '../utils/notificationMeta'
 import { useAuth } from './AuthContext'
+import { useToast } from './ToastContext'
 
 interface NotificationsContextType {
   notifications: NotificationItem[]
@@ -38,6 +40,7 @@ const MAX_STREAM_RETRIES = 5
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth()
+  const toast = useToast()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -87,14 +90,23 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [applyNotifications])
 
-  // Inserta una notificación recibida por SSE sin duplicarla.
+  // Inserta una notificación recibida por SSE sin duplicarla y avisa con un
+  // toast del color/icono de su categoría.
   const applyIncoming = useCallback(
     (notification: NotificationItem) => {
       const current = notificationsRef.current
       if (current.some((item) => item.id === notification.id)) return
       applyNotifications([notification, ...current].slice(0, MAX_NOTIFICATIONS))
+
+      const meta = getNotificationMeta(notification.type)
+      const Icon = meta.icon
+      toast.info(notification.body, {
+        title: notification.title,
+        icon: <Icon className="h-5 w-5" aria-hidden="true" />,
+        className: meta.toastClass,
+      })
     },
-    [applyNotifications],
+    [applyNotifications, toast],
   )
 
   const markRead = useCallback(

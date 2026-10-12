@@ -10,6 +10,10 @@ export interface ToastOptions {
   title?: string
   /** ms antes de auto-cerrar; 0 = no se cierra solo */
   duration?: number
+  /** Icono propio; reemplaza el del tono. */
+  icon?: ReactNode
+  /** Clases propias que reemplazan el color del tono. */
+  className?: string
 }
 
 export interface ToastItem {
@@ -18,6 +22,8 @@ export interface ToastItem {
   message: string
   title?: string
   duration: number
+  icon?: ReactNode
+  className?: string
 }
 
 interface ToastActions {
@@ -51,7 +57,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (tone: ToastTone, message: string, options?: ToastOptions) => {
       const id = ++counter.current
       const duration = options?.duration ?? (tone === 'error' ? 6000 : 4000)
-      setToasts((prev) => [...prev.slice(-(MAX_TOASTS - 1)), { id, tone, message, title: options?.title, duration }])
+      setToasts((prev) => [
+        ...prev.slice(-(MAX_TOASTS - 1)),
+        {
+          id,
+          tone,
+          message,
+          title: options?.title,
+          duration,
+          icon: options?.icon,
+          className: options?.className,
+        },
+      ])
       if (duration > 0) {
         window.setTimeout(() => dismiss(id), duration)
       }
@@ -86,17 +103,19 @@ function ToastViewport({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: 
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-center gap-2 p-4 sm:items-end">
       <div aria-live="polite" aria-atomic="true" className="flex w-full max-w-sm flex-col gap-2">
         {toasts.map((toast) => {
-          const { className, Icon } = TONES[toast.tone]
+          const { className: toneClass, Icon } = TONES[toast.tone]
           return (
             <div
               key={toast.id}
               role={toast.tone === 'error' ? 'alert' : 'status'}
               className={cn(
                 'pointer-events-auto flex items-start gap-3 rounded-2xl border p-3 shadow-sm animate-slide-up',
-                className,
+                toast.className ?? toneClass,
               )}
             >
-              <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="mt-0.5 shrink-0" aria-hidden="true">
+                {toast.icon ?? <Icon className="h-5 w-5" />}
+              </span>
               <div className="min-w-0 flex-1">
                 {toast.title && <p className="text-sm font-semibold">{toast.title}</p>}
                 <p className={cn('text-sm', toast.title && 'mt-0.5')}>{toast.message}</p>
