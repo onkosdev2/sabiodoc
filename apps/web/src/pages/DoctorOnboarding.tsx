@@ -11,8 +11,10 @@ import { Field, Input, PasswordInput, Select, Textarea } from '../components/ui/
 import { registerDoctor } from '../api/auth'
 import { getSpecialties, Specialty } from '../api/specialties'
 import { getMyDoctorApplication, updateMyDoctorProfile, uploadMyDoctorPhoto, deleteMyDoctorPhoto } from '../api/doctors'
+import { getFinancePolicy } from '../api/finance'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
+import { hasRole } from '../utils/roles'
 
 const centsToDisplay = (value: number) => (value / 100).toFixed(2)
 
@@ -97,6 +99,8 @@ export default function DoctorOnboarding() {
 
   // --- Estados del Formulario (Paso 3) ---
   const [pricePerMinute, setPricePerMinute] = useState('5.00')
+  // Comisión vigente de la plataforma (se carga desde el backend).
+  const [platformFeePercent, setPlatformFeePercent] = useState(20)
   
   const [idType, setIdType] = useState('DNI')
   const [customIdType, setCustomIdType] = useState('')
@@ -139,6 +143,20 @@ export default function DoctorOnboarding() {
     setPhotoPreview(objectUrl)
     return () => URL.revokeObjectURL(objectUrl)
   }, [photoFile])
+
+  useEffect(() => {
+    let mounted = true
+    getFinancePolicy()
+      .then((policy) => {
+        if (mounted) setPlatformFeePercent(policy.platform_fee_percent)
+      })
+      .catch(() => {
+        /* se mantiene el valor por defecto si no se puede consultar */
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -465,7 +483,7 @@ export default function DoctorOnboarding() {
             text: 'Tu perfil requiere cambios. Actualiza tus datos y vuelve a guardar.',
           }
 
-  if (!authLoading && isAuthenticated && user?.role === 'patient' && !user.doctor_status) return <Navigate to="/" replace />
+  if (!authLoading && isAuthenticated && !hasRole(user, 'doctor') && !user?.doctor_status) return <Navigate to="/" replace />
   // Un medico aprobado no debe volver al formulario de postulacion, pero si
   // puede seguir usando /doctor/profile para actualizar sus datos.
   if (!authLoading && isAuthenticated && user?.doctor_status === 'approved' && !isProfileRoute) {
@@ -790,6 +808,20 @@ export default function DoctorOnboarding() {
                       <p className="mt-1 text-xs text-slate-500">
                         Ej: 15 min = ${(Number(pricePerMinute) * 15 || 0).toFixed(2)} USD
                       </p>
+                      <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-800">
+                        <p>
+                          La plataforma cobra una comisión del{' '}
+                          <span className="font-semibold">{platformFeePercent}%</span>. Recibirás{' '}
+                          <span className="font-semibold">
+                            ${((Number(pricePerMinute) || 0) * (1 - platformFeePercent / 100)).toFixed(2)}
+                          </span>{' '}
+                          por minuto de consulta.
+                        </p>
+                        <p className="mt-1">
+                          Por una consulta de 15 min: cobras ${(Number(pricePerMinute) * 15 || 0).toFixed(2)} y
+                          recibes ${(Number(pricePerMinute) * 15 * (1 - platformFeePercent / 100) || 0).toFixed(2)}.
+                        </p>
+                      </div>
                     </div>
 
                     <Field label="Documento de identidad" required htmlFor="doctor-id-number">

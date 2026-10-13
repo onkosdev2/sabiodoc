@@ -1,8 +1,11 @@
 """Envío de correos transaccionales (SMTP).
 
-Se usa únicamente para dos flujos:
+Se usa únicamente para tres flujos:
 - verificación de correo al registrarse (paciente y médico),
-- restablecimiento de contraseña.
+- restablecimiento de contraseña,
+- aviso de cambio de contraseña (correo de confirmación de seguridad).
+
+Todos comparten el mismo transporte SMTP (``_send``) y remitente (``_from_header``).
 
 Si no hay SMTP configurado:
 - en desarrollo se registra el enlace en los logs para poder probar el flujo;
@@ -26,12 +29,14 @@ def _from_header() -> str:
     return formataddr(("SabioDoc", address))
 
 
-def _send(message: EmailMessage, *, to_email: str, link: str, kind: str) -> bool:
+def _send(message: EmailMessage, *, to_email: str, kind: str, link: str | None = None) -> bool:
     if not settings.SMTP_HOST:
         if settings.is_production:
             logger.warning("SMTP no configurado: no se pudo enviar %s a %s", kind, to_email)
-        else:
+        elif link:
             logger.info("[%s] Enlace para %s: %s", kind, to_email, link)
+        else:
+            logger.info("[%s] Correo para %s (sin enlace)", kind, to_email)
         return False
 
     try:
@@ -81,6 +86,40 @@ def _build_email_verification_message(to_email: str, verify_url: str) -> EmailMe
 def send_password_reset_email(to_email: str, reset_url: str) -> bool:
     message = _build_password_reset_message(to_email, reset_url)
     return _send(message, to_email=to_email, link=reset_url, kind="password_reset")
+
+
+def _build_password_changed_message(
+    to_email: str, changed_at: str, ip_address: str | None = None
+) -> EmailMessage:
+    message = EmailMessage()
+    message["From"] = _from_header()
+    message["To"] = to_email
+    message["Subject"] = "Tu contraseña de SabioDoc cambió"
+    lines = [
+        "Tu contraseña de SabioDoc se cambió correctamente.",
+        "",
+        f"Fecha: {changed_at}",
+    ]
+    if ip_address:
+        lines.append(f"IP aproximada: {ip_address}")
+    lines.extend(
+        [
+            "",
+            "Si no fuiste tú, restablece tu contraseña de inmediato en:",
+            f"{settings.primary_frontend_origin}/forgot-password",
+            "",
+            "Por seguridad, cerramos las demás sesiones activas de tu cuenta.",
+        ]
+    )
+    message.set_content("\n".join(lines))
+    return message
+
+
+def send_password_changed_email(
+    to_email: str, changed_at: str, ip_address: str | None = None
+) -> bool:
+    message = _build_password_changed_message(to_email, changed_at, ip_address)
+    return _send(message, to_email=to_email, kind="password_changed")
 
 
 def send_email_verification_email(to_email: str, verify_url: str) -> bool:

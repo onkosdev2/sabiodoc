@@ -1,13 +1,23 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
+from app.core.security import validate_password_strength
 from app.models.user import UserRole
 from app.models.doctor_profile import DoctorApprovalStatus
+
+
+def _check_password(value: str) -> str:
+    return validate_password_strength(value)
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        return _check_password(value)
 
 
 class DoctorRegistrationCreate(BaseModel):
@@ -28,6 +38,11 @@ class DoctorRegistrationCreate(BaseModel):
     years_experience: int
     specialty_ids: list[int]
 
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: str) -> str:
+        return _check_password(value)
+
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -41,6 +56,28 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., min_length=10, max_length=256)
     new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, value: str) -> str:
+        return _check_password(value)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _validate_new_password(cls, value: str) -> str:
+        return _check_password(value)
+
+
+class ChangePasswordResponse(BaseModel):
+    message: str
+    # Token nuevo: el cambio de contraseña revoca las demás sesiones.
+    access_token: str
+    token_type: str = "bearer"
 
 
 class VerifyEmailRequest(BaseModel):
@@ -58,9 +95,10 @@ class MessageResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    # ``role`` es el rol primario (para mostrar); ``roles`` es el conjunto real.
     role: UserRole
+    roles: list[UserRole] = []
     doctor_status: Optional[DoctorApprovalStatus] = None
-    is_reviewer: bool = False
     is_email_verified: bool = True
     display_name: Optional[str] = None
     doctor_display_name: Optional[str] = None
@@ -79,7 +117,7 @@ class ReviewerResponse(BaseModel):
     id: int
     email: str
     role: UserRole
-    is_reviewer: bool = True
+    roles: list[UserRole] = []
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -93,15 +131,13 @@ class ReviewerListResponse(BaseModel):
 class AdminUserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    role: UserRole = UserRole.patient
-    is_reviewer: bool = False
+    roles: list[UserRole] = Field(default_factory=lambda: [UserRole.patient])
 
 
 class AdminUserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = Field(default=None, min_length=8, max_length=128)
-    role: Optional[UserRole] = None
-    is_reviewer: Optional[bool] = None
+    roles: Optional[list[UserRole]] = None
 
 
 class AdminUserResponse(BaseModel):
@@ -109,8 +145,8 @@ class AdminUserResponse(BaseModel):
     email: str
     full_name: Optional[str] = None
     role: UserRole
+    roles: list[UserRole] = []
     doctor_status: Optional[DoctorApprovalStatus] = None
-    is_reviewer: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

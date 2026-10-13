@@ -3,6 +3,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 
 import Button from './ui/Button'
+import { reportClientError } from '../utils/clientErrorReporter'
 
 interface Props {
   children: ReactNode
@@ -22,6 +23,12 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Error no controlado:', error, info)
+    reportClientError({
+      message: error.message || 'Error de render no controlado',
+      error,
+      errorType: `ReactErrorBoundary:${error.name}`,
+      context: { component_stack: info.componentStack },
+    })
   }
 
   private handleRetry = () => {

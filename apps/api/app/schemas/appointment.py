@@ -116,6 +116,10 @@ class AppointmentResponse(BaseModel):
     # Pago de la cita con créditos.
     payment_amount_cents: Optional[int] = None
     payment_status: Optional[AppointmentPaymentStatus] = None
+    # Desglose para el médico: comisión de la plataforma y monto neto.
+    payment_platform_fee_cents: Optional[int] = None
+    payment_doctor_amount_cents: Optional[int] = None
+    platform_fee_percent: float = 0
     # Archivos compartidos durante la videoconsulta de esta cita.
     files: list[VideoSessionFileResponse] = []
     files_enabled: bool = False

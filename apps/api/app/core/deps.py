@@ -63,7 +63,7 @@ def get_current_user(
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Permite el acceso unicamente a administradores."""
-    if current_user.role != UserRole.admin:
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores",
@@ -71,9 +71,19 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+def require_admin_or_support(current_user: User = Depends(get_current_user)) -> User:
+    """Permite ver usuarios y su soporte a administradores y al rol de soporte."""
+    if not (current_user.is_admin or current_user.is_support):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores o soporte pueden ver esta información",
+        )
+    return current_user
+
+
 def require_application_reviewer(current_user: User = Depends(get_current_user)) -> User:
     """Permite revisar postulaciones medicas a administradores y revisores."""
-    if not (current_user.role == UserRole.admin or current_user.role == UserRole.reviewer or current_user.is_reviewer):
+    if not (current_user.is_admin or current_user.is_reviewer):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores o revisores pueden gestionar postulaciones medicas",

@@ -1,11 +1,12 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { hasRole } from '../../utils/roles'
 
 /**
- * Acceso al panel médico basado en capacidad, no en rol.
+ * Acceso al panel médico basado en capacidad (DoctorProfile), no solo en el rol.
  *
  * Se permite si el usuario tiene un DoctorProfile (doctor_status no nulo),
- * aunque su rol principal sea reviewer o admin.
+ * aunque además sea revisor o admin.
  */
 export default function DoctorRoute() {
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -20,10 +21,10 @@ export default function DoctorRoute() {
   }
 
   if (!user?.doctor_status) {
-    if (user?.role === 'admin') {
+    if (hasRole(user, 'admin')) {
       return <Navigate to="/admin" replace />
     }
-    if (user?.role === 'reviewer') {
+    if (hasRole(user, 'reviewer')) {
       return <Navigate to="/reviewer/doctor-applications" replace />
     }
     return <Navigate to="/" replace />

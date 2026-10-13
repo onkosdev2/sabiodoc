@@ -25,6 +25,13 @@ class WalletTransactionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DoctorIncomeSummary(BaseModel):
+    gross_income_cents: int = 0
+    platform_fee_cents: int = 0
+    net_income_cents: int = 0
+    completed_count: int = 0
+
+
 class WalletResponse(BaseModel):
     # Saldo en centavos y su equivalente en créditos (1 crédito = 1 USD).
     balance_cents: int
@@ -32,6 +39,11 @@ class WalletResponse(BaseModel):
     currency: str
     min_topup_cents: int
     min_withdrawal_cents: int
+    # Comisión de la plataforma vigente (para que el médico entienda sus ingresos).
+    platform_fee_bps: int = 0
+    platform_fee_percent: float = 0
+    # Resumen de ingresos del médico (solo si el usuario tiene perfil médico).
+    income_summary: Optional[DoctorIncomeSummary] = None
     transactions: list[WalletTransactionResponse] = []
 
 
@@ -56,6 +68,9 @@ class WithdrawalResponse(BaseModel):
     amount_cents: int
     status: WithdrawalStatus
     destination: str
+    provider: Optional[str] = None
+    provider_reference: Optional[str] = None
+    failure_reason: Optional[str] = None
     admin_notes: Optional[str] = None
     requested_at: Optional[datetime] = None
     processed_at: Optional[datetime] = None
@@ -67,11 +82,6 @@ class WithdrawalResponse(BaseModel):
 class WithdrawalListResponse(BaseModel):
     withdrawals: list[WithdrawalResponse]
     total: int
-
-
-class WithdrawalProcessRequest(BaseModel):
-    approve: bool
-    notes: Optional[str] = Field(default=None, max_length=1000)
 
 
 class AppointmentPaymentResponse(BaseModel):

@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_CURRENCY: str = "usd"
+
+    # Pasarela de payouts (retiros). "mock" no mueve dinero real; "stripe" usa
+    # Stripe Connect (Transfers) hacia la cuenta de destino.
+    PAYOUT_PROVIDER: str = "mock"
+    # Secreto para validar la firma de los webhooks de Stripe.
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
     
     VIDEO_PRICE_MIN_CENTS: int = 10
     VIDEO_PRICE_MAX_CENTS: int = 30000
@@ -103,13 +109,23 @@ class Settings(BaseSettings):
     # Presencia de medicos: se considera "activo" si tuvo actividad en esta ventana.
     DOCTOR_PRESENCE_ONLINE_MINUTES: int = 5
 
+    # Registro de errores para el panel de administracion.
+    # Los errores mas antiguos se purgan automaticamente.
+    ERROR_LOG_RETENTION_DAYS: int = 60
+    # Limite de caracteres guardados por campo de texto largo (stack/contexto).
+    ERROR_LOG_MAX_TEXT_CHARS: int = 20000
+
+    # Tickets de soporte: maximo de adjuntos por mensaje.
+    SUPPORT_TICKET_MAX_ATTACHMENTS: int = 5
+
     # Creditos (dinero de pruebas): 1 credito = 1 USD = 100 centavos.
     CREDITS_CURRENCY: str = "usd"
     WALLET_MIN_TOPUP_CENTS: int = 500
     WALLET_MAX_TOPUP_CENTS: int = 100000
     WALLET_MIN_WITHDRAWAL_CENTS: int = 1000
     # Comision de la plataforma sobre cada cita, en puntos basicos (100 = 1%).
-    PLATFORM_FEE_BPS: int = 0
+    # 2000 = 20%: el medico recibe el 80% de lo que cobra.
+    PLATFORM_FEE_BPS: int = 2000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

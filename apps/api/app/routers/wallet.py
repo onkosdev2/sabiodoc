@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
 from app.core.logging import get_logger
+from app.models.doctor_profile import DoctorProfile
 from app.models.user import User
 from app.models.wallet import Withdrawal
 from app.schemas.wallet import (
@@ -26,7 +27,15 @@ def get_my_wallet(
     current_user: User = Depends(get_current_user),
 ):
     """Saldo de créditos y movimientos recientes del usuario actual."""
-    payload = wallet_service.build_wallet_response(db, current_user.id, limit=limit)
+    doctor_profile = (
+        db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
+    )
+    payload = wallet_service.build_wallet_response(
+        db,
+        current_user.id,
+        limit=limit,
+        doctor_profile_id=doctor_profile.id if doctor_profile else None,
+    )
     response = WalletResponse.model_validate(payload)
     db.commit()
     return response

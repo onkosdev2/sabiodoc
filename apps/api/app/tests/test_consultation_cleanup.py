@@ -15,8 +15,8 @@ def _make_user(db) -> User:
     user = User(
         email=f"cleanup_{uuid.uuid4().hex[:8]}@example.com",
         password_hash="x",
-        role=UserRole.patient,
     )
+    user.set_roles({UserRole.patient})
     db.add(user)
     db.commit()
     db.refresh(user)

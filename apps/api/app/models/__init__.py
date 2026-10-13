@@ -8,6 +8,7 @@ from app.models.doctor_presence import DoctorPresence
 from app.models.doctor_profile import DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.error_log import ErrorLog
 from app.models.favorite import Favorite
 from app.models.notification import Notification
 from app.models.password_reset_token import PasswordResetToken
@@ -15,8 +16,13 @@ from app.models.patient_profile import PatientProfile
 from app.models.patient_profile_change_request import PatientProfileChangeRequest
 from app.models.review_report import ReviewReport, ReviewReportStatus
 from app.models.specialty import Specialty
+from app.models.support_ticket import (
+    SupportTicket,
+    SupportTicketAttachment,
+    SupportTicketMessage,
+)
 from app.models.triage_request import TriageRequest
-from app.models.user import User
+from app.models.user import User, UserRoleAssignment
 from app.models.video_session import VideoSession
 from app.models.video_session_event import VideoSessionEvent
 from app.models.video_session_file import VideoSessionFile

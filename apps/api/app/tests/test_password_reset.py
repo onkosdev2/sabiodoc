@@ -21,8 +21,8 @@ def _make_user(password: str = "OldPass123!") -> User:
         user = User(
             email=f"reset_{uuid.uuid4().hex[:8]}@example.com",
             password_hash=get_password_hash(password),
-            role=UserRole.patient,
         )
+        user.set_roles({UserRole.patient})
         db.add(user)
         db.commit()
         db.refresh(user)

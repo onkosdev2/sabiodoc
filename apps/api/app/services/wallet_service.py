@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import math
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -18,6 +19,7 @@ from app.models.wallet import (
     Withdrawal,
     WithdrawalStatus,
 )
+from app.services.payout_service import payout_service
 from app.services.pricing_service import pricing_service
 
 logger = get_logger(__name__)
@@ -35,6 +37,52 @@ class WalletService:
     (`SELECT ... FOR UPDATE`) para evitar saldos negativos por concurrencia.
     Las operaciones no hacen commit: el llamador controla la transacción.
     """
+
+    @staticmethod
+    def platform_fee_cents(amount_cents: int) -> int:
+        """Comisión de la plataforma sobre un monto bruto (redondeo hacia abajo)."""
+        if amount_cents <= 0:
+            return 0
+        return amount_cents * settings.PLATFORM_FEE_BPS // 10000
+
+    @staticmethod
+    def doctor_net_cents(amount_cents: int) -> int:
+        """Lo que recibe el médico tras descontar la comisión de la plataforma."""
+        return max(0, amount_cents - WalletService.platform_fee_cents(amount_cents))
+
+    @staticmethod
+    def platform_fee_percent() -> float:
+        return round(settings.PLATFORM_FEE_BPS / 100, 2)
+
+    def doctor_income_summary(self, db: Session, doctor_profile_id: int) -> dict:
+        """Totales históricos de ingresos del médico, con bruto/comisión/neto.
+
+        Se calculan sobre citas ya liquidadas (``released``), que son las que
+        generaron el ingreso efectivo al monedero del médico.
+        """
+        row = (
+            db.query(
+                func.coalesce(func.sum(AppointmentPayment.billable_amount_cents), 0),
+                func.coalesce(func.sum(AppointmentPayment.platform_fee_cents), 0),
+                func.coalesce(func.sum(AppointmentPayment.doctor_amount_cents), 0),
+                func.count(AppointmentPayment.id),
+            )
+            .filter(
+                AppointmentPayment.doctor_id == doctor_profile_id,
+                AppointmentPayment.status == AppointmentPaymentStatus.released,
+            )
+            .one()
+        )
+        gross_cents = int(row[0] or 0)
+        fee_cents = int(row[1] or 0)
+        net_cents = int(row[2] or 0)
+        count = int(row[3] or 0)
+        return {
+            "gross_income_cents": gross_cents,
+            "platform_fee_cents": fee_cents,
+            "net_income_cents": net_cents,
+            "completed_count": count,
+        }
 
     def get_or_create_wallet(self, db: Session, user_id: int) -> Wallet:
         wallet = (
@@ -128,75 +176,137 @@ class WalletService:
             user_id=user_id,
             amount_cents=amount_cents,
             destination=destination,
-            status=WithdrawalStatus.pending,
+            status=WithdrawalStatus.processing,
+            provider=payout_service.provider_name,
         )
         db.add(withdrawal)
         db.flush()
 
-        # El monto queda retenido: se descuenta ahora y se confirma (o reembolsa) al procesar.
-        self._apply(
+        # El monto se descuenta al solicitar. Si el proveedor confirma el envío
+        # pasa a ``completed``; si falla, se reembolsa (transacción ``reversed``).
+        transaction = self._apply(
             db,
             wallet,
             amount_cents=-amount_cents,
             tx_type=WalletTransactionType.withdrawal,
-            description=f"Retiro #{withdrawal.id} solicitado",
+            description=f"Retiro #{withdrawal.id}",
             reference_type="withdrawal",
             reference_id=withdrawal.id,
             tx_status=WalletTransactionStatus.pending,
         )
-        logger.info(f"Withdrawal requested: user_id={user_id}, amount_cents={amount_cents}")
+
+        try:
+            result = payout_service.create_payout(withdrawal)
+        except Exception as exc:  # pragma: no cover - depende del proveedor
+            logger.error(
+                f"Payout no pudo iniciarse para withdrawal #{withdrawal.id}: {exc}",
+                exc_info=True,
+            )
+            # La transacción completa (débito + retiro) se revierte: si la
+            # pasarela no aceptó la solicitud, no se cobra nada al usuario.
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No se pudo procesar el retiro con la pasarela de pagos. Intenta de nuevo.",
+            ) from exc
+
+        withdrawal.provider_reference = result.reference or withdrawal.provider_reference
+        if result.status == "paid":
+            self._confirm_withdrawal(db, withdrawal, transaction)
+        else:
+            db.flush()
+
+        logger.info(
+            f"Withdrawal {withdrawal.status.value}: id={withdrawal.id}, "
+            f"user_id={user_id}, amount_cents={amount_cents}, provider={withdrawal.provider}"
+        )
         return withdrawal
 
-    def process_withdrawal(
-        self,
-        db: Session,
-        withdrawal: Withdrawal,
-        *,
-        approve: bool,
-        admin_user_id: int,
-        notes: str | None = None,
-    ) -> Withdrawal:
-        if withdrawal.status != WithdrawalStatus.pending:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Este retiro ya fue procesado",
-            )
-
-        pending_tx = (
+    def _withdrawal_transaction(self, db: Session, withdrawal_id: int) -> WalletTransaction | None:
+        return (
             db.query(WalletTransaction)
             .filter(
                 WalletTransaction.reference_type == "withdrawal",
-                WalletTransaction.reference_id == withdrawal.id,
+                WalletTransaction.reference_id == withdrawal_id,
                 WalletTransaction.type == WalletTransactionType.withdrawal,
             )
             .first()
         )
 
+    def _confirm_withdrawal(
+        self,
+        db: Session,
+        withdrawal: Withdrawal,
+        transaction: WalletTransaction | None = None,
+    ) -> None:
+        withdrawal.status = WithdrawalStatus.paid
+        withdrawal.processed_at = withdrawal.processed_at or datetime.now(UTC)
+        transaction = transaction or self._withdrawal_transaction(db, withdrawal.id)
+        if transaction is not None:
+            transaction.status = WalletTransactionStatus.completed
+        db.flush()
+
+    def _fail_withdrawal(
+        self,
+        db: Session,
+        withdrawal: Withdrawal,
+        transaction: WalletTransaction | None,
+        *,
+        reason: str,
+    ) -> None:
+        withdrawal.status = WithdrawalStatus.failed
+        withdrawal.failure_reason = reason
         withdrawal.processed_at = datetime.now(UTC)
-        withdrawal.processed_by_user_id = admin_user_id
-        withdrawal.admin_notes = notes
+        transaction = transaction or self._withdrawal_transaction(db, withdrawal.id)
+        if transaction is not None:
+            transaction.status = WalletTransactionStatus.reversed
+        wallet = self.get_or_create_wallet(db, withdrawal.user_id)
+        self._apply(
+            db,
+            wallet,
+            amount_cents=withdrawal.amount_cents,
+            tx_type=WalletTransactionType.refund,
+            description=f"Retiro #{withdrawal.id} fallido",
+            reference_type="withdrawal",
+            reference_id=withdrawal.id,
+        )
+        db.flush()
 
-        if approve:
-            withdrawal.status = WithdrawalStatus.paid
-            if pending_tx:
-                pending_tx.status = WalletTransactionStatus.completed
-            logger.info(f"Withdrawal paid: id={withdrawal.id}, amount_cents={withdrawal.amount_cents}")
-        else:
-            withdrawal.status = WithdrawalStatus.rejected
-            if pending_tx:
-                pending_tx.status = WalletTransactionStatus.reversed
-            wallet = self.get_or_create_wallet(db, withdrawal.user_id)
-            self._apply(
+    def handle_payout_event(
+        self,
+        db: Session,
+        *,
+        provider_reference: str,
+        status: str,
+        failure_reason: str | None = None,
+    ) -> Withdrawal | None:
+        """Aplica el webhook del proveedor. Idempotente por referencia externa."""
+        withdrawal = (
+            db.query(Withdrawal)
+            .filter(Withdrawal.provider_reference == provider_reference)
+            .with_for_update()
+            .first()
+        )
+        if withdrawal is None:
+            return None
+        # Si ya está resuelto no se vuelve a aplicar (reintentos del webhook).
+        if withdrawal.status in {
+            WithdrawalStatus.paid,
+            WithdrawalStatus.failed,
+            WithdrawalStatus.rejected,
+        }:
+            return withdrawal
+
+        if status == "paid":
+            self._confirm_withdrawal(db, withdrawal)
+        elif status in {"failed", "canceled", "cancelled"}:
+            self._fail_withdrawal(
                 db,
-                wallet,
-                amount_cents=withdrawal.amount_cents,
-                tx_type=WalletTransactionType.refund,
-                description=f"Retiro #{withdrawal.id} rechazado",
-                reference_type="withdrawal",
-                reference_id=withdrawal.id,
+                withdrawal,
+                None,
+                reason=failure_reason or "El proveedor rechazó el retiro",
             )
-            logger.info(f"Withdrawal rejected: id={withdrawal.id}")
-
+        else:
+            return withdrawal
         db.flush()
         return withdrawal
 
@@ -232,7 +342,7 @@ class WalletService:
                 },
             )
 
-        platform_fee = amount_cents * settings.PLATFORM_FEE_BPS // 10000
+        platform_fee = self.platform_fee_cents(amount_cents)
         doctor_amount = amount_cents - platform_fee
 
         self._apply(
@@ -411,7 +521,7 @@ class WalletService:
                 reference_id=appointment.id,
             )
 
-        platform_fee = actual_amount * settings.PLATFORM_FEE_BPS // 10000
+        platform_fee = self.platform_fee_cents(actual_amount)
         doctor_amount = actual_amount - platform_fee
         if doctor_amount > 0:
             wallet = self.get_or_create_wallet(db, appointment.doctor.user_id)
@@ -478,15 +588,29 @@ class WalletService:
         )
         return transactions, total
 
-    def build_wallet_response(self, db: Session, user_id: int, limit: int = 20) -> dict:
+    def build_wallet_response(
+        self,
+        db: Session,
+        user_id: int,
+        limit: int = 20,
+        doctor_profile_id: int | None = None,
+    ) -> dict:
         wallet = self.get_or_create_wallet(db, user_id)
         transactions, _total = self.list_transactions(db, user_id, limit=limit, offset=0)
+        income_summary = (
+            self.doctor_income_summary(db, doctor_profile_id)
+            if doctor_profile_id is not None
+            else None
+        )
         return {
             "balance_cents": wallet.balance_cents or 0,
             "credits": cents_to_credits(wallet.balance_cents or 0),
             "currency": settings.CREDITS_CURRENCY,
             "min_topup_cents": settings.WALLET_MIN_TOPUP_CENTS,
             "min_withdrawal_cents": settings.WALLET_MIN_WITHDRAWAL_CENTS,
+            "platform_fee_bps": settings.PLATFORM_FEE_BPS,
+            "platform_fee_percent": self.platform_fee_percent(),
+            "income_summary": income_summary,
             "transactions": transactions,
         }
 

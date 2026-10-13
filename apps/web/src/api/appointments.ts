@@ -63,6 +63,9 @@ export interface Appointment {
   review_comment: string | null
   payment_amount_cents: number | null
   payment_status: 'held' | 'released' | 'refunded' | null
+  payment_platform_fee_cents: number | null
+  payment_doctor_amount_cents: number | null
+  platform_fee_percent: number
   files: VideoSessionFile[]
   files_enabled: boolean
 }

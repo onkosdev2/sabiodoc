@@ -94,15 +94,15 @@ export const revokeReviewer = async (userId: number): Promise<void> => {
   await client.delete(`/admin/reviewers/${userId}`)
 }
 
-export type AdminUserRole = 'patient' | 'doctor' | 'reviewer' | 'admin'
+export type AdminUserRole = 'patient' | 'doctor' | 'reviewer' | 'admin' | 'support'
 
 export interface AdminUser {
   id: number
   email: string
   full_name: string | null
   role: AdminUserRole
+  roles: AdminUserRole[]
   doctor_status: 'pending' | 'approved' | 'rejected' | 'suspended' | null
-  is_reviewer: boolean
   created_at: string
 }
 
@@ -114,20 +114,17 @@ export interface AdminUserListResponse {
 export interface AdminUserCreatePayload {
   email: string
   password: string
-  role: AdminUserRole
-  is_reviewer?: boolean
+  roles: AdminUserRole[]
 }
 
 export interface AdminUserUpdatePayload {
   email?: string
   password?: string
-  role?: AdminUserRole
-  is_reviewer?: boolean
+  roles?: AdminUserRole[]
 }
 
 export interface AdminUserQuery {
   role?: AdminUserRole
-  is_reviewer?: boolean
   search?: string
   limit?: number
   offset?: number
@@ -140,6 +137,155 @@ export const getAdminUsers = async (params: AdminUserQuery = {}): Promise<AdminU
 
 export const getAdminUser = async (userId: number): Promise<AdminUser> => {
   const response = await client.get<AdminUser>(`/admin/users/${userId}`)
+  return response.data
+}
+
+export interface SupportCounterpart {
+  user_id: number | null
+  name: string | null
+  email: string | null
+  role: 'doctor' | 'patient' | string | null
+}
+
+export interface SupportDoctorProfile {
+  doctor_id: number
+  display_name: string
+  professional_title: string | null
+  price_per_min_cents: number
+  status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  rating_avg: number
+  rating_count: number
+  is_accepting_consultations: boolean
+  specialties: string[]
+}
+
+export interface SupportUserSummary {
+  id: number
+  email: string
+  roles: AdminUserRole[]
+  primary_role: AdminUserRole
+  doctor_status: 'pending' | 'approved' | 'rejected' | 'suspended' | null
+  is_email_verified: boolean
+  created_at: string | null
+  session_version: number
+}
+
+export interface SupportStats {
+  appointments_total: number
+  appointments_completed: number
+  appointments_no_show: number
+  video_sessions_total: number
+  consultations_total: number
+  unread_notifications: number
+  errors_total: number
+}
+
+export interface SupportAppointmentItem {
+  id: number
+  specialty_name: string
+  status: string
+  scheduled_at: string
+  duration_minutes: number
+  counterpart: SupportCounterpart
+  payment_amount_cents: number | null
+  payment_status: string | null
+  payment_doctor_amount_cents: number | null
+  video_session_id: number | null
+  created_at: string | null
+}
+
+export interface SupportVideoSessionItem {
+  id: number
+  status: string
+  provider: string
+  room_name: string
+  counterpart: SupportCounterpart
+  appointment_id: number | null
+  consultation_id: number | null
+  created_at: string | null
+  started_at: string | null
+  ended_at: string | null
+  billable_seconds: number
+  price_per_min_cents: number
+  prepaid_amount_cents: number
+  closed_reason: string | null
+}
+
+export interface SupportConsultationItem {
+  id: number
+  status: string
+  specialty_name: string
+  created_at: string | null
+  closed_at: string | null
+  auto_closed: boolean
+  has_summary: boolean
+}
+
+export interface SupportWalletTransaction {
+  id: number
+  type: string
+  status: string
+  amount_cents: number
+  balance_after_cents: number
+  description: string
+  reference_type: string | null
+  reference_id: number | null
+  created_at: string | null
+}
+
+export interface SupportWithdrawal {
+  id: number
+  amount_cents: number
+  status: string
+  destination: string
+  provider: string | null
+  provider_reference: string | null
+  failure_reason: string | null
+  created_at: string | null
+}
+
+export interface SupportErrorItem {
+  id: number
+  created_at: string | null
+  level: string
+  source: string
+  status_code: number | null
+  method: string | null
+  path: string | null
+  error_type: string | null
+  message: string
+  request_id: string | null
+  video_session_id: number | null
+}
+
+export interface SupportNotificationItem {
+  id: number
+  type: string
+  title: string
+  body: string
+  action_url: string | null
+  created_at: string | null
+}
+
+export interface AdminUserSupport {
+  user: SupportUserSummary
+  doctor_profile: SupportDoctorProfile | null
+  active_session: SupportVideoSessionItem | null
+  next_appointment: SupportAppointmentItem | null
+  stats: SupportStats
+  appointments: SupportAppointmentItem[]
+  video_sessions: SupportVideoSessionItem[]
+  consultations: SupportConsultationItem[]
+  wallet_balance_cents: number
+  transactions: SupportWalletTransaction[]
+  withdrawals: SupportWithdrawal[]
+  errors: SupportErrorItem[]
+  notifications: SupportNotificationItem[]
+}
+
+/** Vista de soporte 360° de un usuario (citas, videoconsultas, monedero, errores...). */
+export const getAdminUserSupport = async (userId: number): Promise<AdminUserSupport> => {
+  const response = await client.get<AdminUserSupport>(`/admin/users/${userId}/support`)
   return response.data
 }
 

@@ -255,7 +255,7 @@ def get_appointment(
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
-    if current_user.role != UserRole.admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
+    if not current_user.is_admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes ver esta cita")
     return appointment_service.serialize_appointment(
         appointment,
@@ -345,7 +345,7 @@ def cancel_appointment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
     if appointment.status != AppointmentStatus.scheduled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se pueden cancelar citas programadas")
-    if current_user.role != UserRole.admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
+    if not current_user.is_admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes cancelar esta cita")
 
     appointment.status = AppointmentStatus.cancelled
@@ -396,7 +396,7 @@ def reschedule_appointment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
     if appointment.status != AppointmentStatus.scheduled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se pueden reprogramar citas programadas")
-    if current_user.role != UserRole.admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
+    if not current_user.is_admin and appointment.patient_id != current_user.id and appointment.doctor.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes reprogramar esta cita")
 
     scheduled_at = payload.scheduled_at.astimezone(UTC)
@@ -461,7 +461,7 @@ def mark_appointment_no_show(
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
-    is_admin = current_user.role == UserRole.admin
+    is_admin = current_user.is_admin
     is_doctor_of_appointment = appointment.doctor is not None and appointment.doctor.user_id == current_user.id
     if not is_admin and not is_doctor_of_appointment:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico de la cita o un administrador pueden marcar la inasistencia")

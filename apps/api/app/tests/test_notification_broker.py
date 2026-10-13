@@ -37,8 +37,8 @@ def test_notification_is_published_only_after_commit():
         user = User(
             email=f"broker_{uuid.uuid4().hex[:8]}@example.com",
             password_hash="x",
-            role=UserRole.patient,
         )
+        user.set_roles({UserRole.patient})
         db.add(user)
         db.commit()
         db.refresh(user)

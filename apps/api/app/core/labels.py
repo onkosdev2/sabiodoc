@@ -67,6 +67,7 @@ AUDIT_ACTION_LABELS: dict[str, str] = {
     "specialty.updated": "Especialidad actualizada",
     "user.created": "Usuario creado",
     "user.deleted": "Usuario eliminado",
+    "user.password_changed": "Contraseña cambiada",
     "user.updated": "Usuario actualizado",
     "video_session.completed": "Videoconsulta finalizada",
     "video_session.doctor_note_updated": "Nota clínica actualizada",

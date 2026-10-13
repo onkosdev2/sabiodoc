@@ -22,7 +22,8 @@ client = TestClient(app)
 
 
 def _make_user(db, role: UserRole) -> User:
-    user = User(email=f"apptfile_{uuid.uuid4().hex[:8]}@example.com", password_hash="x", role=role)
+    user = User(email=f"apptfile_{uuid.uuid4().hex[:8]}@example.com", password_hash="x")
+    user.set_roles({role})
     db.add(user)
     db.commit()
     db.refresh(user)

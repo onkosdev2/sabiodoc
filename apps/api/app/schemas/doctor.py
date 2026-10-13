@@ -139,6 +139,9 @@ class DoctorApplicationResponse(BaseModel):
     professional_title: str | None = None
     bio_short: Optional[str] = None
     price_per_min_cents: int
+    # Lo que recibe el médico tras la comisión de la plataforma.
+    platform_fee_percent: float = 0
+    net_price_per_min_cents: int = 0
     license_number: str | None = None
     license_country: str | None = None
     specialist_registry_number: str | None = None

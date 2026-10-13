@@ -12,6 +12,7 @@ import Button from '../components/ui/Button'
 import Checkbox from '../components/ui/Checkbox'
 import { Input, PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { hasRole } from '../utils/roles'
 import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
 
 interface FieldErrors {
@@ -63,11 +64,13 @@ export default function Login() {
       authLogin(response.access_token, response.user, remember)
       if (response.user.doctor_status === 'approved') {
         navigate('/doctor')
-      } else if (response.user.role === 'admin') {
+      } else if (hasRole(response.user, 'admin')) {
         navigate('/admin')
-      } else if (response.user.is_reviewer || response.user.role === 'reviewer') {
+      } else if (hasRole(response.user, 'reviewer')) {
         navigate('/reviewer/doctor-applications')
-      } else if (response.user.role === 'doctor') {
+      } else if (hasRole(response.user, 'support')) {
+        navigate('/support/tickets')
+      } else if (hasRole(response.user, 'doctor')) {
         navigate('/doctor/pending')
       } else {
         navigate(await getPatientLandingPath())

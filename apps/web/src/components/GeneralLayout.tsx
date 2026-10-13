@@ -1,11 +1,12 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, History, UserRound, Wallet,
+  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, History, UserRound, Wallet, LifeBuoy,
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationsContext'
 import UserMenu, { UserMenuItem } from './UserMenu'
+import { hasRole } from '../utils/roles'
 
 // Páginas de autenticación: al navegar entre ellas no deben apilarse en el historial.
 const AUTH_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/doctor/apply']
@@ -31,18 +32,23 @@ export default function GeneralLayout() {
     [
       { to: '/me/favorites', label: 'Favoritos', icon: Heart },
       { to: '/me/profile', label: 'Mi perfil de paciente', icon: UserRound },
+      { to: '/me/security', label: 'Seguridad', icon: ShieldCheck },
+      { to: '/help', label: 'Ayuda y soporte', icon: LifeBuoy },
     ],
   ]
 
-  // Enlaces a los paneles segun rol/capacidades
+  // Enlaces a los paneles segun roles/capacidades.
   const roleItems: UserMenuItem[] = []
-  if (user?.role === 'doctor' || user?.doctor_status) {
+  if (hasRole(user, 'doctor') || user?.doctor_status) {
     roleItems.push({ to: '/doctor', label: 'Panel médico', icon: Briefcase })
   }
-  if ((user?.is_reviewer || user?.role === 'reviewer') && user?.role !== 'admin') {
+  if (hasRole(user, 'reviewer') && !hasRole(user, 'admin')) {
     roleItems.push({ to: '/reviewer/doctor-applications', label: 'Panel de revisión', icon: ShieldCheck })
   }
-  if (user?.role === 'admin') {
+  if (hasRole(user, 'support') && !hasRole(user, 'admin')) {
+    roleItems.push({ to: '/support/tickets', label: 'Panel de soporte', icon: LifeBuoy })
+  }
+  if (hasRole(user, 'admin')) {
     roleItems.push({ to: '/admin', label: 'Panel Admin', icon: ShieldCheck })
   }
   if (roleItems.length > 0) {

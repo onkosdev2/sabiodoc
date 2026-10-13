@@ -52,6 +52,7 @@ import { deleteFile } from '../api/files'
 import JitsiMeeting from '../components/JitsiMeeting'
 import SessionFilesPanel from '../components/SessionFilesPanel'
 import { getApiErrorMessage } from '../utils/apiError'
+import { reportClientError } from '../utils/clientErrorReporter'
 
 type PreparedVideoSession = {
   video_session_id: number
@@ -195,7 +196,17 @@ export default function VideoConsultationRoom() {
         }
       } catch (statusError: any) {
         if (!cancelled) {
-          setError(getApiErrorMessage(statusError, 'No se pudo consultar el estado de la videoconsulta.'))
+          const message = getApiErrorMessage(statusError, 'No se pudo consultar el estado de la videoconsulta.')
+          setError(message)
+          reportClientError({
+            message,
+            error: statusError,
+            errorType: 'VideoStatusPollError',
+            videoSessionId: session.video_session_id,
+            appointmentId: session.appointment_id ?? null,
+            consultationId: session.consultation_id ?? null,
+            context: { room_url: session.room_url, provider: session.provider },
+          })
         }
       } finally {
         if (!cancelled) {
@@ -295,7 +306,17 @@ export default function VideoConsultationRoom() {
       setJoined(true)
     } catch (joinError: any) {
       console.error('Error joining video room:', joinError)
-      setError(getApiErrorMessage(joinError, 'No se pudo entrar a la sala de videoconsulta.'))
+      const message = getApiErrorMessage(joinError, 'No se pudo entrar a la sala de videoconsulta.')
+      setError(message)
+      reportClientError({
+        message,
+        error: joinError,
+        errorType: 'VideoJoinError',
+        videoSessionId: session.video_session_id,
+        appointmentId: session.appointment_id ?? null,
+        consultationId: session.consultation_id ?? null,
+        context: { room_url: session.room_url, provider: session.provider },
+      })
     } finally {
       setJoining(false)
     }
@@ -447,9 +468,17 @@ export default function VideoConsultationRoom() {
       stream.getTracks().forEach((track) => track.stop())
       setMediaStatus('ok')
       toast.success('Cámara y micrófono listos.')
-    } catch {
+    } catch (mediaError) {
       setMediaStatus('denied')
       toast.error('No pudimos acceder a tu cámara o micrófono. Revisa los permisos del navegador.')
+      reportClientError({
+        message: 'Permiso de cámara o micrófono denegado o no disponible',
+        error: mediaError,
+        errorType: 'MediaDevicesError',
+        videoSessionId: session?.video_session_id ?? null,
+        appointmentId: session?.appointment_id ?? null,
+        context: { room_url: session?.room_url, provider: session?.provider },
+      })
     }
   }
 
@@ -681,6 +710,32 @@ export default function VideoConsultationRoom() {
           </p>
         </div>
       </div>
+
+      {isDoctor && (
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-sm">
+          <p className="font-medium text-emerald-900">Tus ingresos de esta sesión</p>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <p className="text-slate-500">Bruto</p>
+              <p className="font-semibold text-slate-800">{formatMoney(currentCostCents)}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">
+                Comisión {((statusData?.platform_fee_bps ?? 0) / 100).toFixed(0)}%
+              </p>
+              <p className="font-semibold text-amber-700">
+                −{formatMoney(statusData?.platform_fee_cents ?? 0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-500">Recibes</p>
+              <p className="font-semibold text-emerald-700">
+                {formatMoney(statusData?.doctor_amount_cents ?? 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div
         className={`rounded-xl px-3 py-2 text-sm ${
@@ -999,7 +1054,22 @@ export default function VideoConsultationRoom() {
                   onLeft={() => {
                     void handleLeave()
                   }}
-                  onError={(message) => setError(message)}
+                  onError={(message) => {
+                    setError(message)
+                    reportClientError({
+                      message,
+                      errorType: 'JitsiMeetingError',
+                      videoSessionId: session.video_session_id,
+                      appointmentId: session.appointment_id ?? null,
+                      consultationId: session.consultation_id ?? null,
+                      context: {
+                        room_url: session.room_url,
+                        provider: session.provider,
+                        component: 'JitsiMeeting',
+                        participant_role: session.participant_role,
+                      },
+                    })
+                  }}
                 />
               ) : (
                 <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8 text-center text-white">

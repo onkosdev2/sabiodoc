@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { ChevronDown, Home, LogOut, UserRound } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
+import { userRoleLabels } from '../utils/roles'
 
 export interface UserMenuItem {
   to: string
@@ -23,13 +24,6 @@ interface UserMenuProps {
    * "patient" -> nombre del perfil de paciente; "professional" -> nombre del perfil médico.
    */
   nameContext?: 'patient' | 'professional'
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  patient: 'Paciente',
-  doctor: 'Médico',
-  reviewer: 'Revisor',
-  admin: 'Administrador',
 }
 
 /**
@@ -79,10 +73,8 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
     navigate('/')
   }
 
-  const roleParts = new Set<string>()
-  if (user?.role) roleParts.add(ROLE_LABELS[user.role] || 'Usuario')
-  if (user?.doctor_status) roleParts.add('Médico')
-  const roleLabel = Array.from(roleParts).join(' · ')
+  const roleParts = userRoleLabels(user)
+  const roleLabel = roleParts.length > 0 ? roleParts.join(' · ') : 'Usuario'
 
   // El nombre mostrado depende del contexto: en el portal del paciente usamos su
   // perfil de paciente; en los paneles profesionales, el nombre del médico.

@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { hasAnyRole, hasRole } from '../../utils/roles'
 
 /**
  * Permite el acceso al panel de revisión a revisores y administradores.
@@ -17,9 +18,9 @@ export default function ReviewerRoute() {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (user?.role !== 'reviewer' && user?.role !== 'admin' && !user?.is_reviewer) {
-    if (user?.role === 'doctor') {
-      return <Navigate to={user.doctor_status === 'approved' ? '/doctor' : '/doctor/pending'} replace />
+  if (!hasAnyRole(user, 'reviewer', 'admin')) {
+    if (hasRole(user, 'doctor')) {
+      return <Navigate to={user?.doctor_status === 'approved' ? '/doctor' : '/doctor/pending'} replace />
     }
     return <Navigate to="/" replace />
   }

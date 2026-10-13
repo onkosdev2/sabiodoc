@@ -127,9 +127,9 @@ def test_admin_puede_eliminar_usuario_con_tokens_de_verificacion():
         user = User(
             email=f"deltok_{uuid.uuid4().hex[:8]}@example.com",
             password_hash="x",
-            role=UserRole.patient,
             is_email_verified=False,
         )
+        user.set_roles({UserRole.patient})
         db.add(user)
         db.flush()
         db.add(

@@ -17,12 +17,15 @@ import {
   topupCredits,
   Wallet,
   WalletTransaction,
-  WalletTransactionType,
   Withdrawal,
 } from '../api/wallet'
 import { useToast } from '../context/ToastContext'
 import { getApiErrorMessage } from '../utils/apiError'
 import { formatMoney } from '../utils/format'
+import {
+  WALLET_TRANSACTION_TYPE_LABELS as TRANSACTION_LABELS,
+  WITHDRAWAL_STATUS_LABELS,
+} from '../utils/statusLabels'
 import Alert from '../components/ui/Alert'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -35,24 +38,11 @@ interface WalletPageProps {
 
 const QUICK_TOPUPS = [1000, 2000, 5000, 10000]
 
-const TRANSACTION_LABELS: Record<WalletTransactionType, string> = {
-  topup: 'Recarga',
-  withdrawal: 'Retiro',
-  consultation_payment: 'Pago de consulta',
-  consultation_income: 'Ingreso por consulta',
-  refund: 'Reembolso',
-  adjustment: 'Ajuste',
-}
-
-const WITHDRAWAL_STATUS_LABELS: Record<Withdrawal['status'], string> = {
-  pending: 'Pendiente',
-  paid: 'Pagado',
-  rejected: 'Rechazado',
-}
-
-const WITHDRAWAL_TONES: Record<Withdrawal['status'], 'warning' | 'success' | 'danger'> = {
+const WITHDRAWAL_TONES: Record<Withdrawal['status'], 'warning' | 'success' | 'danger' | 'neutral'> = {
   pending: 'warning',
+  processing: 'warning',
   paid: 'success',
+  failed: 'danger',
   rejected: 'danger',
 }
 
@@ -155,7 +145,11 @@ export default function WalletPage({ audience = 'patient' }: WalletPageProps) {
       setWallet(updated)
       setWithdrawAmount('')
       setWithdrawDestination('')
-      toast.success('Solicitud de retiro enviada. Quedará pendiente de revisión.')
+      toast.success(
+        created.status === 'paid'
+          ? 'Retiro procesado. El dinero se envió a tu cuenta.'
+          : 'Retiro en proceso. Te avisaremos cuando se confirme.',
+      )
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo solicitar el retiro.'))
     } finally {
@@ -218,6 +212,52 @@ export default function WalletPage({ audience = 'patient' }: WalletPageProps) {
         </div>
       </section>
 
+      {/* Ingresos del médico y comisión de la plataforma */}
+      {audience === 'professional' && wallet.income_summary && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Resumen de ingresos</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                La plataforma retiene una comisión del{' '}
+                <span className="font-semibold text-slate-900">{wallet.platform_fee_percent}%</span> sobre
+                lo que cobras. El resto se acredita a tu monedero.
+              </p>
+            </div>
+            <Badge tone="primary">Comisión {wallet.platform_fee_percent}%</Badge>
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ingresos brutos</p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">
+                {formatMoney(wallet.income_summary.gross_income_cents)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-amber-700">
+                Comisión {wallet.platform_fee_percent}%
+              </p>
+              <p className="mt-2 text-2xl font-bold text-amber-700">
+                −{formatMoney(wallet.income_summary.platform_fee_cents)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Ingresos netos</p>
+              <p className="mt-2 text-2xl font-bold text-emerald-700">
+                {formatMoney(wallet.income_summary.net_income_cents)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Citas liquidadas</p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">
+                {wallet.income_summary.completed_count}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recargar */}
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -274,7 +314,7 @@ export default function WalletPage({ audience = 'patient' }: WalletPageProps) {
             <h2 className="text-lg font-semibold text-slate-900">Retirar a mi cuenta</h2>
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            Convierte créditos en dinero. La solicitud queda pendiente de aprobación.
+            Convierte créditos en dinero. El retiro se procesa automáticamente al solicitarlo.
           </p>
 
           <div className="mt-4 space-y-3">
@@ -361,7 +401,7 @@ export default function WalletPage({ audience = 'patient' }: WalletPageProps) {
       {/* Retiros */}
       {withdrawals.length > 0 && (
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Mis solicitudes de retiro</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Mis retiros</h2>
           <ul className="mt-4 space-y-3">
             {withdrawals.map((withdrawal) => (
               <li
@@ -371,6 +411,9 @@ export default function WalletPage({ audience = 'patient' }: WalletPageProps) {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900">{formatMoney(withdrawal.amount_cents)}</p>
                   <p className="truncate text-xs text-slate-500">{withdrawal.destination}</p>
+                  {withdrawal.failure_reason && (
+                    <p className="mt-1 text-xs text-rose-600">Motivo: {withdrawal.failure_reason}</p>
+                  )}
                   {withdrawal.admin_notes && (
                     <p className="mt-1 text-xs text-slate-500">Nota: {withdrawal.admin_notes}</p>
                   )}

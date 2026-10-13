@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import { Activity, Banknote, CalendarDays, ClipboardCheck, Flag, LayoutDashboard, ShieldCheck, Stethoscope, Users } from 'lucide-react'
+import { Activity, Bug, CalendarDays, ClipboardCheck, Flag, Landmark, LayoutDashboard, ShieldCheck, Stethoscope, Users } from 'lucide-react'
 
 import PanelLayout from './PanelLayout'
 
@@ -17,13 +17,16 @@ export default function AdminLayout() {
           { to: '/admin/users', label: 'Usuarios', icon: Users },
           { to: '/admin/specialties', label: 'Especialidades', icon: Stethoscope },
           { to: '/admin/reviews', label: 'Reseñas', icon: Flag },
-          { to: '/admin/withdrawals', label: 'Retiros', icon: Banknote },
+          { to: '/admin/finance', label: 'Ingresos y salidas', icon: Landmark },
         ],
         // Supervisión y monitoreo.
         [
           { to: '/admin/appointments', label: 'Citas', icon: CalendarDays },
           { to: '/admin/system', label: 'Estado de la IA', icon: Activity },
+          { to: '/admin/errors', label: 'Errores del sistema', icon: Bug },
         ],
+        // Cuenta.
+        [{ to: '/admin/security', label: 'Seguridad', icon: ShieldCheck }],
       ]}
       notificationsTo="/admin/notifications"
     >

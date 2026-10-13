@@ -56,13 +56,13 @@ def test_create_approve_and_reject_flow():
     patient = User(
         email=f"change_patient_{uuid.uuid4().hex[:8]}@example.com",
         password_hash="x",
-        role=UserRole.patient,
     )
+    patient.set_roles({UserRole.patient})
     doctor_user = User(
         email=f"change_doctor_{uuid.uuid4().hex[:8]}@example.com",
         password_hash="x",
-        role=UserRole.doctor,
     )
+    doctor_user.set_roles({UserRole.doctor})
     db.add_all([patient, doctor_user])
     db.commit()
     db.refresh(patient)

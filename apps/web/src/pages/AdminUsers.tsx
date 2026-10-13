@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Loader2, MoreVertical, Pencil, RefreshCcw, Save, Trash2, UserPlus, X } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Loader2, MoreVertical, Pencil, Eye, RefreshCcw, Save, Trash2, UserPlus, X } from 'lucide-react'
 
 import {
   AdminUser,
@@ -15,42 +15,97 @@ import { useToast } from '../context/ToastContext'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Pagination from '../components/Pagination'
 import Alert from '../components/ui/Alert'
+import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import { Input, PasswordInput, Select } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { ROLE_LABELS as SHARED_ROLE_LABELS } from '../utils/roles'
+import { DOCTOR_STATUS_LABELS } from '../utils/statusLabels'
 import { usePagination } from '../hooks/usePagination'
 
-const ROLE_OPTIONS: AdminUserRole[] = ['patient', 'doctor', 'admin']
-// Opciones del filtro: los roles y, además, la capacidad de revisor.
-const FILTER_OPTIONS: Array<'all' | AdminUserRole> = ['all', 'patient', 'doctor', 'reviewer', 'admin']
+// El rol médico no se crea desde aquí (requiere postulación + perfil).
+const SELECTABLE_ROLES: AdminUserRole[] = ['patient', 'doctor', 'reviewer', 'support', 'admin']
+const FILTER_OPTIONS: Array<'all' | AdminUserRole> = ['all', 'patient', 'doctor', 'reviewer', 'support', 'admin']
 
 const isFilterRole = (value: string | null): value is 'all' | AdminUserRole =>
   value !== null && (FILTER_OPTIONS as readonly string[]).includes(value)
 
-const ROLE_LABELS: Record<AdminUserRole, string> = {
-  patient: 'Paciente',
-  doctor: 'Médico',
-  reviewer: 'Revisor',
-  admin: 'Administrador',
-}
+const ROLE_LABELS: Record<AdminUserRole, string> = SHARED_ROLE_LABELS
 
 const ROLE_BADGES: Record<AdminUserRole, string> = {
   patient: 'bg-slate-200 text-slate-800',
   doctor: 'bg-emerald-100 text-emerald-800',
   reviewer: 'bg-violet-100 text-violet-800',
+  support: 'bg-amber-100 text-amber-800',
   admin: 'bg-sky-100 text-sky-800',
 }
 
-const DOCTOR_STATUS_LABELS: Record<string, string> = {
-  pending: 'perfil pendiente',
-  approved: 'perfil aprobado',
-  rejected: 'perfil rechazado',
-  suspended: 'perfil suspendido',
+function sameRoles(a: AdminUserRole[], b: AdminUserRole[]): boolean {
+  if (a.length !== b.length) return false
+  const setB = new Set(b)
+  return a.every((role) => setB.has(role))
+}
+
+interface RoleSelectorProps {
+  label: string
+  value: AdminUserRole[]
+  onChange: (roles: AdminUserRole[]) => void
+  /** El rol médico solo se puede asignar si el usuario tiene perfil médico. */
+  doctorAvailable: boolean
+  /** Roles que no se pueden quitar (p. ej. el rol base paciente). */
+  lockedRoles?: AdminUserRole[]
+}
+
+function RoleSelector({ label, value, onChange, doctorAvailable, lockedRoles = [] }: RoleSelectorProps) {
+  const toggle = (role: AdminUserRole) => {
+    if (value.includes(role)) {
+      onChange(value.filter((item) => item !== role))
+    } else {
+      onChange([...value, role])
+    }
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-slate-700">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {SELECTABLE_ROLES.map((role) => {
+          const locked = lockedRoles.includes(role)
+          const disabled = locked || (role === 'doctor' && !doctorAvailable)
+          return (
+            <label
+              key={role}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                disabled
+                  ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+                  : 'border-slate-200 text-slate-700 hover:border-slate-400'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={value.includes(role)}
+                disabled={disabled}
+                onChange={() => toggle(role)}
+              />
+              {ROLE_LABELS[role]}
+            </label>
+          )
+        })}
+      </div>
+      {!doctorAvailable && (
+        <p className="mt-2 text-xs text-amber-700">
+          El rol «Médico» se habilita al completar la postulación y tener perfil médico.
+        </p>
+      )}
+    </div>
+  )
 }
 
 export default function AdminUsers() {
   const { user: currentUser } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -65,15 +120,13 @@ export default function AdminUsers() {
 
   const [createEmail, setCreateEmail] = useState('')
   const [createPassword, setCreatePassword] = useState('')
-  const [createRole, setCreateRole] = useState<AdminUserRole>('patient')
-  const [createIsReviewer, setCreateIsReviewer] = useState(false)
+  const [createRoles, setCreateRoles] = useState<AdminUserRole[]>(['patient'])
   const [creating, setCreating] = useState(false)
 
   const [selected, setSelected] = useState<AdminUser | null>(null)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [editEmail, setEditEmail] = useState('')
-  const [editRole, setEditRole] = useState<AdminUserRole>('patient')
-  const [editIsReviewer, setEditIsReviewer] = useState(false)
+  const [editRoles, setEditRoles] = useState<AdminUserRole[]>([])
   const [editPassword, setEditPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<AdminUser | null>(null)
@@ -89,8 +142,7 @@ export default function AdminUsers() {
     setError(null)
     try {
       const response = await getAdminUsers({
-        role: roleFilter === 'all' || roleFilter === 'reviewer' ? undefined : roleFilter,
-        is_reviewer: roleFilter === 'reviewer' ? true : undefined,
+        role: roleFilter === 'all' ? undefined : roleFilter,
         search: search.trim() || undefined,
         limit: 100,
       })
@@ -138,16 +190,14 @@ export default function AdminUsers() {
       const created = await createAdminUser({
         email: createEmail.trim(),
         password: createPassword,
-        role: createRole,
-        is_reviewer: createIsReviewer,
+        roles: createRoles,
       })
       setUsers((current) => [created, ...current])
       setTotal((current) => current + 1)
       setCreateEmail('')
       setCreatePassword('')
-      setCreateRole('patient')
-      setCreateIsReviewer(false)
-      toast.success(`Usuario creado: ${created.email} (${ROLE_LABELS[created.role]})`)
+      setCreateRoles(['patient'])
+      toast.success(`Usuario creado: ${created.email} (${created.roles.map((r) => ROLE_LABELS[r]).join(', ')})`)
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, 'No se pudo crear el usuario'))
     } finally {
@@ -158,8 +208,7 @@ export default function AdminUsers() {
   const handleSelect = (item: AdminUser) => {
     setSelected(item)
     setEditEmail(item.email)
-    setEditRole(item.role)
-    setEditIsReviewer(item.is_reviewer)
+    setEditRoles(item.roles)
     setEditPassword('')
     setError(null)
   }
@@ -172,8 +221,7 @@ export default function AdminUsers() {
     try {
       const updated = await updateAdminUser(selected.id, {
         email: editEmail.trim() !== selected.email ? editEmail.trim() : undefined,
-        role: editRole !== selected.role ? editRole : undefined,
-        is_reviewer: editIsReviewer !== selected.is_reviewer ? editIsReviewer : undefined,
+        roles: sameRoles(editRoles, selected.roles) ? undefined : editRoles,
         password: editPassword || undefined,
       })
       setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)))
@@ -213,11 +261,11 @@ export default function AdminUsers() {
         <p className="text-xs uppercase tracking-[0.28em] text-sky-700">Administración</p>
         <h1 className="mt-2 text-3xl font-bold text-slate-950">Usuarios</h1>
         <p className="mt-2 max-w-3xl text-slate-600">
-          Crea, consulta, edita y elimina cuentas de pacientes, revisores y administradores. Los médicos se
-          generan desde el flujo de postulación y aquí puedes gestionar su rol y estado.
+          Crea, consulta, edita y elimina cuentas. Un usuario puede tener varios roles a la vez
+          («Paciente» es el rol base); los médicos se generan desde el flujo de postulación.
         </p>
 
-        <form onSubmit={handleCreate} className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] lg:items-end">
+        <form onSubmit={handleCreate} className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
           <Input
             label="Correo electrónico"
             type="email"
@@ -236,34 +284,19 @@ export default function AdminUsers() {
             minLength={8}
             required
           />
-          <Select
-            label="Rol"
-            value={createRole}
-            onChange={(event) => setCreateRole(event.target.value as AdminUserRole)}
-          >
-            {ROLE_OPTIONS.filter((role) => role !== 'doctor').map((role) => (
-              <option key={role} value={role}>
-                {ROLE_LABELS[role]}
-              </option>
-            ))}
-          </Select>
           <Button type="submit" loading={creating} leftIcon={<UserPlus className="h-4 w-4" />}>
             Crear
           </Button>
         </form>
-        <label className="mt-3 flex items-center gap-3 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={createIsReviewer}
-            onChange={(event) => setCreateIsReviewer(event.target.checked)}
-            className="h-4 w-4"
+        <div className="mt-4">
+          <RoleSelector
+            label="Roles"
+            value={createRoles}
+            onChange={setCreateRoles}
+            doctorAvailable={false}
+            lockedRoles={['patient']}
           />
-          Dar acceso de revisión (revisor)
-        </label>
-        <p className="mt-2 text-xs text-slate-500">
-          Para médicos: la cuenta se crea al completar la postulación; luego puedes cambiar su rol y marcar
-          "Acceso de revisión" aquí.
-        </p>
+        </div>
       </section>
 
       {error && <Alert tone="danger">{error}</Alert>}
@@ -328,25 +361,25 @@ export default function AdminUsers() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate text-sm font-semibold text-slate-900">{item.full_name || item.email}</p>
-                      <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${ROLE_BADGES[item.role]}`}>
-                        {ROLE_LABELS[item.role]}
-                      </span>
-                      {item.is_reviewer && (
-                        <span className="rounded-full bg-violet-100 px-3 py-1 text-[11px] font-medium text-violet-800">
-                          Revisor
+                      {item.roles.map((role) => (
+                        <span
+                          key={role}
+                          className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${ROLE_BADGES[role]}`}
+                        >
+                          {ROLE_LABELS[role]}
                         </span>
-                      )}
+                      ))}
                       {item.doctor_status && (
-                        <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-medium text-amber-800">
+                        <Badge tone="info">
                           {DOCTOR_STATUS_LABELS[item.doctor_status] || 'Sin perfil'}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                      Alta: {new Date(item.created_at).toLocaleDateString('es-ES')}
+                      {item.email} · Registro: {new Date(item.created_at).toLocaleDateString('es-ES')}
                     </p>
                   </div>
-                  <div className="relative flex-none" data-user-menu>
+                  <div className="relative flex-none" data-user-menu onClick={(event) => event.stopPropagation()}>
                     <button type="button"
                       onClick={() => setOpenMenuId((current) => (current === item.id ? null : item.id))}
                       className="rounded-full border border-slate-300 p-2 text-slate-600 transition-colors hover:border-slate-900 hover:text-slate-900"
@@ -359,6 +392,17 @@ export default function AdminUsers() {
 
                     {openMenuId === item.id && (
                       <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl">
+                        <button type="button"
+                          onClick={() => {
+                            setOpenMenuId(null)
+                            navigate(`/admin/users/${item.id}/support`)
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          <Eye className="h-4 w-4 text-slate-500" />
+                          Ver información
+                        </button>
+
                         <button type="button"
                           onClick={() => {
                             setOpenMenuId(null)
@@ -403,7 +447,7 @@ export default function AdminUsers() {
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           {!selected ? (
             <div className="flex min-h-[280px] items-center justify-center text-center text-slate-500">
-              Selecciona “Editar” en un usuario para modificar su correo, rol o contraseña.
+              Selecciona “Editar” en un usuario para modificar su correo, roles o contraseña.
             </div>
           ) : (
             <form onSubmit={handleSave} className="space-y-4">
@@ -430,40 +474,13 @@ export default function AdminUsers() {
                 required
               />
 
-              <div>
-                <Select
-                  label="Rol"
-                  value={editRole}
-                  onChange={(event) => setEditRole(event.target.value as AdminUserRole)}
-                >
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role} value={role}>
-                      {ROLE_LABELS[role]}
-                    </option>
-                  ))}
-                </Select>
-                {editRole === 'doctor' && !selected.doctor_status && (
-                  <p className="mt-2 text-xs text-amber-700">
-                    Este usuario no tiene perfil médico; no se puede asignar el rol médico todavía.
-                  </p>
-                )}
-              </div>
-
-              <label className="flex items-start gap-3 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-900">
-                <input
-                  type="checkbox"
-                  checked={editIsReviewer}
-                  onChange={(event) => setEditIsReviewer(event.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium">Acceso de revisión</span>
-                  <span className="mt-0.5 block text-xs text-violet-700">
-                    Permite revisar y aprobar/rechazar postulaciones médicas, sin cambiar su rol principal
-                    (puede ser médico y revisor a la vez).
-                  </span>
-                </span>
-              </label>
+              <RoleSelector
+                label="Roles"
+                value={editRoles}
+                onChange={setEditRoles}
+                doctorAvailable={Boolean(selected.doctor_status)}
+                lockedRoles={['patient']}
+              />
 
               <PasswordInput
                 label="Nueva contraseña"

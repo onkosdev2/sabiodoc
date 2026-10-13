@@ -71,6 +71,7 @@ from app.services.consultation_service import close_stale_consultations
 from app.services.specialist_assistant import sanitize_summary_text
 from app.services.reminder_service import reminder_service
 from app.services.video_session_service import video_session_service
+from app.services.wallet_service import wallet_service
 from app.services import session_file_service
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
@@ -267,7 +268,7 @@ def upsert_my_doctor_profile(
     current_user: User = Depends(get_current_user),
 ):
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
-    if not doctor_profile and current_user.role != UserRole.doctor:
+    if not doctor_profile and not current_user.is_doctor:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes un perfil medico")
 
     doctor_onboarding_service.validate_price_or_raise(payload.price_per_min_cents)
@@ -570,9 +571,15 @@ def get_doctor_dashboard(
     )
     average_rating = _rating_for(db, doctor_profile.id)[0]
     active_video_sessions = _get_live_video_sessions(db, doctor_profile)[:5]
+    income = wallet_service.doctor_income_summary(db, doctor_profile.id)
     metrics = [
         DoctorDashboardMetricCard(key="scheduled", label="Citas programadas", value=str(total_scheduled)),
         DoctorDashboardMetricCard(key="completed", label="Citas completadas", value=str(total_completed)),
+        DoctorDashboardMetricCard(
+            key="net_income",
+            label="Ingresos netos",
+            value=f"US$ {income['net_income_cents'] / 100:,.2f}",
+        ),
         DoctorDashboardMetricCard(key="rating", label="Valoración promedio", value=f"{average_rating:.1f}"),
         DoctorDashboardMetricCard(key="notifications", label="Notificaciones sin leer", value=str(unread_notifications)),
     ]

@@ -103,7 +103,7 @@ export default function Register() {
             placeholder="••••••••"
             autoComplete="new-password"
             required
-            hint="Mínimo 8 caracteres"
+            hint="Mínimo 8 caracteres, con al menos una letra y un número."
             error={fieldErrors.password}
           />
 

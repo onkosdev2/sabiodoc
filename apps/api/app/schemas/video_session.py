@@ -109,6 +109,10 @@ class VideoSessionStatusResponse(BaseModel):
     price_per_min_cents: int = 0
     held_amount_cents: int = 0
     current_cost_cents: int = 0
+    # Desglose para el médico: comisión de la plataforma sobre el costo actual.
+    platform_fee_cents: int = 0
+    doctor_amount_cents: int = 0
+    platform_fee_bps: int = 0
     overtime_amount_cents: int = 0
     patient_balance_cents: int = 0
     can_afford_overtime: bool = False

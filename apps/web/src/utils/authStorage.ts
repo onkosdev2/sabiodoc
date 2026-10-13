@@ -50,6 +50,12 @@ export function setStoredUser(user: unknown): void {
   if (storage) storage.setItem(USER_KEY, JSON.stringify(user))
 }
 
+/** Reemplaza el token conservando el storage (local o de sesión) ya usado. */
+export function setStoredToken(token: string): void {
+  const storage = getAuthStorage() ?? localStorage
+  storage.setItem(TOKEN_KEY, token)
+}
+
 /** Elimina la sesión de ambos storages. */
 export function clearStoredAuth(): void {
   localStorage.removeItem(TOKEN_KEY)

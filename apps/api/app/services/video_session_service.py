@@ -17,6 +17,8 @@ from app.models.video_session import PaymentStatus, VideoSession, VideoSessionSt
 from app.models.video_session_event import VideoSessionEvent
 from app.models.wallet import AppointmentPayment, AppointmentPaymentStatus
 from sqlalchemy import and_, or_
+from app.services.audit_service import audit_service
+from app.services.error_log_service import error_log_service
 from app.services.jitsi_service import jitsi_service
 from app.services.llm_client import llm_client
 from app.services.payment_service import payment_service
@@ -471,7 +473,7 @@ class VideoSessionService:
         if not doctor_profile:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
 
-        if doctor_profile.user.role.value != "doctor":
+        if not doctor_profile.user.is_doctor:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario seleccionado no es medico")
 
         if not doctor_profile.is_accepting_consultations:
@@ -580,6 +582,19 @@ class VideoSessionService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         except Exception as exc:
             logger.error(f"Video session prepare failed: {exc}", exc_info=True)
+            error_log_service.record_exception(
+                exc,
+                message=f"Fallo al preparar la videoconsulta inmediata: {exc}",
+                video_session_id=video_session.id,
+                consultation_id=consultation.id,
+                context={
+                    "flow": "prepare_session",
+                    "jitsi_mock": jitsi_service.is_mock,
+                    "jitsi_base_url": settings.JITSI_BASE_URL,
+                    "jitsi_jwt_enabled": bool(settings.JITSI_JWT_SECRET),
+                    "room_name": room_name,
+                },
+            )
             video_session.status = VideoSessionStatus.failed
             video_session.payment_status = PaymentStatus.failed
             db.commit()
@@ -730,6 +745,20 @@ class VideoSessionService:
             )
         except Exception as exc:
             logger.error(f"Appointment video session prepare failed: {exc}", exc_info=True)
+            error_log_service.record_exception(
+                exc,
+                message=f"Fallo al preparar la sala de la cita: {exc}",
+                video_session_id=video_session.id,
+                appointment_id=appointment.id,
+                consultation_id=appointment.consultation_id,
+                context={
+                    "flow": "prepare_session_for_appointment",
+                    "jitsi_mock": jitsi_service.is_mock,
+                    "jitsi_base_url": settings.JITSI_BASE_URL,
+                    "jitsi_jwt_enabled": bool(settings.JITSI_JWT_SECRET),
+                    "room_name": room_name,
+                },
+            )
             video_session.status = VideoSessionStatus.failed
             db.commit()
             raise HTTPException(
@@ -773,7 +802,7 @@ class VideoSessionService:
             return "patient"
         if appointment.doctor and appointment.doctor.user_id == current_user.id:
             return "doctor"
-        if current_user.role == UserRole.admin:
+        if current_user.is_admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El administrador no puede entrar a esta sala")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes entrar a esta sala")
 

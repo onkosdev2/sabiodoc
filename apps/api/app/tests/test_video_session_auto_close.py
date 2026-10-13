@@ -27,7 +27,8 @@ from app.services.wallet_service import wallet_service
 
 
 def _make_user(db, role: UserRole = UserRole.patient) -> User:
-    user = User(email=f"autoclose_{uuid.uuid4().hex[:8]}@example.com", password_hash="x", role=role)
+    user = User(email=f"autoclose_{uuid.uuid4().hex[:8]}@example.com", password_hash="x")
+    user.set_roles({role})
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -171,7 +172,7 @@ def test_cierra_y_liquida_una_sesion_abandonada():
         # Se cobran 10 min * 500 = 5000; la diferencia de la retencion se devuelve.
         assert payment.billable_amount_cents == 5000
         assert wallet_service.get_balance_cents(db, patient.id) == 15000
-        assert wallet_service.get_balance_cents(db, doctor_user.id) == 5000
+        assert wallet_service.get_balance_cents(db, doctor_user.id) == wallet_service.doctor_net_cents(5000)
     finally:
         _cleanup(
             db,

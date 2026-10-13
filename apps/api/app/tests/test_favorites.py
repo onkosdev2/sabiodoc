@@ -27,8 +27,8 @@ def test_flujo_de_favoritos_de_medico():
     patient = User(
         email=f"fav_{uuid.uuid4().hex[:8]}@example.com",
         password_hash="x",
-        role=UserRole.patient,
     )
+    patient.set_roles({UserRole.patient})
     db.add(patient)
     db.commit()
     db.refresh(patient)

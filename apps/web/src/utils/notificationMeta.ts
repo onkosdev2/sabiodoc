@@ -6,6 +6,7 @@ import {
   CalendarX,
   CircleDollarSign,
   FileText,
+  LifeBuoy,
   ShieldCheck,
   Star,
   Video,
@@ -20,6 +21,7 @@ export type NotificationCategory =
   | 'reviews'
   | 'profile'
   | 'files'
+  | 'support'
   | 'system'
 
 export interface NotificationCategoryConfig {
@@ -115,6 +117,15 @@ export const NOTIFICATION_CATEGORIES: NotificationCategoryConfig[] = [
     toastClass: 'border-cyan-200 bg-cyan-50 text-cyan-900',
   },
   {
+    id: 'support',
+    label: 'Soporte',
+    icon: LifeBuoy,
+    chipClass: 'bg-teal-100 text-teal-700',
+    badgeClass: 'border-teal-200 bg-teal-50 text-teal-700',
+    accentClass: 'bg-teal-400',
+    toastClass: 'border-teal-200 bg-teal-50 text-teal-900',
+  },
+  {
     id: 'system',
     label: 'Sistema',
     icon: ShieldCheck,
@@ -155,6 +166,9 @@ const CATEGORY_BY_TYPE: Record<string, NotificationCategory> = {
   audit: 'system',
   test: 'system',
   specialty: 'system',
+  support_ticket_created: 'support',
+  support_ticket_reply: 'support',
+  support_ticket_resolved: 'support',
 }
 
 /**
@@ -177,6 +191,7 @@ export function resolveNotificationCategory(type: string): NotificationCategory 
   if (type.includes('review')) return 'reviews'
   if (type.includes('credit') || type.includes('wallet') || type.includes('withdraw')) return 'credits'
   if (type.startsWith('video')) return 'video'
+  if (type.startsWith('support_ticket')) return 'support'
   if (type.includes('file') || type.includes('note')) return 'files'
   return 'system'
 }

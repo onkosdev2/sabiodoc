@@ -90,6 +90,7 @@ def _reset_and_seed() -> None:
     run_seed.seed_specialties()
     run_seed.seed_demo_admin()
     run_seed.seed_demo_reviewer()
+    run_seed.seed_demo_support()
     run_seed.seed_demo_doctors()
     run_seed.seed_demo_patient()
     run_seed.seed_demo_reviews()

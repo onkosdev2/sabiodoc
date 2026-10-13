@@ -102,6 +102,10 @@ export default function DoctorPending() {
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 US$ {(application.price_per_min_cents / 100).toFixed(2)} / min
               </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Recibirás US$ {(application.net_price_per_min_cents / 100).toFixed(2)} / min tras la comisión del{' '}
+                {application.platform_fee_percent}% de la plataforma.
+              </p>
               <p className="mt-1 text-sm text-slate-600">Estado actual: {DOCTOR_APPLICATION_STATUS_LABELS[application.status] || 'Sin estado'}</p>
               <p className="mt-1 text-sm text-slate-600">Zona horaria: {application.timezone || 'UTC'}</p>
             </div>

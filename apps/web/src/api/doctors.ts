@@ -118,6 +118,8 @@ export interface DoctorApplication {
   professional_title: string | null
   bio_short: string | null
   price_per_min_cents: number
+  platform_fee_percent: number
+  net_price_per_min_cents: number
   license_number: string | null
   license_country: string | null
   specialist_registry_number: string | null

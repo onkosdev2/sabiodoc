@@ -12,7 +12,7 @@ export interface PanelNavItem {
   icon: LucideIcon
 }
 
-type PanelAccent = 'emerald' | 'sky' | 'violet'
+type PanelAccent = 'emerald' | 'sky' | 'violet' | 'amber'
 
 interface PanelLayoutProps {
   panelName: string
@@ -29,6 +29,7 @@ const ACCENTS: Record<PanelAccent, { wrapper: string; icon: string }> = {
   emerald: { wrapper: 'bg-emerald-400/15', icon: 'text-emerald-300' },
   sky: { wrapper: 'bg-sky-400/15', icon: 'text-sky-300' },
   violet: { wrapper: 'bg-violet-400/15', icon: 'text-violet-300' },
+  amber: { wrapper: 'bg-amber-400/15', icon: 'text-amber-300' },
 }
 
 /**

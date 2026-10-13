@@ -1,13 +1,14 @@
+import json
 import re
 import unicodedata
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.core.deps import get_current_user, get_db, require_admin
+from app.core.deps import get_current_user, get_db, require_admin, require_admin_or_support
 from app.core.labels import (
     audit_action_label,
     audit_entity_label,
@@ -23,6 +24,7 @@ from app.models.doctor_presence import DoctorPresence
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.error_log import ErrorLog
 from app.models.password_reset_token import PasswordResetToken
 from app.models.patient_profile import PatientProfile
 from app.models.patient_profile_change_request import PatientProfileChangeRequest
@@ -31,7 +33,7 @@ from app.models.favorite import Favorite
 from app.models.notification import Notification, NotificationStatus
 from app.models.review_report import ReviewReport, ReviewReportStatus
 from app.models.triage_request import TriageRequest
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserRoleAssignment, sorted_roles
 from app.models.video_session import VideoSession, VideoSessionStatus
 from app.models.video_session_file import VideoSessionFile
 from app.models.wallet import Wallet, WalletTransaction, Withdrawal, WithdrawalStatus
@@ -42,6 +44,15 @@ from app.schemas.appointment import (
     AdminLiveVideoSessionResponse,
     AdminMarketplaceOverviewResponse,
     AppointmentListResponse,
+)
+from app.schemas.error_log import (
+    ErrorLogBulkDeleteRequest,
+    ErrorLogCleanupResponse,
+    ErrorLogDeleteResponse,
+    ErrorLogDetail,
+    ErrorLogItem,
+    ErrorLogListResponse,
+    ErrorLogSummary,
 )
 from app.schemas.user import (
     AdminUserCreate,
@@ -62,13 +73,15 @@ from app.schemas.doctor import (
 )
 from app.services.appointment_service import appointment_service
 from app.services.audit_service import audit_service
+from app.services.error_log_service import error_log_service
+from app.services.user_support_service import user_support_service
 from app.services.patient_profile_service import get_patient_display_name
 from app.services.llm_client import llm_client
 from app.services import review_service
 from app.services.wallet_service import wallet_service
+from app.schemas.support import SupportUserDetailResponse
 from app.schemas.wallet import (
     WithdrawalListResponse,
-    WithdrawalProcessRequest,
     WithdrawalResponse,
 )
 from app.schemas.specialty import (
@@ -100,15 +113,29 @@ def _serialize_admin_user(user: User) -> AdminUserResponse:
         id=user.id,
         email=user.email,
         full_name=full_name,
-        role=user.role,
+        role=user.primary_role,
+        roles=sorted_roles(user.roles),
         doctor_status=profile.status if profile else None,
-        is_reviewer=bool(user.is_reviewer),
+        created_at=user.created_at,
+    )
+
+
+def _serialize_reviewer(user: User) -> ReviewerResponse:
+    return ReviewerResponse(
+        id=user.id,
+        email=user.email,
+        role=user.primary_role,
+        roles=sorted_roles(user.roles),
         created_at=user.created_at,
     )
 
 
 def _count_admins(db: Session) -> int:
-    return db.query(User).filter(User.role == UserRole.admin).count()
+    return (
+        db.query(UserRoleAssignment)
+        .filter(UserRoleAssignment.role == UserRole.admin)
+        .count()
+    )
 
 
 def _slugify(name: str) -> str:
@@ -256,7 +283,7 @@ def get_marketplace_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores")
 
     now = datetime.now(UTC)
@@ -331,7 +358,7 @@ def get_live_video_sessions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores")
 
     sessions = (
@@ -371,7 +398,7 @@ def get_admin_incidents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.admin:
+    if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores")
 
     incidents: list[AdminIncidentResponse] = []
@@ -440,12 +467,13 @@ def list_reviewers(
 ):
     reviewers = (
         db.query(User)
-        .filter(or_(User.is_reviewer == True, User.role == UserRole.reviewer))
+        .join(UserRoleAssignment, UserRoleAssignment.user_id == User.id)
+        .filter(UserRoleAssignment.role == UserRole.reviewer)
         .order_by(User.created_at.desc())
         .all()
     )
     return ReviewerListResponse(
-        reviewers=[ReviewerResponse.model_validate(reviewer) for reviewer in reviewers],
+        reviewers=[_serialize_reviewer(reviewer) for reviewer in reviewers],
         total=len(reviewers),
     )
 
@@ -458,13 +486,13 @@ def create_reviewer(
 ):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
-        if existing.is_reviewer or existing.role == UserRole.reviewer:
+        if existing.is_reviewer:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Este usuario ya es revisor",
             )
-        # Damos la capacidad de revisión sin cambiar su rol (puede seguir siendo médico).
-        existing.is_reviewer = True
+        # Se suma el rol de revisor sin quitar los demás (paciente, médico, admin).
+        existing.add_role(UserRole.reviewer)
         reviewer = existing
         action = "reviewer.granted"
     else:
@@ -476,9 +504,8 @@ def create_reviewer(
         reviewer = User(
             email=payload.email,
             password_hash=get_password_hash(payload.password),
-            role=UserRole.patient,
-            is_reviewer=True,
         )
+        reviewer.set_roles({UserRole.patient, UserRole.reviewer})
         db.add(reviewer)
         action = "reviewer.created"
 
@@ -493,7 +520,7 @@ def create_reviewer(
     )
     db.commit()
     db.refresh(reviewer)
-    return ReviewerResponse.model_validate(reviewer)
+    return _serialize_reviewer(reviewer)
 
 
 @router.delete("/reviewers/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -504,9 +531,10 @@ def revoke_reviewer(
 ):
     reviewer = (
         db.query(User)
+        .join(UserRoleAssignment, UserRoleAssignment.user_id == User.id)
         .filter(
             User.id == user_id,
-            or_(User.is_reviewer == True, User.role == UserRole.reviewer),
+            UserRoleAssignment.role == UserRole.reviewer,
         )
         .first()
     )
@@ -516,28 +544,14 @@ def revoke_reviewer(
             detail="Revisor no encontrado",
         )
 
-    reviewer.is_reviewer = False
-    restored_role = reviewer.role.value
-    if reviewer.role == UserRole.reviewer:
-        # Compatibilidad con el rol antiguo: devolvemos a medico o paciente.
-        doctor_profile = (
-            db.query(DoctorProfile)
-            .filter(DoctorProfile.user_id == reviewer.id)
-            .first()
-        )
-        if doctor_profile and doctor_profile.status == DoctorApprovalStatus.approved:
-            reviewer.role = UserRole.doctor
-            restored_role = "doctor"
-        else:
-            reviewer.role = UserRole.patient
-            restored_role = "patient"
+    reviewer.remove_role(UserRole.reviewer)
     audit_service.log(
         db,
         action="reviewer.revoked",
         entity_type="user",
         entity_id=reviewer.id,
         actor_user_id=current_user.id,
-        metadata={"email": reviewer.email, "restored_role": restored_role},
+        metadata={"email": reviewer.email},
     )
     db.commit()
     return None
@@ -546,18 +560,27 @@ def revoke_reviewer(
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     role: UserRole | None = None,
-    is_reviewer: bool | None = None,
     search: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_admin_or_support),
 ):
     query = db.query(User)
     if role:
-        query = query.filter(User.role == role)
-    if is_reviewer is not None:
-        query = query.filter(User.is_reviewer == is_reviewer)
+        query = query.join(
+            UserRoleAssignment, UserRoleAssignment.user_id == User.id
+        ).filter(UserRoleAssignment.role == role)
+        # El rol "paciente" lo tiene toda cuenta (rol base); como filtro util se
+        # interpreta como "solo paciente" (sin rol profesional).
+        if role == UserRole.patient:
+            query = query.filter(
+                ~User.role_assignments.any(
+                    UserRoleAssignment.role.in_(
+                        (UserRole.doctor, UserRole.reviewer, UserRole.admin)
+                    )
+                )
+            )
     if search:
         query = query.filter(User.email.ilike(f"%{search}%"))
 
@@ -589,22 +612,17 @@ def create_user(
 
     # Un medico requiere un DoctorProfile (flujo de postulación). Se puede crear
     # la cuenta y luego promoverla cuando el perfil exista.
-    if payload.role == UserRole.doctor:
+    if UserRole.doctor in set(payload.roles):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Para crear un médico usa el flujo de postulación; luego podrás asignarle el rol",
         )
 
-    # El rol "reviewer" se mantiene por compatibilidad: se traduce a paciente + flag.
-    role = UserRole.patient if payload.role == UserRole.reviewer else payload.role
-    is_reviewer = payload.is_reviewer or payload.role == UserRole.reviewer
-
     user = User(
         email=payload.email,
         password_hash=get_password_hash(payload.password),
-        role=role,
-        is_reviewer=is_reviewer,
     )
+    user.set_roles(payload.roles)
     db.add(user)
     db.flush()
     audit_service.log(
@@ -613,7 +631,7 @@ def create_user(
         entity_type="user",
         entity_id=user.id,
         actor_user_id=current_user.id,
-        metadata={"email": user.email, "role": user.role.value, "is_reviewer": bool(user.is_reviewer)},
+        metadata={"email": user.email, "roles": [role.value for role in sorted_roles(user.roles)]},
     )
     db.commit()
     db.refresh(user)
@@ -630,6 +648,19 @@ def get_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
     return _serialize_admin_user(user)
+
+
+@router.get("/users/{user_id}/support", response_model=SupportUserDetailResponse)
+def get_user_support(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_support),
+):
+    """Vista de soporte 360°: citas, videoconsultas, monedero, errores, etc."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    return user_support_service.build(db, user)
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserResponse)
@@ -661,44 +692,35 @@ def update_user(
         # Invalida las sesiones activas del usuario.
         user.session_version = (user.session_version or 1) + 1
 
-    if payload.role and payload.role != user.role:
-        if user.id == current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No puedes cambiar tu propio rol",
-            )
-        if user.role == UserRole.admin and _count_admins(db) <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Debe existir al menos un administrador",
-            )
-        if payload.role == UserRole.doctor:
-            profile = (
-                db.query(DoctorProfile)
-                .filter(DoctorProfile.user_id == user.id)
-                .first()
-            )
-            if not profile:
+    if payload.roles is not None:
+        new_roles = set(payload.roles)
+        if new_roles != user.roles:
+            if user.id == current_user.id and UserRole.admin not in new_roles:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="El usuario necesita un perfil médico para tener el rol de médico",
+                    detail="No puedes quitarte tu propio rol de administrador",
                 )
-        user.role = payload.role
-
-    if payload.is_reviewer is not None and payload.is_reviewer != user.is_reviewer:
-        user.is_reviewer = payload.is_reviewer
-        if not payload.is_reviewer and user.role == UserRole.reviewer:
-            # Compatibilidad con el rol antiguo.
-            profile = (
-                db.query(DoctorProfile)
-                .filter(DoctorProfile.user_id == user.id)
-                .first()
-            )
-            user.role = (
-                UserRole.doctor
-                if profile and profile.status == DoctorApprovalStatus.approved
-                else UserRole.patient
-            )
+            if (
+                UserRole.admin in user.roles
+                and UserRole.admin not in new_roles
+                and _count_admins(db) <= 1
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Debe existir al menos un administrador",
+                )
+            if UserRole.doctor in new_roles and UserRole.doctor not in user.roles:
+                profile = (
+                    db.query(DoctorProfile)
+                    .filter(DoctorProfile.user_id == user.id)
+                    .first()
+                )
+                if not profile:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="El usuario necesita un perfil médico para tener el rol de médico",
+                    )
+            user.set_roles(new_roles)
 
     audit_service.log(
         db,
@@ -706,7 +728,7 @@ def update_user(
         entity_type="user",
         entity_id=user.id,
         actor_user_id=current_user.id,
-        metadata={"email": user.email, "role": user.role.value, "is_reviewer": bool(user.is_reviewer)},
+        metadata={"email": user.email, "roles": [role.value for role in sorted_roles(user.roles)]},
     )
     db.commit()
     db.refresh(user)
@@ -728,7 +750,7 @@ def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No puedes eliminar tu propia cuenta",
         )
-    if user.role == UserRole.admin and _count_admins(db) <= 1:
+    if user.is_admin and _count_admins(db) <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Debe existir al menos un administrador",
@@ -827,7 +849,7 @@ def delete_user(
         entity_type="user",
         entity_id=user.id,
         actor_user_id=current_user.id,
-        metadata={"email": user.email, "role": user.role.value},
+        metadata={"email": user.email, "roles": [role.value for role in sorted_roles(user.roles)]},
     )
     db.delete(user)
     db.commit()
@@ -837,13 +859,19 @@ def delete_user(
 @router.get("/withdrawals", response_model=WithdrawalListResponse)
 def list_withdrawals(
     status_filter: WithdrawalStatus | None = Query(default=None),
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Lista las solicitudes de retiro de créditos para su revisión."""
+    """Historial de retiros (solo lectura) con filtro opcional por estado y fecha."""
     query = db.query(Withdrawal).options(joinedload(Withdrawal.user))
     if status_filter is not None:
         query = query.filter(Withdrawal.status == status_filter)
+    if start is not None:
+        query = query.filter(Withdrawal.created_at >= start)
+    if end is not None:
+        query = query.filter(Withdrawal.created_at <= end)
     withdrawals = query.order_by(Withdrawal.created_at.desc()).all()
     return WithdrawalListResponse(
         withdrawals=[
@@ -854,6 +882,9 @@ def list_withdrawals(
                 amount_cents=item.amount_cents,
                 status=item.status,
                 destination=item.destination,
+                provider=item.provider,
+                provider_reference=item.provider_reference,
+                failure_reason=item.failure_reason,
                 admin_notes=item.admin_notes,
                 requested_at=item.requested_at,
                 processed_at=item.processed_at,
@@ -863,47 +894,6 @@ def list_withdrawals(
         ],
         total=len(withdrawals),
     )
-
-
-@router.post("/withdrawals/{withdrawal_id}/process", response_model=WithdrawalResponse)
-def process_withdrawal(
-    withdrawal_id: int,
-    payload: WithdrawalProcessRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    """Aprueba (paga) o rechaza una solicitud de retiro."""
-    withdrawal = (
-        db.query(Withdrawal)
-        .filter(Withdrawal.id == withdrawal_id)
-        .with_for_update()
-        .first()
-    )
-    if not withdrawal:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Solicitud de retiro no encontrada")
-
-    wallet_service.process_withdrawal(
-        db,
-        withdrawal,
-        approve=payload.approve,
-        admin_user_id=current_user.id,
-        notes=payload.notes,
-    )
-    audit_service.log(
-        db,
-        action="withdrawal.processed",
-        entity_type="withdrawal",
-        entity_id=withdrawal.id,
-        actor_user_id=current_user.id,
-        metadata={
-            "user_id": withdrawal.user_id,
-            "amount_cents": withdrawal.amount_cents,
-            "approved": payload.approve,
-        },
-    )
-    response = WithdrawalResponse.model_validate(withdrawal)
-    db.commit()
-    return response
 
 
 # --- Moderación de reseñas ---------------------------------------------------
@@ -1042,3 +1032,197 @@ def unhide_review(
     db.commit()
     db.refresh(review)
     return _serialize_admin_review(review)
+
+
+# ---------------------------------------------------------------------------
+# Registro de errores (panel de IT)
+# ---------------------------------------------------------------------------
+def _error_log_context(entry: ErrorLog) -> dict | None:
+    if not entry.context_json:
+        return None
+    try:
+        return json.loads(entry.context_json)
+    except (ValueError, TypeError):
+        return {"raw": entry.context_json}
+
+
+def _serialize_error_log(entry: ErrorLog, *, occurrences: int = 1) -> ErrorLogItem:
+    return ErrorLogItem(
+        id=entry.id,
+        created_at=entry.created_at,
+        level=entry.level,
+        source=entry.source,
+        status_code=entry.status_code,
+        method=entry.method,
+        path=entry.path,
+        error_type=entry.error_type,
+        message=entry.message,
+        user_id=entry.user_id,
+        user_email=entry.user_email,
+        user_role=entry.user_role,
+        request_id=entry.request_id,
+        video_session_id=entry.video_session_id,
+        appointment_id=entry.appointment_id,
+        consultation_id=entry.consultation_id,
+        fingerprint=entry.fingerprint,
+        occurrences=occurrences,
+    )
+
+
+def _serialize_error_log_detail(entry: ErrorLog) -> ErrorLogDetail:
+    occurrences = 1
+    if entry.fingerprint:
+        occurrences = error_log_service.fingerprint_counts([entry.fingerprint]).get(
+            entry.fingerprint, 1
+        )
+    base = _serialize_error_log(entry, occurrences=occurrences)
+    return ErrorLogDetail(
+        **base.model_dump(),
+        stack_trace=entry.stack_trace,
+        context=_error_log_context(entry),
+        ip_address=entry.ip_address,
+        user_agent=entry.user_agent,
+    )
+
+
+@router.get("/error-logs", response_model=ErrorLogListResponse)
+def list_error_logs(
+    level: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    status_code: int | None = Query(default=None),
+    path: str | None = Query(default=None),
+    user_id: int | None = Query(default=None),
+    video_only: bool = Query(default=False),
+    search: str | None = Query(default=None),
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Lista los errores registrados con filtros para el equipo de IT."""
+    error_log_service.maybe_cleanup()
+
+    def apply_filters(query):
+        if level:
+            query = query.filter(ErrorLog.level == level)
+        if source:
+            query = query.filter(ErrorLog.source == source)
+        if status_code is not None:
+            query = query.filter(ErrorLog.status_code == status_code)
+        if path:
+            query = query.filter(ErrorLog.path.ilike(f"%{path}%"))
+        if user_id is not None:
+            query = query.filter(ErrorLog.user_id == user_id)
+        if video_only:
+            query = query.filter(ErrorLog.video_session_id.isnot(None))
+        if search:
+            like = f"%{search}%"
+            query = query.filter(
+                or_(
+                    ErrorLog.message.ilike(like),
+                    ErrorLog.path.ilike(like),
+                    ErrorLog.user_email.ilike(like),
+                    ErrorLog.error_type.ilike(like),
+                    ErrorLog.request_id.ilike(like),
+                )
+            )
+        if start:
+            query = query.filter(ErrorLog.created_at >= start)
+        if end:
+            query = query.filter(ErrorLog.created_at <= end)
+        return query
+
+    base_query = apply_filters(db.query(ErrorLog))
+    total = base_query.count()
+    entries = (
+        base_query.order_by(ErrorLog.created_at.desc(), ErrorLog.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    counts = error_log_service.fingerprint_counts([entry.fingerprint for entry in entries])
+    items = [
+        _serialize_error_log(
+            entry,
+            occurrences=counts.get(entry.fingerprint, 1) if entry.fingerprint else 1,
+        )
+        for entry in entries
+    ]
+
+    summary_query = apply_filters(db.query(ErrorLog))
+    now = datetime.now(UTC)
+    summary = ErrorLogSummary(
+        total=total,
+        last_24h=summary_query.filter(ErrorLog.created_at >= now - timedelta(hours=24)).count(),
+        video_total=summary_query.filter(ErrorLog.video_session_id.isnot(None)).count(),
+        client_total=summary_query.filter(ErrorLog.source == "client").count(),
+        backend_total=summary_query.filter(ErrorLog.source == "backend").count(),
+    )
+
+    return ErrorLogListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        summary=summary,
+    )
+
+
+@router.get("/error-logs/{error_id}", response_model=ErrorLogDetail)
+def get_error_log(
+    error_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    entry = db.query(ErrorLog).filter(ErrorLog.id == error_id).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Error no encontrado")
+    return _serialize_error_log_detail(entry)
+
+
+@router.delete("/error-logs/{error_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_error_log(
+    error_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Elimina un error del registro."""
+    entry = db.query(ErrorLog).filter(ErrorLog.id == error_id).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Error no encontrado")
+    db.delete(entry)
+    db.commit()
+    return None
+
+
+@router.post("/error-logs/bulk-delete", response_model=ErrorLogDeleteResponse)
+def bulk_delete_error_logs(
+    payload: ErrorLogBulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Elimina varios errores a la vez."""
+    ids = list(dict.fromkeys(payload.ids))
+    deleted = (
+        db.query(ErrorLog)
+        .filter(ErrorLog.id.in_(ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return ErrorLogDeleteResponse(deleted=int(deleted or 0))
+
+
+@router.post("/error-logs/cleanup", response_model=ErrorLogCleanupResponse)
+def cleanup_error_logs(
+    days: int | None = Query(default=None, ge=1, le=3650),
+    current_user: User = Depends(require_admin),
+):
+    """Purga manualmente los errores más antiguos que la retención configurada."""
+    deleted = error_log_service.cleanup_old(days=days)
+    return ErrorLogCleanupResponse(
+        deleted=deleted,
+        retention_days=days or settings.ERROR_LOG_RETENTION_DAYS,
+    )

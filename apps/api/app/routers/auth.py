@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from datetime import UTC, datetime, timedelta
 import hashlib
@@ -8,13 +8,14 @@ from app.core.config import settings
 from app.core.deps import get_db, get_current_user
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
-from app.models.email_verification_token import EmailVerificationToken
-from app.models.password_reset_token import PasswordResetToken
-from app.models.user import UserRole
 from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
 from app.models.doctor_specialty import DoctorSpecialty
-from app.models.user import User
+from app.models.email_verification_token import EmailVerificationToken
+from app.models.password_reset_token import PasswordResetToken
+from app.models.user import User, UserRole, sorted_roles
 from app.schemas.user import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     DoctorRegistrationCreate,
     ForgotPasswordRequest,
     MessageResponse,
@@ -30,8 +31,10 @@ from app.schemas.user import (
 from app.core.logging import get_logger
 from app.core.rate_limit import enforce_rate_limit, rate_limit_dependency
 from app.services.doctor_onboarding_service import doctor_onboarding_service
+from app.services.audit_service import audit_service
 from app.services.email_service import (
     send_email_verification_email,
+    send_password_changed_email,
     send_password_reset_email,
 )
 
@@ -43,6 +46,7 @@ register_rate_limit = rate_limit_dependency("auth:register", max_requests=10, wi
 login_rate_limit = rate_limit_dependency("auth:login", max_requests=10, window_seconds=300)
 forgot_password_rate_limit = rate_limit_dependency("auth:forgot-password", max_requests=5, window_seconds=3600)
 reset_password_rate_limit = rate_limit_dependency("auth:reset-password", max_requests=10, window_seconds=3600)
+change_password_rate_limit = rate_limit_dependency("auth:change-password", max_requests=10, window_seconds=900)
 verify_email_rate_limit = rate_limit_dependency("auth:verify-email", max_requests=20, window_seconds=3600)
 resend_verification_rate_limit = rate_limit_dependency("auth:resend-verification", max_requests=5, window_seconds=3600)
 # Además del límite por IP, limitamos por cuenta para frenar ataques dirigidos.
@@ -109,9 +113,9 @@ def build_user_response(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         email=user.email,
-        role=user.role,
+        role=user.primary_role,
+        roles=sorted_roles(user.roles),
         doctor_status=doctor_profile.status if doctor_profile else None,
-        is_reviewer=bool(user.is_reviewer),
         is_email_verified=bool(user.is_email_verified),
         display_name=doctor_name or patient_name,
         doctor_display_name=doctor_name,
@@ -139,6 +143,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         password_hash=get_password_hash(user_data.password),
         is_email_verified=not email_verification_required,
     )
+    user.set_roles({UserRole.patient})
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -170,7 +175,7 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     
     if existing_user:
         # Si ya es doctor, lo bloqueamos (ya tiene perfil medico)
-        if existing_user.role == UserRole.doctor:
+        if existing_user.is_doctor:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El correo ya está registrado como médico"
@@ -183,20 +188,17 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
                 detail="El correo ya está registrado. Contraseña incorrecta."
             )
 
-        # Un paciente se promueve a doctor para habilitar su panel medico.
-        # Un admin o revisor conserva su rol y gana la capacidad medica mediante
-        # su DoctorProfile (modelo de capacidades aditivas).
-        if existing_user.role == UserRole.patient:
-            existing_user.role = UserRole.doctor
+        # Se suma el rol de médico sin quitar los demás (paciente, revisor, admin).
+        existing_user.add_role(UserRole.doctor)
         user = existing_user
     else:
-        # Si no existe, creamos el usuario desde cero
+        # Si no existe, creamos el usuario desde cero con los roles base + médico.
         user = User(
             email=doctor_data.email,
             password_hash=get_password_hash(doctor_data.password),
-            role=UserRole.doctor,
             is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED,
         )
+        user.set_roles({UserRole.patient, UserRole.doctor})
         db.add(user)
     
     # IMPORTANTE: Este flush va una sola vez, después del bloque if/else
@@ -446,3 +448,70 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     db.commit()
     logger.info("Password reset completed: id=%s", user.id)
     return MessageResponse(message="Contraseña actualizada. Ya puedes iniciar sesión.")
+
+
+@router.post(
+    "/change-password",
+    response_model=ChangePasswordResponse,
+    dependencies=[Depends(change_password_rate_limit)],
+)
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cambia la contraseña del usuario autenticado.
+
+    Exige la contraseña actual, invalida los demás inicios de sesión
+    (``session_version``), cancela los enlaces de restablecimiento pendientes y
+    envía un correo de confirmación. Devuelve un token nuevo para conservar la
+    sesión actual abierta.
+    """
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta.",
+        )
+    if verify_password(payload.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nueva contraseña debe ser distinta a la actual.",
+        )
+
+    now = datetime.now(UTC)
+    current_user.password_hash = get_password_hash(payload.new_password)
+    # Revoca los tokens emitidos antes del cambio (otras sesiones).
+    current_user.session_version = (current_user.session_version or 1) + 1
+    # Un cambio de contraseña invalida los enlaces de restablecimiento pendientes.
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == current_user.id,
+        PasswordResetToken.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
+
+    client_ip = request.client.host if request.client else None
+    audit_service.log(
+        db,
+        action="user.password_changed",
+        entity_type="user",
+        entity_id=current_user.id,
+        actor_user_id=current_user.id,
+        metadata={"ip": client_ip},
+    )
+    db.commit()
+    db.refresh(current_user)
+    logger.info("Password changed: id=%s", current_user.id)
+
+    try:
+        send_password_changed_email(
+            current_user.email,
+            changed_at=now.strftime("%Y-%m-%d %H:%M UTC"),
+            ip_address=client_ip,
+        )
+    except Exception:
+        logger.exception("No se pudo enviar el correo de cambio de contraseña")
+
+    return ChangePasswordResponse(
+        message="Contraseña actualizada. Por seguridad, cerramos tus otras sesiones.",
+        access_token=_issue_access_token(current_user),
+    )

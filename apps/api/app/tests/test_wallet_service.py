@@ -19,7 +19,8 @@ from app.models.video_session import (
     VideoSessionStatus,
 )
 from app.models.video_session_event import VideoSessionEvent
-from app.models.wallet import AppointmentPayment, AppointmentPaymentStatus, Wallet, WalletTransaction, Withdrawal
+from app.models.wallet import AppointmentPayment, AppointmentPaymentStatus, Wallet, WalletTransaction, Withdrawal, WithdrawalStatus
+from app.services.payout_service import PayoutResult, payout_service
 from app.services.video_session_service import video_session_service
 from app.services.wallet_service import wallet_service
 
@@ -28,8 +29,8 @@ def _make_user(db, role: UserRole = UserRole.patient) -> User:
     user = User(
         email=f"wallet_{uuid.uuid4().hex[:8]}@example.com",
         password_hash="x",
-        role=role,
     )
+    user.set_roles({role})
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -198,7 +199,7 @@ def test_release_appointment_pays_doctor():
         wallet_service.release_appointment(db, appointment)
         db.commit()
 
-        assert wallet_service.get_balance_cents(db, doctor_user.id) == amount
+        assert wallet_service.get_balance_cents(db, doctor_user.id) == wallet_service.doctor_net_cents(amount)
         db.refresh(appointment)
         assert appointment.payment.status == AppointmentPaymentStatus.released
     finally:
@@ -234,7 +235,7 @@ def test_refund_appointment_returns_credits_to_patient():
         db.close()
 
 
-def test_withdrawal_rejection_refunds_credits():
+def test_withdrawal_se_procesa_automaticamente():
     db = SessionLocal()
     user_id = None
     try:
@@ -245,10 +246,58 @@ def test_withdrawal_rejection_refunds_credits():
 
         withdrawal = wallet_service.request_withdrawal(db, user.id, 2000, "Cuenta demo")
         db.commit()
+        db.refresh(withdrawal)
+
+        assert withdrawal.status == WithdrawalStatus.paid
+        assert withdrawal.provider == "mock"
+        assert withdrawal.provider_reference
+        # El débito se confirma: el saldo queda en 3000.
+        assert wallet_service.get_balance_cents(db, user.id) == 3000
+        transaction = wallet_service._withdrawal_transaction(db, withdrawal.id)
+        assert transaction is not None
+        assert transaction.status.value == "completed"
+    finally:
+        _cleanup(db, user_ids=[user_id] if user_id else [], appointment_ids=[])
+        db.close()
+
+
+def test_withdrawal_fallido_en_webhook_devuelve_creditos(monkeypatch):
+    def _processing(_withdrawal):
+        return PayoutResult(status="processing", reference="tr_test_123", provider="stripe")
+
+    monkeypatch.setattr(payout_service, "create_payout", _processing)
+
+    db = SessionLocal()
+    user_id = None
+    try:
+        user = _make_user(db)
+        user_id = user.id
+        wallet_service.topup(db, user.id, 5000)
+        db.commit()
+
+        withdrawal = wallet_service.request_withdrawal(db, user.id, 2000, "acct_test")
+        db.commit()
+        db.refresh(withdrawal)
+        assert withdrawal.status == WithdrawalStatus.processing
+        assert withdrawal.provider_reference == "tr_test_123"
         assert wallet_service.get_balance_cents(db, user.id) == 3000
 
-        wallet_service.process_withdrawal(
-            db, withdrawal, approve=False, admin_user_id=user.id, notes="rechazado"
+        # El webhook del proveedor informa el fallo -> se devuelven los créditos.
+        updated = wallet_service.handle_payout_event(
+            db,
+            provider_reference="tr_test_123",
+            status="failed",
+            failure_reason="cuenta inválida",
+        )
+        db.commit()
+        assert updated is not None
+        assert updated.status == WithdrawalStatus.failed
+        assert updated.failure_reason == "cuenta inválida"
+        assert wallet_service.get_balance_cents(db, user.id) == 5000
+
+        # Idempotencia: un segundo webhook no vuelve a reembolsar.
+        wallet_service.handle_payout_event(
+            db, provider_reference="tr_test_123", status="failed"
         )
         db.commit()
         assert wallet_service.get_balance_cents(db, user.id) == 5000
@@ -257,7 +306,12 @@ def test_withdrawal_rejection_refunds_credits():
         db.close()
 
 
-def test_withdrawal_approval_keeps_debit():
+def test_withdrawal_fallido_al_iniciar_no_cobra(monkeypatch):
+    def _boom(_withdrawal):
+        raise RuntimeError("pasarela caída")
+
+    monkeypatch.setattr(payout_service, "create_payout", _boom)
+
     db = SessionLocal()
     user_id = None
     try:
@@ -266,14 +320,12 @@ def test_withdrawal_approval_keeps_debit():
         wallet_service.topup(db, user.id, 5000)
         db.commit()
 
-        withdrawal = wallet_service.request_withdrawal(db, user.id, 2000, "Cuenta demo")
-        db.commit()
-
-        wallet_service.process_withdrawal(
-            db, withdrawal, approve=True, admin_user_id=user.id, notes=None
-        )
-        db.commit()
-        assert wallet_service.get_balance_cents(db, user.id) == 3000
+        with pytest.raises(HTTPException) as exc:
+            wallet_service.request_withdrawal(db, user.id, 2000, "Cuenta demo")
+        assert exc.value.status_code == 502
+        db.rollback()
+        # Al revertirse la transacción, el saldo no se toca.
+        assert wallet_service.get_balance_cents(db, user.id) == 5000
     finally:
         _cleanup(db, user_ids=[user_id] if user_id else [], appointment_ids=[])
         db.close()
@@ -324,7 +376,7 @@ def test_release_appointment_bills_real_time_and_refunds_remainder():
         assert payment is not None
         assert payment.billable_amount_cents == 2500
         assert wallet_service.get_balance_cents(db, patient.id) == 20000 - 2500
-        assert wallet_service.get_balance_cents(db, doctor_user.id) == 2500
+        assert wallet_service.get_balance_cents(db, doctor_user.id) == wallet_service.doctor_net_cents(2500)
     finally:
         _cleanup(db, user_ids=user_ids, appointment_ids=appointment_ids)
         db.close()

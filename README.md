@@ -131,7 +131,17 @@ Flujo de una cita:
 6. Si la consulta se **extiende**, se **consumen créditos del saldo** del paciente minuto a minuto (con aviso en vivo). Si el saldo se agota, la **videollamada finaliza automáticamente** (`closed_reason = completed_no_credits`).
 7. Al **completar** (o al expirar/cortar), se liquida el **tiempo real**: el tiempo reservado sale de la retención, el tiempo extra del saldo; lo no usado se **devuelve al paciente** y el médico recibe su parte.
 8. Si la cita se **cancela**, se **reembolsa** todo al paciente (`refunded`).
-9. Paciente y médico pueden **solicitar retiros**; un admin los aprueba o rechaza.
+9. Paciente y médico pueden **solicitar retiros**. Se procesan **automáticamente** con la pasarela de payouts (mock en pruebas, Stripe Connect en producción): el retiro pasa a `processing` y se confirma por webhook (`paid` o `failed`). Si falla, los créditos se devuelven solos; el admin solo monitorea.
+
+### Comisión de la plataforma
+
+SabioDoc cobra una **comisión del 20%** (`PLATFORM_FEE_BPS=2000`) sobre lo que cobra el médico. Al liquidar la cita, el monto facturado se reparte así:
+
+- **Bruto**: lo que paga el paciente por el tiempo real (`billable_amount_cents`).
+- **Comisión 20%**: ingreso de la plataforma (`platform_fee_cents`).
+- **Neto 80%**: lo que se acredita al monedero del médico (`doctor_amount_cents`).
+
+La comisión es configurable con `PLATFORM_FEE_BPS` (100 = 1%). El médico ve el desglose en su onboarding (tarifa neta), su monedero («Mis ingresos»), el panel operativo y la sala de videoconsulta. El admin lo ve en **Ingresos y salidas** (`/admin/finance`), con el detalle por cita liquidada.
 
 El panel de la videoconsulta muestra el **costo real de la sesión**, el máximo retenido, el tiempo extra consumido, el saldo disponible y si el cronómetro está activo o en pausa por ausencia de alguno.
 
@@ -143,16 +153,60 @@ Variables de entorno (backend):
 | WALLET_MIN_TOPUP_CENTS | Recarga mínima (centavos) | 500 |
 | WALLET_MAX_TOPUP_CENTS | Recarga máxima (centavos) | 100000 |
 | WALLET_MIN_WITHDRAWAL_CENTS | Retiro mínimo (centavos) | 1000 |
-| PLATFORM_FEE_BPS | Comisión de plataforma (puntos básicos) | 0 |
+| PLATFORM_FEE_BPS | Comisión de plataforma (puntos básicos) | 2000 |
+| PAYOUT_PROVIDER | Pasarela de retiros (`mock`/`stripe`) | mock |
 | VIDEO_PRESENCE_TIMEOUT_SECONDS | Segundos sin señal antes de pausar el cronómetro | 30 |
 | VIDEO_MIN_BILLABLE_MINUTES | Mínimo facturable si hubo sesión activa | 1 |
 
 ## 📋 Endpoints API
 
+### Seguridad de contraseñas
+- Política mínima: **8 caracteres**, al menos una letra y un número (validada en registro, reset y cambio).
+- Cambio de contraseña: `POST /auth/change-password` pide la contraseña actual, **revoca las demás sesiones** (`session_version`), cancela los enlaces de restablecimiento pendientes, registra el evento en auditoría y **envía un correo de confirmación**. Devuelve un token nuevo para no cerrar la sesión actual.
+- En la app, cada usuario lo encuentra en **Perfil → Seguridad** (`/me/security`, `/doctor/security`, `/admin/security`, `/reviewer/security`, `/support/security`).
+
 ### Autenticación
 - `POST /auth/register` - Registro de usuario
 - `POST /auth/login` - Inicio de sesión
 - `GET /auth/me` - Usuario actual
+- `POST /auth/forgot-password` - Solicitar enlace de restablecimiento
+- `POST /auth/reset-password` - Restablecer con token (correo)
+- `POST /auth/change-password` - Cambiar contraseña (sesión activa; exige la actual)
+
+### Roles y permisos
+Los roles son **múltiples** por usuario (tabla `user_roles`). `patient` es el rol base que
+**toda cuenta** tiene; `doctor`, `reviewer`, `admin` y `support` son roles sumables. La capacidad clínica
+(tarifa, aprobación, especialidades) sigue viviendo en `DoctorProfile`.
+
+- `POST /admin/users` / `PATCH /admin/users/{id}` aceptan `roles: ["patient", "support", ...]`.
+- El rol `doctor` requiere un `DoctorProfile` (se obtiene por la postulación médica).
+- `GET /admin/reviewers` y `POST/DELETE /admin/reviewers/{id}` gestionan el rol `reviewer`.
+- El rol `support` puede **listar usuarios** (`GET /admin/users`) y ver la **vista de soporte**
+  (`GET /admin/users/{id}/support`), pero **no** puede crear, editar ni eliminar usuarios, ni acceder
+  a finanzas, errores o moderación.
+- El filtro `GET /admin/users?role=patient` lista cuentas **solo paciente** (sin rol profesional);
+  los demás roles filtran por pertenencia (incluye combinaciones).
+
+### Soporte de usuario (admin)
+- `GET /admin/users/{id}/support` devuelve una **vista 360°** para dar soporte: roles y estado de la
+  cuenta, **cita actual/próxima y con qué médico o paciente**, videoconsultas (estado, sala, tiempos y
+  facturación), consultas de IA, monedero, retiros, **errores recientes** y notificaciones.
+- En el panel de administrador, cada usuario tiene la acción **«Ver información»** en el menú de tres puntos
+  (abre `/admin/users/{id}/support`), con un botón para **copiar el resumen** para el ticket. En el panel de
+  soporte, la lista de usuarios abre el detalle con un clic.
+
+### Tickets de soporte
+Sistema de tickets con conversación y adjuntos, para que pacientes y médicos reporten problemas
+(más allá de la vista de admin). El contenido del FAQ es fijo en el frontend.
+
+- `POST /support/tickets` - Crear ticket (paciente/médico). Adjunta contexto: rol, URL, navegador,
+  último error y cita/sesión. Sugiere prioridad según la categoría.
+- `GET /support/tickets` - Mis tickets · `GET /support/tickets/{id}` - Detalle (dueño o soporte/admin)
+- `POST /support/tickets/{id}/messages` - Responder (usuario o soporte)
+- `POST /support/attachments` - Subir adjunto (imagen/PDF) a Cloudinary y obtener su id
+- `GET /support/inbox` - (Soporte/admin) Bandeja con filtros · `PATCH /support/inbox/{id}` - Estado/prioridad/asignación
+- Pantallas: **Ayuda y soporte** (`/help`, con FAQ + formulario + mis tickets) y **Tickets** (`/support/tickets`).
+- Notificaciones **in-app** al crear, responder y resolver.
 
 ### Especialidades
 - `GET /specialties` - Listar/buscar especialidades
@@ -175,8 +229,12 @@ Variables de entorno (backend):
 - `POST /wallet/topup` - Recargar créditos (dinero ficticio)
 - `POST /wallet/withdraw` - Solicitar retiro de créditos a una cuenta
 - `GET /wallet/me/withdrawals` - Mis solicitudes de retiro
-- `GET /admin/withdrawals` - (Admin) Solicitudes de retiro
-- `POST /admin/withdrawals/{id}/process` - (Admin) Aprobar/rechazar un retiro
+- `GET /finance/policy` - Comisión vigente y límites de tarifa (para el médico)
+- `GET /admin/withdrawals` - (Admin) Historial de retiros (solo lectura)
+- `GET /admin/finance/overview` - (Admin) Ingresos, salidas, comisión y custodia
+- `GET /admin/finance/transactions` - (Admin) Todos los movimientos (entradas/salidas)
+- `GET /admin/finance/commissions` - (Admin) Ganancias por comisión por cita
+- `POST /webhooks/payouts/{provider}` - Webhook de la pasarela de payouts
 
 ### Favoritos
 - `POST /favorites` - Agregar/quitar favorito
@@ -278,5 +336,9 @@ Uso
  └─────────────────────────────────────────────────────────────────────────────────────┴──────────────────┴──────────────────┘                                                                                     
 
 ## 📝 Licencia
+
+> Todos los usuarios tienen además el rol base **`patient`**. Un mismo usuario puede
+> combinar varios roles (p. ej. `doctor` + `reviewer` + `patient`). Hay un usuario de soporte demo:
+> `soporte.demo@sabiodoc.app` / `SupportDemo123!` (rol `support`), con su panel en `/support`.
 
 Proyecto MVP - Uso interno.

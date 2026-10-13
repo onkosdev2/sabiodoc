@@ -98,6 +98,9 @@ def _serialize_status(
     else:
         current_cost_cents = 0
 
+    platform_fee_cents = current_cost_cents * settings.PLATFORM_FEE_BPS // 10000
+    doctor_amount_cents = max(0, current_cost_cents - platform_fee_cents)
+
     scheduled_minutes = video_session.estimated_minutes or 0
     overtime_minutes = max(0, billable_minutes_total - scheduled_minutes)
     can_afford_overtime = price_per_min_cents > 0 and patient_balance_cents >= price_per_min_cents
@@ -137,6 +140,9 @@ def _serialize_status(
         price_per_min_cents=price_per_min_cents,
         held_amount_cents=held_amount_cents,
         current_cost_cents=current_cost_cents,
+        platform_fee_cents=platform_fee_cents,
+        doctor_amount_cents=doctor_amount_cents,
+        platform_fee_bps=settings.PLATFORM_FEE_BPS,
         overtime_amount_cents=overtime_amount_cents,
         patient_balance_cents=patient_balance_cents,
         can_afford_overtime=can_afford_overtime,

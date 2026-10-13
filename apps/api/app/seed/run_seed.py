@@ -10,7 +10,7 @@ from app.db.session import SessionLocal
 from app.core.security import get_password_hash
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation_review import ConsultationReview
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserRoleAssignment
 from app.models.specialty import Specialty
 from app.models.doctor_profile import DoctorProfile
 from app.models.doctor_profile import DoctorApprovalStatus
@@ -31,8 +31,8 @@ def seed_demo_admin():
             admin = User(
                 email="admin.demo@sabiodoc.app",
                 password_hash=get_password_hash("AdminDemo123!"),
-                role=UserRole.admin,
             )
+            admin.set_roles({UserRole.patient, UserRole.admin})
             db.add(admin)
             db.commit()
             print("✅ Admin demo listo: admin.demo@sabiodoc.app / AdminDemo123!")
@@ -54,8 +54,8 @@ def seed_demo_patient():
             patient = User(
                 email=patient_email,
                 password_hash=get_password_hash("PatientDemo123!"),
-                role=UserRole.patient,  # O el rol que corresponda a usuario normal
             )
+            patient.set_roles({UserRole.patient})
             db.add(patient)
             db.commit()
             print(f"✅ Paciente demo listo: {patient_email} / PatientDemo123!")
@@ -78,8 +78,8 @@ def seed_demo_reviewer():
             reviewer = User(
                 email=reviewer_email,
                 password_hash=get_password_hash("ReviewerDemo123!"),
-                role=UserRole.reviewer,
             )
+            reviewer.set_roles({UserRole.patient, UserRole.reviewer})
             db.add(reviewer)
             db.commit()
             print("✅ Revisor demo listo: revisor.demo@sabiodoc.app / ReviewerDemo123!")
@@ -88,6 +88,30 @@ def seed_demo_reviewer():
     except Exception as e:
         db.rollback()
         print(f"❌ Error al insertar revisor demo: {e}")
+        raise
+    finally:
+        db.close()
+
+
+def seed_demo_support():
+    db = SessionLocal()
+    try:
+        support_email = "soporte.demo@sabiodoc.app"
+        support = db.query(User).filter(User.email == support_email).first()
+        if not support:
+            support = User(
+                email=support_email,
+                password_hash=get_password_hash("SupportDemo123!"),
+            )
+            support.set_roles({UserRole.patient, UserRole.support})
+            db.add(support)
+            db.commit()
+            print("✅ Soporte demo listo: soporte.demo@sabiodoc.app / SupportDemo123!")
+        else:
+            print("Soporte demo ya existe. Saltando seed.")
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error al insertar soporte demo: {e}")
         raise
     finally:
         db.close()
@@ -166,8 +190,8 @@ def seed_demo_doctors():
                 user = User(
                     email=doctor_data["email"],
                     password_hash=get_password_hash(doctor_data["password"]),
-                    role=UserRole.doctor,
                 )
+                user.set_roles({UserRole.patient, UserRole.doctor})
                 db.add(user)
                 db.flush()
 
@@ -260,7 +284,21 @@ def seed_demo_reviews():
             print("Ya existen resenas. Saltando seed de resenas.")
             return
 
-        patients = db.query(User).filter(User.role == UserRole.patient).order_by(User.id).all()
+        # Pacientes "puros": tienen el rol base pero ningún rol profesional.
+        patients = (
+            db.query(User)
+            .join(UserRoleAssignment, UserRoleAssignment.user_id == User.id)
+            .filter(UserRoleAssignment.role == UserRole.patient)
+            .filter(
+                ~User.role_assignments.any(
+                    UserRoleAssignment.role.in_(
+                        (UserRole.doctor, UserRole.reviewer, UserRole.admin)
+                    )
+                )
+            )
+            .order_by(User.id)
+            .all()
+        )
         if not patients:
             print("No hay pacientes para sembrar resenas.")
             return
@@ -352,6 +390,7 @@ if __name__ == "__main__":
     seed_specialties()
     seed_demo_admin()
     seed_demo_reviewer()
+    seed_demo_support()
     seed_demo_doctors()
     seed_demo_patient()
     seed_demo_reviews()

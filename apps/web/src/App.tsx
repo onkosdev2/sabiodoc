@@ -9,12 +9,14 @@ import ServiceWorkerUpdater from './components/ServiceWorkerUpdater'
 import DoctorLayout from './components/DoctorLayout'
 import AdminLayout from './components/AdminLayout'
 import ReviewerLayout from './components/ReviewerLayout'
+import SupportLayout from './components/SupportLayout'
 import RouteFallback from './components/RouteFallback'
 import AuthenticatedRoute from './components/guards/AuthenticatedRoute'
 import DoctorRoute from './components/guards/DoctorRoute'
 import PatientRoute from './components/guards/PatientRoute'
 import AdminRoute from './components/guards/AdminRoute'
 import ReviewerRoute from './components/guards/ReviewerRoute'
+import SupportRoute from './components/guards/SupportRoute'
 import NotFound from './pages/NotFound'
 
 // Páginas con carga diferida (code-splitting por ruta).
@@ -38,7 +40,12 @@ const AdminDoctorApplications = lazyWithRetry(() => import('./pages/AdminDoctorA
 const AdminOverview = lazyWithRetry(() => import('./pages/AdminOverview'))
 const AdminAppointments = lazyWithRetry(() => import('./pages/AdminAppointments'))
 const AdminUsers = lazyWithRetry(() => import('./pages/AdminUsers'))
+const AdminUserSupport = lazyWithRetry(() => import('./pages/AdminUserSupport'))
+const SupportUsers = lazyWithRetry(() => import('./pages/SupportUsers'))
+const SupportInbox = lazyWithRetry(() => import('./pages/SupportInbox'))
+const HelpSupport = lazyWithRetry(() => import('./pages/HelpSupport'))
 const AdminSystemHealth = lazyWithRetry(() => import('./pages/AdminSystemHealth'))
+const AdminErrors = lazyWithRetry(() => import('./pages/AdminErrors'))
 const ReviewerDoctorApplications = lazyWithRetry(() => import('./pages/ReviewerDoctorApplications'))
 const ConsultationChat = lazyWithRetry(() => import('./pages/ConsultationChat'))
 const VideoConsultationRoom = lazyWithRetry(() => import('./pages/VideoConsultationRoom'))
@@ -55,10 +62,11 @@ const MyAppointments = lazyWithRetry(() => import('./pages/MyAppointments'))
 const RescheduleAppointment = lazyWithRetry(() => import('./pages/RescheduleAppointment'))
 const ConsultationHistory = lazyWithRetry(() => import('./pages/ConsultationHistory'))
 const PatientProfilePage = lazyWithRetry(() => import('./pages/PatientProfile'))
+const SecuritySettings = lazyWithRetry(() => import('./pages/SecuritySettings'))
 const WalletPage = lazyWithRetry(() => import('./pages/Wallet'))
-const AdminWithdrawals = lazyWithRetry(() => import('./pages/AdminWithdrawals'))
 const AdminSpecialties = lazyWithRetry(() => import('./pages/AdminSpecialties'))
 const AdminReviews = lazyWithRetry(() => import('./pages/AdminReviews'))
+const AdminFinance = lazyWithRetry(() => import('./pages/AdminFinance'))
 
 function App() {
   return (
@@ -98,6 +106,8 @@ function App() {
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/me/history" element={<ConsultationHistory />} />
                 <Route path="/me/profile" element={<PatientProfilePage />} />
+                <Route path="/me/security" element={<SecuritySettings />} />
+                <Route path="/help" element={<HelpSupport />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />
@@ -121,6 +131,7 @@ function App() {
                 <Route path="/doctor/patients" element={<DoctorPatients />} />
                 <Route path="/doctor/patients/:patientId" element={<DoctorPatientTimeline />} />
                 <Route path="/doctor/profile" element={<DoctorOnboarding />} />
+                <Route path="/doctor/security" element={<SecuritySettings />} />
                 <Route path="/doctor/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
@@ -134,10 +145,14 @@ function App() {
                 <Route path="/admin/doctor-applications" element={<AdminDoctorApplications />} />
                 <Route path="/admin/reviewers" element={<AdminUsers />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
-                <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
+                <Route path="/admin/users/:userId/support" element={<AdminUserSupport />} />
+                <Route path="/admin/withdrawals" element={<Navigate to="/admin/finance" replace />} />
                 <Route path="/admin/specialties" element={<AdminSpecialties />} />
                 <Route path="/admin/reviews" element={<AdminReviews />} />
+                <Route path="/admin/finance" element={<AdminFinance />} />
                 <Route path="/admin/system" element={<AdminSystemHealth />} />
+                <Route path="/admin/errors" element={<AdminErrors />} />
+                <Route path="/admin/security" element={<SecuritySettings />} />
                 <Route path="/admin/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
@@ -147,6 +162,22 @@ function App() {
               <Route element={<ReviewerLayout />}>
                 <Route path="/reviewer" element={<Navigate to="/reviewer/doctor-applications" replace />} />
                 <Route path="/reviewer/doctor-applications" element={<ReviewerDoctorApplications />} />
+                <Route path="/reviewer/security" element={<SecuritySettings />} />
+              </Route>
+            </Route>
+
+            {/* Panel de soporte */}
+            <Route element={<SupportRoute />}>
+              <Route element={<SupportLayout />}>
+                <Route path="/support" element={<Navigate to="/support/tickets" replace />} />
+                <Route path="/support/users" element={<SupportUsers />} />
+                <Route path="/support/tickets" element={<SupportInbox />} />
+                <Route
+                  path="/support/users/:userId"
+                  element={<AdminUserSupport basePath="/support/users" />}
+                />
+                <Route path="/support/security" element={<SecuritySettings />} />
+                <Route path="/support/notifications" element={<NotificationsPage />} />
               </Route>
             </Route>
           </Routes>

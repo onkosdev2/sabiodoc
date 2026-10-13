@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import { Activity, Briefcase, CalendarDays, FileText, Star, Users, Wallet } from 'lucide-react'
+import { Activity, Briefcase, CalendarDays, FileText, LifeBuoy, Lock, Star, Users, Wallet } from 'lucide-react'
 
 import PanelLayout, { PanelNavItem } from './PanelLayout'
 import { useAuth } from '../context/AuthContext'
@@ -28,6 +28,8 @@ export default function DoctorLayout() {
         [{ to: '/doctor/wallet', label: 'Ingresos', icon: Wallet }],
         // Cuenta.
         [{ to: '/doctor/profile', label: 'Mi perfil profesional', icon: FileText }],
+        [{ to: '/doctor/security', label: 'Seguridad', icon: Lock }],
+        [{ to: '/help', label: 'Ayuda y soporte', icon: LifeBuoy }],
       ]
     : [[{ to: '/doctor/apply', label: 'Mi postulación', icon: FileText }]]
 

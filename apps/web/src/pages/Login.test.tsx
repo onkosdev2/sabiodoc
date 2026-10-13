@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import Login from './Login'
-import { login } from '../api/auth'
+import { login, type AuthResponse } from '../api/auth'
 import { getMyPatientProfile } from '../api/patients'
 import { useAuth } from '../context/AuthContext'
 
@@ -17,10 +17,10 @@ const mockedProfile = vi.mocked(getMyPatientProfile)
 const mockedUseAuth = vi.mocked(useAuth)
 const authLogin = vi.fn()
 
-const PATIENT_RESPONSE = {
+const PATIENT_RESPONSE: AuthResponse = {
   access_token: 'token-123',
   token_type: 'bearer',
-  user: { id: 1, email: 'ana@example.com', role: 'patient' as const, created_at: '' },
+  user: { id: 1, email: 'ana@example.com', role: 'patient', roles: ['patient'], created_at: '' },
 }
 
 function renderLogin() {
@@ -92,7 +92,7 @@ describe('Login', () => {
   it('lleva a los médicos a su panel pendiente', async () => {
     mockedLogin.mockResolvedValue({
       ...PATIENT_RESPONSE,
-      user: { id: 2, email: 'doc@example.com', role: 'doctor' as const, created_at: '' },
+      user: { id: 2, email: 'doc@example.com', role: 'doctor', roles: ['patient', 'doctor'], created_at: '' },
     })
 
     renderLogin()

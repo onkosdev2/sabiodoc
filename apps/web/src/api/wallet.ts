@@ -9,7 +9,7 @@ export type WalletTransactionType =
   | 'adjustment'
 
 export type WalletTransactionStatus = 'completed' | 'pending' | 'reversed'
-export type WithdrawalStatus = 'pending' | 'paid' | 'rejected'
+export type WithdrawalStatus = 'pending' | 'processing' | 'paid' | 'failed' | 'rejected'
 
 export interface WalletTransaction {
   id: number
@@ -23,12 +23,22 @@ export interface WalletTransaction {
   created_at: string
 }
 
+export interface DoctorIncomeSummary {
+  gross_income_cents: number
+  platform_fee_cents: number
+  net_income_cents: number
+  completed_count: number
+}
+
 export interface Wallet {
   balance_cents: number
   credits: number
   currency: string
   min_topup_cents: number
   min_withdrawal_cents: number
+  platform_fee_bps: number
+  platform_fee_percent: number
+  income_summary: DoctorIncomeSummary | null
   transactions: WalletTransaction[]
 }
 
@@ -39,6 +49,9 @@ export interface Withdrawal {
   amount_cents: number
   status: WithdrawalStatus
   destination: string
+  provider: string | null
+  provider_reference: string | null
+  failure_reason: string | null
   admin_notes: string | null
   requested_at: string | null
   processed_at: string | null
@@ -76,21 +89,9 @@ export const getMyWithdrawals = async (): Promise<WithdrawalListResponse> => {
   return response.data
 }
 
-export const getAdminWithdrawals = async (status?: WithdrawalStatus): Promise<WithdrawalListResponse> => {
-  const response = await client.get<WithdrawalListResponse>('/admin/withdrawals', {
-    params: status ? { status_filter: status } : {},
-  })
-  return response.data
-}
-
-export const processWithdrawal = async (
-  withdrawalId: number,
-  approve: boolean,
-  notes?: string,
-): Promise<Withdrawal> => {
-  const response = await client.post<Withdrawal>(`/admin/withdrawals/${withdrawalId}/process`, {
-    approve,
-    notes: notes?.trim() || undefined,
-  })
+export const getAdminWithdrawals = async (
+  params: { status_filter?: WithdrawalStatus; start?: string; end?: string } = {},
+): Promise<WithdrawalListResponse> => {
+  const response = await client.get<WithdrawalListResponse>('/admin/withdrawals', { params })
   return response.data
 }

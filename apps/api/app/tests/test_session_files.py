@@ -19,7 +19,8 @@ from app.services import session_file_service
 
 
 def _make_user(db, role: UserRole = UserRole.patient) -> User:
-    user = User(email=f"file_{uuid.uuid4().hex[:8]}@example.com", password_hash="x", role=role)
+    user = User(email=f"file_{uuid.uuid4().hex[:8]}@example.com", password_hash="x")
+    user.set_roles({role})
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -1,11 +1,14 @@
 import client from './client'
 
+export type UserRole = 'patient' | 'doctor' | 'reviewer' | 'admin' | 'support'
+
 export interface User {
   id: number
   email: string
-  role: 'patient' | 'doctor' | 'reviewer' | 'admin'
+  // ``role`` es el rol primario (para mostrar); ``roles`` es el conjunto real.
+  role: UserRole
+  roles: UserRole[]
   doctor_status?: 'pending' | 'approved' | 'rejected' | 'suspended' | null
-  is_reviewer?: boolean
   is_email_verified?: boolean
   display_name?: string | null
   doctor_display_name?: string | null
@@ -77,6 +80,24 @@ export const forgotPassword = async (email: string): Promise<MessageResponse> =>
 export const resetPassword = async (token: string, newPassword: string): Promise<MessageResponse> => {
   const response = await client.post<MessageResponse>('/auth/reset-password', {
     token,
+    new_password: newPassword,
+  })
+  return response.data
+}
+
+export interface ChangePasswordResponse {
+  message: string
+  access_token: string
+  token_type: string
+}
+
+/** Cambia la contraseña del usuario autenticado (requiere la actual). */
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResponse> => {
+  const response = await client.post<ChangePasswordResponse>('/auth/change-password', {
+    current_password: currentPassword,
     new_password: newPassword,
   })
   return response.data

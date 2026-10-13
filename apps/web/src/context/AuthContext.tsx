@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User, getMe } from '../api/auth'
 import { heartbeatPresence } from '../api/doctors'
-import { clearStoredAuth, getStoredToken, setStoredAuth, setStoredUser } from '../utils/authStorage'
+import { clearStoredAuth, getStoredToken, setStoredAuth, setStoredToken, setStoredUser } from '../utils/authStorage'
 
 interface AuthContextType {
   user: User | null
@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (token: string, user: User, remember?: boolean) => void
   logout: () => void
   refreshUser: () => Promise<User | null>
+  updateToken: (token: string) => void
   isAuthenticated: boolean
   isLoading: boolean
 }
@@ -99,6 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const updateToken = (newToken: string) => {
+    setStoredToken(newToken)
+    setToken(newToken)
+  }
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -106,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refreshUser,
+      updateToken,
       isAuthenticated: !!token && !!user,
       isLoading
     }}>

@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.doctor_presence import DoctorPresence, DoctorPresenceStatus
 from app.models.doctor_profile import DoctorProfile
 from app.models.doctor_specialty import DoctorSpecialty
@@ -47,6 +48,8 @@ class DoctorOnboardingService:
         return presence
 
     def build_application_response(self, doctor_profile: DoctorProfile, specialties: list[Specialty]) -> DoctorApplicationResponse:
+        price = doctor_profile.price_per_min_cents or 0
+        platform_fee = price * settings.PLATFORM_FEE_BPS // 10000
         return DoctorApplicationResponse(
             doctor_id=doctor_profile.id,
             user_id=doctor_profile.user_id,
@@ -54,7 +57,9 @@ class DoctorOnboardingService:
             display_name=doctor_profile.display_name,
             professional_title=doctor_profile.professional_title,
             bio_short=doctor_profile.bio_short,
-            price_per_min_cents=doctor_profile.price_per_min_cents,
+            price_per_min_cents=price,
+            platform_fee_percent=round(settings.PLATFORM_FEE_BPS / 100, 2),
+            net_price_per_min_cents=max(0, price - platform_fee),
             license_number=doctor_profile.license_number,
             license_country=doctor_profile.license_country,
             specialist_registry_number=doctor_profile.specialist_registry_number,

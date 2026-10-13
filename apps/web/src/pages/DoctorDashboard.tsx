@@ -28,6 +28,7 @@ import SummaryToggleButton from '../components/SummaryToggleButton'
 const METRIC_DESTINATIONS: Record<string, string> = {
   scheduled: '/doctor/appointments?status=scheduled',
   completed: '/doctor/appointments?status=completed',
+  net_income: '/doctor/wallet',
   rating: '/doctor/reviews',
   notifications: '/doctor/notifications',
 }

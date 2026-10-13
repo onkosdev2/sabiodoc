@@ -60,7 +60,7 @@ class AppointmentService:
         return any(link.specialty_id == specialty_id for link in doctor_profile.doctor_specialties)
 
     def ensure_bookable_doctor(self, doctor_profile: DoctorProfile, specialty_id: int) -> None:
-        if doctor_profile.user.role.value != "doctor":
+        if not doctor_profile.user.is_doctor:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El profesional seleccionado no es medico")
         if doctor_profile.status != DoctorApprovalStatus.approved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico aun no esta aprobado")
@@ -197,6 +197,9 @@ class AppointmentService:
             review_comment=review.comment if review else None,
             payment_amount_cents=payment.amount_cents if payment else None,
             payment_status=payment.status if payment else None,
+            payment_platform_fee_cents=payment.platform_fee_cents if payment else None,
+            payment_doctor_amount_cents=payment.doctor_amount_cents if payment else None,
+            platform_fee_percent=round(settings.PLATFORM_FEE_BPS / 100, 2),
             files=files or [],
             files_enabled=settings.cloudinary_enabled,
         )

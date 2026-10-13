@@ -28,8 +28,11 @@ class WalletTransactionStatus(str, enum.Enum):
 
 
 class WithdrawalStatus(str, enum.Enum):
+    # pending/rejected son legado del flujo manual de aprobación.
     pending = "pending"
+    processing = "processing"
     paid = "paid"
+    failed = "failed"
     rejected = "rejected"
 
 
@@ -77,9 +80,13 @@ class Withdrawal(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     amount_cents = Column(Integer, nullable=False)
-    status = Column(Enum(WithdrawalStatus), nullable=False, default=WithdrawalStatus.pending, index=True)
-    # Cuenta de destino (dinero falso por ahora: se guarda como texto de referencia).
+    status = Column(Enum(WithdrawalStatus), nullable=False, default=WithdrawalStatus.processing, index=True)
+    # Cuenta de destino (en Stripe, el ID de la cuenta conectada).
     destination = Column(String(255), nullable=False)
+    # Proveedor de payouts que procesó el retiro y su referencia externa.
+    provider = Column(String(40), nullable=True)
+    provider_reference = Column(String(255), nullable=True, index=True)
+    failure_reason = Column(Text, nullable=True)
     admin_notes = Column(Text, nullable=True)
     processed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     requested_at = Column(DateTime(timezone=True), server_default=func.now())

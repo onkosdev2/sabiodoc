@@ -40,6 +40,9 @@ export interface VideoSessionStatus {
   price_per_min_cents: number
   held_amount_cents: number
   current_cost_cents: number
+  platform_fee_cents: number
+  doctor_amount_cents: number
+  platform_fee_bps: number
   overtime_amount_cents: number
   patient_balance_cents: number
   can_afford_overtime: boolean
