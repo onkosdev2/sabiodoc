@@ -117,7 +117,7 @@ class VideoSessionStatusResponse(BaseModel):
     patient_balance_cents: int = 0
     can_afford_overtime: bool = False
     billing_mode: str = "scheduled"
-    # Presencia en la sala (el cronometro solo corre con ambos).
+    # Presencia en la sala (el cronómetro solo corre con ambos).
     patient_present: bool = False
     doctor_present: bool = False
     both_present: bool = False

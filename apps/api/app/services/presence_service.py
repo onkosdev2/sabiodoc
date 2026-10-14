@@ -1,15 +1,15 @@
-"""Presencia real de los medicos.
+"""Presencia real de los médicos.
 
 La presencia no se guarda como un estado inventado: se **deriva** de datos
 reales:
-- ``last_seen_at``: ultima actividad autenticada (heartbeat del frontend).
+- ``last_seen_at``: última actividad autenticada (heartbeat del frontend).
 - sesiones de video activas y vigentes.
 - ``is_accepting_consultations``.
 
 Estados resultantes (etiquetas):
-- "En sesion"   -> tiene una videoconsulta activa.
+- "En sesión"   -> tiene una videoconsulta activa.
 - "Disponible"  -> activo recientemente y aceptando consultas.
-- "No disponible" -> activo pero no esta aceptando consultas.
+- "No disponible" -> activo pero no está aceptando consultas.
 - "Desconectado" -> sin actividad reciente.
 """
 
@@ -80,7 +80,7 @@ def resolve_presence(
     now: datetime | None = None,
     has_active_session: bool | None = None,
 ) -> ResolvedPresence:
-    """Calcula la presencia real de un medico."""
+    """Calcula la presencia real de un médico."""
     now = now or datetime.now(UTC)
     presence = doctor_profile.presence
     last_seen_at = presence.last_seen_at if presence else None
@@ -101,7 +101,7 @@ def resolve_presence(
 
 
 def touch_presence(db: Session, doctor_profile: DoctorProfile, *, now: datetime | None = None) -> DoctorPresence:
-    """Marca al medico como activo ahora (heartbeat)."""
+    """Marca al médico como activo ahora (heartbeat)."""
     now = now or datetime.now(UTC)
     presence = doctor_profile.presence
     if presence is None:

@@ -342,7 +342,7 @@ def list_appointments(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Citas de todos los medicos, con filtro opcional por estado."""
+    """Citas de todos los médicos, con filtro opcional por estado."""
     query = db.query(Appointment).options(joinedload(Appointment.patient).joinedload(User.patient_profile))
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
@@ -378,7 +378,7 @@ def get_live_video_sessions(
                 video_session_id=session.id,
                 appointment_id=session.appointment_id,
                 consultation_id=session.consultation_id,
-                doctor_name=session.doctor.display_name if session.doctor else "Medico",
+                doctor_name=session.doctor.display_name if session.doctor else "Médico",
                 patient_email=session.patient.email if session.patient else "",
                 patient_name=get_patient_display_name(session.patient),
                 status=session.status.value,
@@ -610,7 +610,7 @@ def create_user(
             detail="El correo ya está registrado",
         )
 
-    # Un medico requiere un DoctorProfile (flujo de postulación). Se puede crear
+    # Un médico requiere un DoctorProfile (flujo de postulación). Se puede crear
     # la cuenta y luego promoverla cuando el perfil exista.
     if UserRole.doctor in set(payload.roles):
         raise HTTPException(
@@ -760,7 +760,7 @@ def delete_user(
         db.query(DoctorProfile).filter(DoctorProfile.user_id == user.id).first()
     )
 
-    # Protegemos el historial clinico: no se elimina un usuario con actividad real.
+    # Protegemos el historial clínico: no se elimina un usuario con actividad real.
     has_history = (
         db.query(Appointment.id).filter(Appointment.patient_id == user.id).first()
         or db.query(Consultation.id).filter(Consultation.user_id == user.id).first()

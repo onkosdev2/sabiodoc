@@ -419,7 +419,7 @@ def is_off_topic(message: str) -> bool:
 # Confirmaciones cortas que aceptan una oferta del asistente.
 _AFFIRMATIVE_RE = re.compile(
     r"^(?:si+|claro|dale|ok|okay|okey|perfecto|de acuerdo|adelante|correcto|listo|vamos|"
-    r"hazlo|generalo|genera|sip|yes|yep|afirmativo|exacto|asi es|eso es)"
+    r"hazlo|generalo|genera|sip|yes|yep|afirmativo|exacto|así es|eso es)"
     r"(?:[\s,]+(?:que|quiero|el|resumen|por favor|porfavor|porfa|gracias|pues|"
     r"entonces|ya|si+|generalo|genera|hazlo))*[\s.!]*$",
     re.IGNORECASE,
@@ -877,7 +877,7 @@ Reglas:
         symptom_summary = self._extract_symptoms(sentences, specialty_slug)
         duration = self._extract_first_match(
             sentences,
-            ("desde", "hace", "día", "dias", "semana", "semanas", "mes", "meses", "año", "años", "empeor", "mejor", "igual"),
+            ("desde", "hace", "día", "días", "semana", "semanas", "mes", "meses", "año", "años", "empeor", "mejor", "igual"),
         )
         medications = self._extract_matching_snippets(
             sentences,

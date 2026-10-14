@@ -79,12 +79,12 @@ logger = get_logger(__name__)
 
 
 def _get_approved_doctor_profile_or_403(db: Session, current_user: User) -> DoctorProfile:
-    # La capacidad medica depende del perfil, no del rol principal del usuario.
+    # La capacidad médica depende del perfil, no del rol principal del usuario.
     return get_doctor_profile_or_403(db, current_user, require_approved=True)
 
 
 def _rating_aggregates(db: Session, doctor_ids: list[int]) -> dict[int, tuple[float, int]]:
-    """Calcula el promedio y la cantidad real de resenas desde consultation_reviews."""
+    """Calcula el promedio y la cantidad real de reseñas desde consultation_reviews."""
     if not doctor_ids:
         return {}
     rows = (
@@ -228,7 +228,7 @@ def presence_heartbeat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Marca al medico como activo ahora (heartbeat del frontend)."""
+    """Marca al médico como activo ahora (heartbeat del frontend)."""
     doctor_profile = get_doctor_profile_or_403(db, current_user)
     presence = touch_presence(db, doctor_profile)
     return DoctorPresenceResponse(
@@ -269,7 +269,7 @@ def upsert_my_doctor_profile(
 ):
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == current_user.id).first()
     if not doctor_profile and not current_user.is_doctor:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes un perfil medico")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes un perfil médico")
 
     doctor_onboarding_service.validate_price_or_raise(payload.price_per_min_cents)
 
@@ -403,7 +403,7 @@ def update_doctor_application_status(
 ):
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
     if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Postulacion medica no encontrada")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Postulacion médica no encontrada")
 
     doctor_profile.status = payload.status
     doctor_profile.review_notes = payload.review_notes
@@ -490,7 +490,7 @@ def upsert_my_availability(
 
 
 def _get_live_video_sessions(db: Session, doctor_profile: DoctorProfile) -> list[VideoSession]:
-    """Sesiones preparadas/activas que aun no expiran.
+    """Sesiones preparadas/activas que aún no expiran.
 
     Marca como expiradas las preparadas vencidas. Centraliza la regla para que el
     dashboard y la pagina de videoconsultas muestren exactamente lo mismo.
@@ -628,7 +628,7 @@ def get_patient_timeline_for_doctor(
     if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo puedes ver el historial de pacientes con relacion clinica previa o cita agendada",
+            detail="Solo puedes ver el historial de pacientes con relacion clínica previa o cita agendada",
         )
 
     # Reflejar borradores inactivos como cerrados en el historial.
@@ -667,7 +667,7 @@ def get_patient_timeline_for_doctor(
     for appointment in appointments:
         review = appointment.review[0] if appointment.review else None
         # La preconsulta vinculada ya aparece como su propio evento: no repetimos
-        # su resumen/ficha en la cita para no duplicar la informacion clinica.
+        # su resumen/ficha en la cita para no duplicar la información clínica.
         linked_consultation = (
             appointment.consultation_id is not None
             and appointment.consultation_id in appointment_items_consultation_ids
@@ -749,7 +749,7 @@ def list_my_patients(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Pacientes con los que el medico ha trabajado (citas y/o videoconsultas)."""
+    """Pacientes con los que el médico ha trabajado (citas y/o videoconsultas)."""
     doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
     now = datetime.now(timezone.utc)
 
@@ -842,7 +842,7 @@ def get_doctor_bookable_slots(
     if not doctor_profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
     if doctor_profile.status != DoctorApprovalStatus.approved or not doctor_profile.is_accepting_consultations:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico no esta disponible para nuevas citas")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no está disponible para nuevas citas")
     slots = appointment_service.compute_bookable_slots(
         db,
         doctor_profile=doctor_profile,
@@ -865,12 +865,12 @@ def get_patient_profile_for_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Perfil del paciente para el medico, si existe relacion clinica."""
+    """Perfil del paciente para el médico, si existe relacion clínica."""
     doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
     if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo puedes ver pacientes con relacion clinica previa o cita agendada",
+            detail="Solo puedes ver pacientes con relacion clínica previa o cita agendada",
         )
 
     patient = db.query(User).filter(User.id == patient_id).first()
@@ -895,7 +895,7 @@ def list_patient_profile_change_requests(
     if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo puedes ver pacientes con relacion clinica previa o cita agendada",
+            detail="Solo puedes ver pacientes con relacion clínica previa o cita agendada",
         )
 
     requests = list_for_patient_and_doctor(
@@ -920,7 +920,7 @@ def create_patient_profile_change_request(
     if not _doctor_can_view_patient_history(db, doctor_profile.id, patient_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo puedes ver pacientes con relacion clinica previa o cita agendada",
+            detail="Solo puedes ver pacientes con relacion clínica previa o cita agendada",
         )
 
     patient = db.query(User).filter(User.id == patient_id).first()
@@ -941,9 +941,9 @@ def create_patient_profile_change_request(
         db,
         user_id=patient.id,
         notification_type="patient_profile_change_request",
-        title="Tu medico propone actualizar tus datos",
+        title="Tu médico propone actualizar tus datos",
         body=(
-            f"El Dr(a). {doctor_profile.display_name} propuso cambios en tu perfil clinico. "
+            f"El Dr(a). {doctor_profile.display_name} propuso cambios en tu perfil clínico. "
             "Revisalos y acepta o rechaza los cambios."
         ),
         action_url="/me/profile",
@@ -1019,7 +1019,7 @@ def get_my_reviews(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Reseñas reales del medico autenticado."""
+    """Reseñas reales del médico autenticado."""
     doctor_profile = _get_approved_doctor_profile_or_403(db, current_user)
     reviews = (
         db.query(ConsultationReview)
@@ -1049,7 +1049,7 @@ def get_my_reviews(
 
 @router.get("/{doctor_id}", response_model=DoctorDetailResponse)
 def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
-    """Perfil publico de un medico aprobado con sus especialidades y resenas."""
+    """Perfil publico de un médico aprobado con sus especialidades y reseñas."""
     doctor_profile = (
         db.query(DoctorProfile)
         .filter(DoctorProfile.id == doctor_id, DoctorProfile.status == DoctorApprovalStatus.approved)

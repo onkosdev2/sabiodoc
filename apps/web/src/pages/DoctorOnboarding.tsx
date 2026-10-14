@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, Camera, Trash2 } from 'lucide-react'
 import { Country, getCitiesOfCountry, localizedCountryName } from '../utils/locations'
@@ -14,6 +14,7 @@ import { getMyDoctorApplication, updateMyDoctorProfile, uploadMyDoctorPhoto, del
 import { getFinancePolicy } from '../api/finance'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
+import { focusFirstInvalid } from '../utils/forms'
 import { timeZoneLabel } from '../utils/format'
 import { hasRole } from '../utils/roles'
 
@@ -123,6 +124,8 @@ export default function DoctorOnboarding() {
   
   // --- Estados de UI ---
   const [availableCities, setAvailableCities] = useState<string[]>([])
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const formRef = useRef<HTMLFormElement>(null)
   const [specialties, setSpecialties] = useState<Specialty[]>([])
   const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -305,16 +308,24 @@ export default function DoctorOnboarding() {
     
     // --- VALIDACIÓN PASO 1 ---
     if (step === 1) {
-      if (!email || !baseName) return setError('Completa los campos obligatorios.')
-      if (!cityName.trim()) return setError('Por favor especifica tu ciudad.')
-      
+      const next: Record<string, string> = {}
+      if (!email.trim()) next.email = 'Ingresa tu correo.'
+      if (!baseName.trim()) next.baseName = 'Ingresa tus nombres y apellidos.'
+      if (!cityName.trim()) next.cityName = 'Especifica tu ciudad.'
+
       if (!isDoctorEditing) {
-        if (password.length < 8 || password !== confirmPassword) {
-          return setError('Las contraseñas no coinciden o son muy cortas (mínimo 8 caracteres).')
-        }
+        if (password.length < 8) next.password = 'Mínimo 8 caracteres.'
+        else if (password !== confirmPassword) next.confirmPassword = 'Las contraseñas no coinciden.'
         // La existencia del email se valida al enviar: el backend responde con un
         // error claro si ya está registrado como médico. No exponemos un endpoint
         // público que revele si un correo existe (enumeración de usuarios).
+      }
+
+      if (Object.keys(next).length > 0) {
+        setFieldErrors(next)
+        setError('Revisa los campos marcados.')
+        focusFirstInvalid(formRef.current)
+        return
       }
     }
     
@@ -327,6 +338,7 @@ export default function DoctorOnboarding() {
     }
     
     // Si todo sale bien, avanzamos al siguiente paso
+    setFieldErrors({})
     setStep((prev) => Math.min(prev + 1, totalSteps))
   }
 
@@ -556,7 +568,7 @@ export default function DoctorOnboarding() {
             </div>
             )}
 
-            <form onSubmit={isProfileRoute || step === totalSteps ? handleSubmit : (e) => e.preventDefault()} className="space-y-6">
+            <form ref={formRef} onSubmit={isProfileRoute || step === totalSteps ? handleSubmit : (e) => e.preventDefault()} className="space-y-6">
               
               {/* PASO 1: CUENTA Y UBICACIÓN */}
               {(isProfileRoute || step === 1) && (
@@ -572,9 +584,10 @@ export default function DoctorOnboarding() {
                       required
                       placeholder="medico@clinica.pe"
                       autoComplete="email"
+                      error={fieldErrors.email}
                     />
 
-                    <Field label="Nombres y apellidos" required htmlFor="doctor-name">
+                    <Field label="Nombres y apellidos" required htmlFor="doctor-name" error={fieldErrors.baseName}>
                       <div className="flex gap-2">
                         <select
                           aria-label="Tratamiento"
@@ -597,6 +610,7 @@ export default function DoctorOnboarding() {
                           className="input-field min-w-0 flex-1"
                           required
                           placeholder="Juan Pérez"
+                          aria-invalid={fieldErrors.baseName ? true : undefined}
                         />
                       </div>
                     </Field>
@@ -611,6 +625,7 @@ export default function DoctorOnboarding() {
                           minLength={8}
                           placeholder="••••••••"
                           autoComplete="new-password"
+                          error={fieldErrors.password}
                         />
                         <PasswordInput
                           label="Confirmar contraseña"
@@ -620,6 +635,7 @@ export default function DoctorOnboarding() {
                           minLength={8}
                           placeholder="••••••••"
                           autoComplete="new-password"
+                          error={fieldErrors.confirmPassword}
                         />
                       </>
                     )}
@@ -637,6 +653,7 @@ export default function DoctorOnboarding() {
                       onChange={(e) => setCityName(e.target.value)}
                       required
                       placeholder="Escribe o elige tu ciudad"
+                      error={fieldErrors.cityName}
                     />
                     <datalist id={`city-options-${countryIso}`}>
                       {availableCities.map((c) => (

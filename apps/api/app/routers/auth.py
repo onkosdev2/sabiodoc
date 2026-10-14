@@ -180,7 +180,7 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     existing_user = db.query(User).filter(User.email == doctor_data.email).first()
     
     if existing_user:
-        # Si ya es doctor, lo bloqueamos (ya tiene perfil medico)
+        # Si ya es doctor, lo bloqueamos (ya tiene perfil médico)
         if existing_user.is_doctor:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

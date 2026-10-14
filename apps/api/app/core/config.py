@@ -79,12 +79,12 @@ class Settings(BaseSettings):
     APPOINTMENT_BUFFER_MINUTES: int = 10
     NO_SHOW_GRACE_MINUTES: int = 10
     VIDEO_CONSENT_VERSION: str = "v1"
-    # El cronometro solo corre cuando ambos estan en la sala. Si un participante
-    # deja de dar senales por mas de este tiempo, el cronometro se pausa.
+    # El cronómetro solo corre cuando ambos están en la sala. Si un participante
+    # deja de dar senales por mas de este tiempo, el cronómetro se pausa.
     VIDEO_PRESENCE_TIMEOUT_SECONDS: int = 30
-    # Minimo facturable cuando la sesion estuvo activa (evita cobros de 0).
+    # Minimo facturable cuando la sesión estuvo activa (evita cobros de 0).
     VIDEO_MIN_BILLABLE_MINUTES: int = 1
-    # Si una sesion activa se queda sin nadie en la sala durante este tiempo,
+    # Si una sesión activa se queda sin nadie en la sala durante este tiempo,
     # se cierra y liquida automaticamente.
     VIDEO_SESSION_ABANDON_MINUTES: int = 5
 
@@ -93,20 +93,20 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
     CLOUDINARY_FOLDER: str = "sabiodoc/session-files"
-    # Carpeta para las fotos de perfil de los medicos.
+    # Carpeta para las fotos de perfil de los médicos.
     CLOUDINARY_DOCTOR_FOLDER: str = "sabiodoc/doctors"
-    # Tamano maximo de la foto de perfil (MB).
+    # Tamano máximo de la foto de perfil (MB).
     DOCTOR_PHOTO_MAX_MB: int = 5
-    # Maximo de archivos que cada participante puede enviar por sesion.
+    # Maximo de archivos que cada participante puede enviar por sesión.
     SESSION_FILES_MAX: int = 10
-    # Tamano maximo por archivo (MB).
+    # Tamano máximo por archivo (MB).
     SESSION_FILE_MAX_MB: int = 20
 
     # Borradores de consulta IA: se cierran automaticamente si no registran
-    # actividad (mensajes) en este tiempo. 168 h = 7 dias.
+    # actividad (mensajes) en este tiempo. 168 h = 7 días.
     CONSULTATION_DRAFT_TTL_HOURS: int = 168
 
-    # Presencia de medicos: se considera "activo" si tuvo actividad en esta ventana.
+    # Presencia de médicos: se considera "activo" si tuvo actividad en esta ventana.
     DOCTOR_PRESENCE_ONLINE_MINUTES: int = 5
 
     # Registro de errores para el panel de administracion.
@@ -115,16 +115,16 @@ class Settings(BaseSettings):
     # Limite de caracteres guardados por campo de texto largo (stack/contexto).
     ERROR_LOG_MAX_TEXT_CHARS: int = 20000
 
-    # Tickets de soporte: maximo de adjuntos por mensaje.
+    # Tickets de soporte: máximo de adjuntos por mensaje.
     SUPPORT_TICKET_MAX_ATTACHMENTS: int = 5
 
-    # Creditos (dinero de pruebas): 1 credito = 1 USD = 100 centavos.
+    # Créditos (dinero de pruebas): 1 crédito = 1 USD = 100 centavos.
     CREDITS_CURRENCY: str = "usd"
     WALLET_MIN_TOPUP_CENTS: int = 500
     WALLET_MAX_TOPUP_CENTS: int = 100000
     WALLET_MIN_WITHDRAWAL_CENTS: int = 1000
     # Comision de la plataforma sobre cada cita, en puntos basicos (100 = 1%).
-    # 2000 = 20%: el medico recibe el 80% de lo que cobra.
+    # 2000 = 20%: el médico recibe el 80% de lo que cobra.
     PLATFORM_FEE_BPS: int = 2000
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

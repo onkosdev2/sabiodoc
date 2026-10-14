@@ -28,14 +28,14 @@ def close_stale_consultations(
 ) -> int:
     """Cierra consultas IA abiertas sin actividad reciente.
 
-    "Actividad" = fecha del ultimo mensaje del chat; si nunca hubo mensajes,
+    "Actividad" = fecha del último mensaje del chat; si nunca hubo mensajes,
     se usa la fecha de creacion. Un borrador (`created`) o una consulta
     `active` que llevan mas de `ttl_hours` sin movimiento se cierran y se
     marcan con `auto_closed=True`.
 
     Excepcion: los borradores donde el usuario nunca escribio nada (por ejemplo,
     un clic accidental al crear la consulta) se eliminan por completo en lugar
-    de cerrarse, para no dejar registros sin valor clinico en el historial.
+    de cerrarse, para no dejar registros sin valor clínico en el historial.
 
     Devuelve cuantas consultas se cerraron (no cuenta las purgadas).
     """
@@ -73,7 +73,7 @@ def close_stale_consultations(
     now = datetime.now(UTC)
 
     # Borradores donde el paciente nunca envio un mensaje: no hubo intencion
-    # real de consultar, asi que no aportan nada al historial.
+    # real de consultar, así que no aportan nada al historial.
     draft_ids = [c.id for c in stale if c.status == ConsultationStatus.created]
     engaged_draft_ids: set[int] = set()
     if draft_ids:

@@ -110,7 +110,7 @@ class AppointmentPayment(Base):
     # Lo que efectivamente recibe el médico (monto menos comisión de plataforma).
     doctor_amount_cents = Column(Integer, nullable=False)
     platform_fee_cents = Column(Integer, nullable=False, server_default="0")
-    # Tiempo real facturado y monto real cobrado (<= amount_cents, que es el maximo retenido).
+    # Tiempo real facturado y monto real cobrado (<= amount_cents, que es el máximo retenido).
     billable_seconds = Column(Integer, nullable=False, server_default="0")
     billable_amount_cents = Column(Integer, nullable=True)
     # Tiempo extra ya consumido del monedero del paciente (fuera de la retencion).

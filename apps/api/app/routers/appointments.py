@@ -119,7 +119,7 @@ def create_appointment(
     if not payload.accepted_overtime_terms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Debes aceptar que una consulta extendida puede consumir creditos adicionales",
+            detail="Debes aceptar que una consulta extendida puede consumir créditos adicionales",
         )
 
     scheduled_at = payload.scheduled_at.astimezone(UTC)

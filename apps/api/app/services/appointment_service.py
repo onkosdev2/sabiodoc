@@ -35,13 +35,13 @@ class AppointmentService:
         slots_by_day: dict[int, list] = {}
         for slot in slots:
             if slot.weekday < 0 or slot.weekday > 6:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dia de semana invalido")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dia de semana inválido")
             if slot.start_time >= slot.end_time:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cada franja debe tener hora de inicio menor a hora de fin")
             if slot.is_active:
                 slots_by_day.setdefault(slot.weekday, []).append(slot)
 
-        # Dos franjas activas del mismo dia no pueden solaparse.
+        # Dos franjas activas del mismo día no pueden solaparse.
         for weekday, day_slots in slots_by_day.items():
             ordered = sorted(day_slots, key=lambda item: item.start_time)
             for previous, current in zip(ordered, ordered[1:]):
@@ -49,8 +49,8 @@ class AppointmentService:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=(
-                            "Las franjas activas de un mismo dia no pueden solaparse "
-                            f"(dia {weekday}: {previous.start_time.strftime('%H:%M')}-"
+                            "Las franjas activas de un mismo día no pueden solaparse "
+                            f"(día {weekday}: {previous.start_time.strftime('%H:%M')}-"
                             f"{previous.end_time.strftime('%H:%M')} y "
                             f"{current.start_time.strftime('%H:%M')}-{current.end_time.strftime('%H:%M')})"
                         ),
@@ -61,13 +61,13 @@ class AppointmentService:
 
     def ensure_bookable_doctor(self, doctor_profile: DoctorProfile, specialty_id: int) -> None:
         if not doctor_profile.user.is_doctor:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El profesional seleccionado no es medico")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El profesional seleccionado no es médico")
         if doctor_profile.status != DoctorApprovalStatus.approved:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico aun no esta aprobado")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico aún no está aprobado")
         if not doctor_profile.is_accepting_consultations:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico no acepta consultas actualmente")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no acepta consultas actualmente")
         if not self.doctor_supports_specialty(doctor_profile, specialty_id):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico no atiende esta especialidad")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no atiende esta especialidad")
 
     def ensure_slot_matches_availability(
         self,
@@ -90,7 +90,7 @@ class AppointmentService:
             and slot.end_time >= local_end.time()
         ]
         if not matches:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La hora elegida no coincide con la disponibilidad del medico")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La hora elegida no coincide con la disponibilidad del médico")
 
     def ensure_no_overlap(self, db: Session, *, doctor_id: int, scheduled_at: datetime, duration_minutes: int) -> None:
         buffer_delta = timedelta(minutes=settings.APPOINTMENT_BUFFER_MINUTES)
@@ -113,7 +113,7 @@ class AppointmentService:
             current_protected_start = appointment.scheduled_at - buffer_delta
             current_protected_end = current_end + buffer_delta
             if current_protected_start < protected_end and current_protected_end > protected_start:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El medico ya tiene una cita en ese horario")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El médico ya tiene una cita en ese horario")
 
     def build_ai_snapshots(
         self, db: Session, consultation: Consultation | None
@@ -195,7 +195,7 @@ class AppointmentService:
             patient_email=appointment.patient.email if appointment.patient else "",
             patient_name=self._patient_display_name(appointment),
             doctor_id=appointment.doctor_id,
-            doctor_name=appointment.doctor.display_name if appointment.doctor else "Medico",
+            doctor_name=appointment.doctor.display_name if appointment.doctor else "Médico",
             status=appointment.status,
             scheduled_at=appointment.scheduled_at,
             duration_minutes=appointment.duration_minutes,

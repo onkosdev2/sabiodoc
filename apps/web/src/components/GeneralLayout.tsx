@@ -148,17 +148,17 @@ export default function GeneralLayout() {
 
       <footer className="border-t border-slate-100 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-6 text-center text-sm text-slate-500">
-          <nav className="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2" aria-label="Legal">
-            <Link to="/telemedicina" className="text-slate-600 hover:text-primary-600 hover:underline">
+          <nav className="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1" aria-label="Legal">
+            <Link to="/telemedicina" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Telemedicina
             </Link>
-            <Link to="/privacidad" className="text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/privacidad" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Privacidad
             </Link>
-            <Link to="/terminos" className="text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/terminos" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Términos
             </Link>
-            <Link to="/help" className="text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/help" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Ayuda y soporte
             </Link>
           </nav>

@@ -41,7 +41,7 @@ class JitsiService:
 
     Genera la URL de la sala y, si ``JITSI_JWT_SECRET`` está configurado **y el
     proveedor lo admite** (Jitsi propio/JaaS), un JWT por participante
-    (paciente/medico) para salas protegidas. En ``meet.jit.si`` las salas son
+    (paciente/médico) para salas protegidas. En ``meet.jit.si`` las salas son
     públicas y el JWT se ignora (el primer participante es moderador).
     """
 

@@ -377,8 +377,8 @@ class WalletService:
     ) -> int:
         """Costo real segun el tiempo efectivo, con tope en lo retenido.
 
-        Se redondea hacia arriba al minuto y se aplica un minimo facturable si la
-        sesion estuvo activa. Si nunca hubo tiempo, el costo es 0 (se devuelve todo).
+        Se redondea hacia arriba al minuto y se aplica un mínimo facturable si la
+        sesión estuvo activa. Si nunca hubo tiempo, el costo es 0 (se devuelve todo).
         """
         if billable_seconds <= 0:
             return 0
@@ -403,7 +403,7 @@ class WalletService:
         )
 
     def charge_overtime(self, db: Session, appointment, amount_cents: int) -> bool:
-        """Consume creditos del paciente por tiempo extra de la cita.
+        """Consume créditos del paciente por tiempo extra de la cita.
 
         Devuelve False si el paciente no tiene saldo suficiente (el llamador debe
         terminar la videollamada). La retencion inicial (``amount_cents`` del pago)
@@ -473,7 +473,7 @@ class WalletService:
         """Liquida la cita cobrando el tiempo real (incluido el tiempo extra).
 
         La retencion cubre el tiempo reservado; el tiempo extra ya se consumio del
-        monedero durante la sesion. Aqui se ajusta lo no usado y se paga al medico.
+        monedero durante la sesión. Aquí se ajusta lo no usado y se paga al médico.
         """
         payment = (
             db.query(AppointmentPayment)
@@ -496,7 +496,7 @@ class WalletService:
             billable_seconds = session.billable_seconds if session else None
 
         if billable_seconds is None:
-            # Sin sesion: se libera el total retenido (comportamiento previo).
+            # Sin sesión: se libera el total retenido (comportamiento previo).
             actual_amount = payment.amount_cents
             refund_amount = 0
         else:

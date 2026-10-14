@@ -34,7 +34,7 @@ class Appointment(Base):
     booked_via_ai = Column(Boolean, nullable=False, server_default="false")
     consent_accepted_at = Column(DateTime(timezone=True), nullable=True)
     consent_text_version = Column(String(50), nullable=True)
-    # El paciente acepto que la consulta puede extenderse y consumir creditos extra.
+    # El paciente acepto que la consulta puede extenderse y consumir créditos extra.
     overtime_terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)

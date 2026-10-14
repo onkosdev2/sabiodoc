@@ -82,8 +82,8 @@ SPECIALTIES_DATA = [
         "name": "Medicina Interna",
         "description": "Especialidad médica que se dedica a la atención integral del adulto enfermo, enfocada en el diagnóstico y tratamiento no quirúrgico de enfermedades que afectan a los órganos internos.",
         "keywords": [
-            "internista", "medicina interna", "medico internista", "médico internista",
-            "medico general", "médico general", "medicina general", "adultos",
+            "internista", "medicina interna", "médico internista", "médico internista",
+            "médico general", "médico general", "medicina general", "adultos",
             "enfermedades internas", "diagnostico general", "diagnóstico general"
         ],
         "is_top": True
@@ -310,9 +310,9 @@ SPECIALTIES_DATA = [
         "name": "Medicina Familiar y Comunitaria",
         "description": "Especialidad médica que brinda atención integral y continua a la persona y su familia en la comunidad, actuando como puerta de entrada al sistema de salud y coordinando la atención longitudinal.",
         "keywords": [
-            "medico familiar", "médico familiar", "medicina familiar",
+            "médico familiar", "médico familiar", "medicina familiar",
             "medicina comunitaria", "medicina familiar y comunitaria",
-            "medico de cabecera", "médico de cabecera", "atencion primaria",
+            "médico de cabecera", "médico de cabecera", "atención primaria",
             "atención primaria", "familia", "comunidad", "prevencion", "prevención",
             "control niño sano"
         ],
@@ -324,7 +324,7 @@ SPECIALTIES_DATA = [
         "description": "Especialidad médica que se dedica al diagnóstico y tratamiento no quirúrgico del cáncer, incluyendo quimioterapia, inmunoterapia y terapias dirigidas.",
         "keywords": [
             "oncologo", "oncóloga", "oncólogo", "oncologia", "oncología",
-            "oncologia medica", "oncología médica", "cancer", "cáncer", "tumor",
+            "oncologia médica", "oncología médica", "cancer", "cáncer", "tumor",
             "tumores", "quimioterapia", "inmunoterapia", "terapias dirigidas",
             "neoplasia", "maligno", "benigno"
         ],
@@ -342,11 +342,11 @@ SPECIALTIES_DATA = [
         "is_top": False
     },
     {
-        "slug": "patologia-clinica",
+        "slug": "patologia-clínica",
         "name": "Patología Clínica",
         "description": "Especialidad médica que se encarga del estudio de muestras biológicas mediante análisis de laboratorio para apoyar el diagnóstico, el pronóstico y el seguimiento de las enfermedades.",
         "keywords": [
-            "patologo clinico", "patólogo clínico", "patologia clinica",
+            "patologo clínico", "patólogo clínico", "patologia clínica",
             "patología clínica", "laboratorio", "analisis clinicos",
             "análisis clínicos", "examenes de sangre", "exámenes de sangre",
             "bioquimica", "bioquímica", "hematologia de laboratorio",

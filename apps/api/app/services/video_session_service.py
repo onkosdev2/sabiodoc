@@ -33,17 +33,17 @@ class VideoSessionService:
     APPOINTMENT_ROOM_CLOSE_MINUTES_AFTER = 180
 
     INTRO_SYSTEM_PROMPT = (
-        "Eres un asistente clinico que redacta el guion de apertura de una videoconsulta medica. "
-        "El medico leera el texto en voz alta al iniciar la sesion.\n\n"
-        "El guion debe cumplir estas reglas:\n"
+        "Eres un asistente clínico que redacta el guión de apertura de una videoconsulta médica. "
+        "El médico leera el texto en voz alta al iniciar la sesión.\n\n"
+        "El guión debe cumplir estas reglas:\n"
         "- Ser breve: entre 2 y 4 frases, en espanol neutro, tono profesional y calido.\n"
-        "- Presentar al medico por su nombre.\n"
+        "- Presentar al médico por su nombre.\n"
         "- Saludar al paciente por su nombre.\n"
         "- Indicar que la videoconsulta comienza.\n"
         "- Pedir al paciente que diga su nombre completo en voz alta (esto permite identificar "
         "cada voz en la transcripcion de la consulta).\n"
-        "- Mencionar que la sesion puede ser transcrita para el historial clinico.\n\n"
-        "Devuelve UNICAMENTE el texto que dira el medico: sin comillas, sin acotaciones, sin listas "
+        "- Mencionar que la sesión puede ser transcrita para el historial clínico.\n\n"
+        "Devuelve UNICAMENTE el texto que dira el médico: sin comillas, sin acotaciones, sin listas "
         "y sin el nombre del paciente entre corchetes."
     )
 
@@ -69,20 +69,20 @@ class VideoSessionService:
         return (
             f"Hola, soy {doctor_name}. Te doy la bienvenida a tu videoconsulta de {specialty_name}. "
             f"Antes de comenzar, {patient_name}, ?podrias decir tu nombre completo en voz alta para "
-            "confirmar que el audio se registra correctamente? Esta sesion puede ser transcrita para tu "
-            "historial clinico. Comenzamos."
+            "confirmar que el audio se registra correctamente? Esta sesión puede ser transcrita para tu "
+            "historial clínico. Comenzamos."
         )
 
     def generate_intro_script(self, db: Session, video_session: VideoSession) -> str:
-        """Genera (o devuelve) el guion de apertura de la videoconsulta.
+        """Genera (o devuelve) el guión de apertura de la videoconsulta.
 
-        El guion ayuda a que la transcripcion identifique cada voz y queda guardado
+        El guión ayuda a que la transcripcion identifique cada voz y queda guardado
         para no regenerarlo en cada visita.
         """
         if video_session.intro_script:
             return video_session.intro_script
 
-        doctor_name = video_session.doctor.display_name if video_session.doctor else "el medico"
+        doctor_name = video_session.doctor.display_name if video_session.doctor else "el médico"
         patient_name = self._resolve_patient_name(db, video_session.patient)
         specialty_name = self._resolve_specialty_name(video_session)
 
@@ -93,7 +93,7 @@ class VideoSessionService:
             summary = video_session.consultation.summary
 
         user_message = (
-            f"Medico: {doctor_name}\n"
+            f"Médico: {doctor_name}\n"
             f"Paciente: {patient_name}\n"
             f"Especialidad: {specialty_name}\n"
         )
@@ -147,7 +147,7 @@ class VideoSessionService:
         role: str,
         now: datetime | None = None,
     ) -> None:
-        """Heartbeat: actualiza la ultima senal de vida del participante."""
+        """Heartbeat: actualiza la última senal de vida del participante."""
         now = now or datetime.now(timezone.utc)
         if role == "patient":
             video_session.patient_last_seen_at = now
@@ -216,7 +216,7 @@ class VideoSessionService:
         )
 
     def pause_timer(self, video_session: VideoSession, now: datetime | None = None) -> None:
-        """Acumula el tiempo transcurrido y detiene el cronometro."""
+        """Acumula el tiempo transcurrido y detiene el cronómetro."""
         if video_session.started_at is None:
             return
         now = now or datetime.now(timezone.utc)
@@ -225,11 +225,11 @@ class VideoSessionService:
         video_session.started_at = None
 
     def reconcile_timer(self, video_session: VideoSession, now: datetime | None = None) -> bool:
-        """Pausa el cronometro si dejo de haber ambos participantes en la sala.
+        """Pausa el cronómetro si dejo de haber ambos participantes en la sala.
 
-        Devuelve True si pauso el cronometro. Solo acumula el tiempo hasta el
-        ultimo momento en que ambos dieron senal de vida, para no cobrar tiempo
-        en el que el medico estuvo solo (evita que corra el reloj a su favor).
+        Devuelve True si pauso el cronómetro. Solo acumula el tiempo hasta el
+        último momento en que ambos dieron senal de vida, para no cobrar tiempo
+        en el que el médico estuvo solo (evita que corra el reloj a su favor).
         """
         if video_session.started_at is None:
             return False
@@ -261,7 +261,7 @@ class VideoSessionService:
     def process_overtime_billing(
         self, db: Session, video_session: VideoSession, now: datetime | None = None
     ) -> bool:
-        """Consume creditos del paciente por el tiempo extra transcurrido.
+        """Consume créditos del paciente por el tiempo extra transcurrido.
 
         Devuelve False cuando el paciente no tiene saldo para seguir: el llamador
         debe terminar la videollamada de inmediato.
@@ -306,7 +306,7 @@ class VideoSessionService:
     def terminate_for_no_credits(
         self, db: Session, video_session: VideoSession, now: datetime | None = None
     ) -> None:
-        """Finaliza la videollamada de golpe porque el paciente se quedo sin creditos."""
+        """Finaliza la videollamada de golpe porque el paciente se quedo sin créditos."""
         now = now or datetime.now(timezone.utc)
         self.pause_timer(video_session, now)
         video_session.status = VideoSessionStatus.completed
@@ -337,10 +337,10 @@ class VideoSessionService:
                 db,
                 user_id=appointment.patient_id,
                 notification_type="video_session_no_credits",
-                title="Videoconsulta finalizada por falta de creditos",
-                body="La videoconsulta termino al agotarse tus creditos. Recarga para futuras consultas.",
+                title="Videoconsulta finalizada por falta de créditos",
+                body="La videoconsulta termino al agotarse tus créditos. Recarga para futuras consultas.",
                 action_url="/me/wallet",
-                metadata={"video_session_id": video_session.id, "action_label": "Recargar creditos"},
+                metadata={"video_session_id": video_session.id, "action_label": "Recargar créditos"},
             )
 
         db.add(
@@ -356,10 +356,10 @@ class VideoSessionService:
         )
 
     def _apply_expiration(self, video_session: VideoSession, now: datetime) -> None:
-        """Marca una sesion vencida como expirada, acumulando el tiempo si estaba activa."""
+        """Marca una sesión vencida como expirada, acumulando el tiempo si estaba activa."""
         if video_session.started_at is not None:
             # El tiempo no puede superar la ventana de la sala: evita cobros absurdos
-            # si alguien dejo la sesion abierta.
+            # si alguien dejo la sesión abierta.
             reference = min(now, video_session.expires_at)
             segment = max(0, int((reference - video_session.started_at).total_seconds()))
             video_session.billable_seconds = (video_session.billable_seconds or 0) + segment
@@ -372,9 +372,9 @@ class VideoSessionService:
             video_session.closed_reason = "expired_inactivity"
 
     def settle_appointment_if_billable(self, db: Session, video_session: VideoSession) -> None:
-        """Cierra la cita y cobra el tiempo real si la sesion expiro con uso.
+        """Cierra la cita y cobra el tiempo real si la sesión expiro con uso.
 
-        Evita que el medico pierda el cobro y que la retencion quede colgada
+        Evita que el médico pierda el cobro y que la retencion quede colgada
         cuando la sala expira en lugar de cerrarse manualmente.
         """
         appointment = video_session.appointment
@@ -411,7 +411,7 @@ class VideoSessionService:
         return True
 
     def _is_abandoned(self, video_session: VideoSession, now: datetime) -> bool:
-        """True si una sesion activa lleva un rato sin nadie en la sala."""
+        """True si una sesión activa lleva un rato sin nadie en la sala."""
         if video_session.status != VideoSessionStatus.active:
             return False
         if self.participant_present(video_session, "patient", now) or self.participant_present(
@@ -427,7 +427,7 @@ class VideoSessionService:
         return reference <= now - timedelta(minutes=settings.VIDEO_SESSION_ABANDON_MINUTES)
 
     def _close_abandoned(self, video_session: VideoSession, now: datetime) -> None:
-        # Pausa el cronometro hasta la ultima senal de vida (si seguia corriendo).
+        # Pausa el cronómetro hasta la última senal de vida (si seguia corriendo).
         self.reconcile_timer(video_session, now)
         video_session.patient_present = False
         video_session.doctor_present = False
@@ -514,18 +514,18 @@ class VideoSessionService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
 
         if not doctor_profile.user.is_doctor:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario seleccionado no es medico")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario seleccionado no es médico")
 
         if not doctor_profile.is_accepting_consultations:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El medico no esta aceptando videoconsultas en este momento",
+                detail="El médico no está aceptando videoconsultas en este momento",
             )
 
         if doctor_profile.status != DoctorApprovalStatus.approved:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El medico aun no esta aprobado para atender videoconsultas",
+                detail="El médico aún no está aprobado para atender videoconsultas",
             )
 
         specialty_link = (
@@ -539,14 +539,14 @@ class VideoSessionService:
         if not specialty_link:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El medico no atiende la especialidad de esta consulta",
+                detail="El médico no atiende la especialidad de esta consulta",
             )
 
         resolved = resolve_presence(db, doctor_profile)
         if resolved.status != DoctorPresenceStatus.online:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El medico no esta disponible ahora mismo",
+                detail="El médico no está disponible ahora mismo",
             )
         active_session = (
             db.query(VideoSession)
@@ -565,7 +565,7 @@ class VideoSessionService:
         if active_session:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="El medico ya tiene una videoconsulta en curso o preparada",
+                detail="El médico ya tiene una videoconsulta en curso o preparada",
             )
 
         self._ensure_no_immediate_schedule_conflict(
@@ -698,7 +698,7 @@ class VideoSessionService:
         if not doctor_profile:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
         if doctor_profile.status != DoctorApprovalStatus.approved:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico aun no esta aprobado")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico aún no está aprobado")
         if appointment.status != AppointmentStatus.scheduled:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo las citas programadas pueden abrir sala")
 
@@ -836,7 +836,7 @@ class VideoSessionService:
 
     def _resolve_appointment_participant_role(self, appointment: Appointment, current_user: User) -> str:
         # Primero resolvemos si el usuario es participante real de la cita, sin
-        # importar su rol principal. Asi un medico/admin que tambien agenda como
+        # importar su rol principal. Asi un médico/admin que también agenda como
         # paciente puede entrar a su propia consulta.
         if appointment.patient_id == current_user.id:
             return "patient"
@@ -893,7 +893,7 @@ class VideoSessionService:
             if appointment_end > now:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="El medico tiene una cita programada que se cruza con esta videoconsulta inmediata",
+                    detail="El médico tiene una cita programada que se cruza con esta videoconsulta inmediata",
                 )
 
     def _serialize_appointment_video_session(
@@ -915,7 +915,7 @@ class VideoSessionService:
             "participant_token": participant_token,
             "participant_role": participant_role,
             "specialty_name": appointment.specialty.name if appointment.specialty else "Especialidad",
-            "doctor_name": appointment.doctor.display_name if appointment.doctor else "Medico",
+            "doctor_name": appointment.doctor.display_name if appointment.doctor else "Médico",
             "expires_at": video_session.expires_at,
         }
 

@@ -49,9 +49,9 @@ def _expire_if_needed(db: Session, video_session: VideoSession) -> None:
 
 
 def _heartbeat_and_reconcile(db: Session, video_session: VideoSession, participant_role: str) -> None:
-    """Registra la presencia del que consulta y pausa el cronometro si falta alguien.
+    """Registra la presencia del que consulta y pausa el cronómetro si falta alguien.
 
-    Durante el tiempo extra consume creditos del paciente; si se queda sin saldo,
+    Durante el tiempo extra consume créditos del paciente; si se queda sin saldo,
     termina la videollamada de inmediato.
     """
     if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
@@ -287,11 +287,11 @@ def join_video_session(
     _expire_if_needed(db, video_session)
     participant_role = _resolve_participant_role(video_session, current_user)
     if video_session.status in {VideoSessionStatus.completed, VideoSessionStatus.cancelled, VideoSessionStatus.expired, VideoSessionStatus.failed}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no está disponible")
 
-    # Entrar a la sala NO inicia el cronometro: solo registra la conexion y la
-    # presencia. El tiempo de consulta lo controla el medico (iniciar/pausar/finalizar)
-    # y solo corre cuando ambos estan presentes.
+    # Entrar a la sala NO inicia el cronómetro: solo registra la conexion y la
+    # presencia. El tiempo de consulta lo controla el médico (iniciar/pausar/finalizar)
+    # y solo corre cuando ambos están presentes.
     now = datetime.now(timezone.utc)
     video_session_service.set_participant_presence(video_session, participant_role, True, now)
     if participant_role == "patient":
@@ -368,7 +368,7 @@ def generate_video_session_intro(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Genera (o recupera) el guion de apertura de la videoconsulta. Solo el medico."""
+    """Genera (o recupera) el guión de apertura de la videoconsulta. Solo el médico."""
     video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
     if not video_session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
@@ -377,7 +377,7 @@ def generate_video_session_intro(
     if participant_role != "doctor":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el medico puede ver el guion de apertura",
+            detail="Solo el médico puede ver el guión de apertura",
         )
     if video_session.status in {
         VideoSessionStatus.completed,
@@ -385,7 +385,7 @@ def generate_video_session_intro(
         VideoSessionStatus.expired,
         VideoSessionStatus.failed,
     }:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no está disponible")
 
     video_session_service.generate_intro_script(db, video_session)
     return _serialize_status_with_billing(db, video_session, participant_role)
@@ -397,7 +397,7 @@ def start_video_session_timer(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Inicia (o reanuda) el cronometro de la videoconsulta. Solo el medico."""
+    """Inicia (o reanuda) el cronómetro de la videoconsulta. Solo el médico."""
     video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
     if not video_session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
@@ -406,7 +406,7 @@ def start_video_session_timer(
     if participant_role != "doctor":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el medico puede controlar el cronometro de la videoconsulta",
+            detail="Solo el médico puede controlar el cronómetro de la videoconsulta",
         )
     if video_session.status in {
         VideoSessionStatus.completed,
@@ -414,7 +414,7 @@ def start_video_session_timer(
         VideoSessionStatus.expired,
         VideoSessionStatus.failed,
     }:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no esta disponible")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no está disponible")
 
     now = datetime.now(timezone.utc)
     video_session_service.touch_participant(video_session, "doctor", now)
@@ -424,12 +424,12 @@ def start_video_session_timer(
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Para iniciar la consulta, el paciente y el medico deben estar en la sala",
+            detail="Para iniciar la consulta, el paciente y el médico deben estar en la sala",
         )
     if video_session.started_at is None:
         video_session.started_at = now
     # Al iniciar, garantizamos que la sala siga vigente durante la consulta
-    # (duracion estimada + margen); asi no se expira una sesion legitima.
+    # (duracion estimada + margen); así no se expira una sesión legitima.
     minimum_expiry = now + timedelta(minutes=video_session.estimated_minutes + 60)
     if video_session.expires_at < minimum_expiry:
         video_session.expires_at = minimum_expiry
@@ -455,7 +455,7 @@ def pause_video_session_timer(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Pausa el cronometro acumulando el tiempo transcurrido. Solo el medico."""
+    """Pausa el cronómetro acumulando el tiempo transcurrido. Solo el médico."""
     video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
     if not video_session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
@@ -464,7 +464,7 @@ def pause_video_session_timer(
     if participant_role != "doctor":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el medico puede controlar el cronometro de la videoconsulta",
+            detail="Solo el médico puede controlar el cronómetro de la videoconsulta",
         )
 
     now = datetime.now(timezone.utc)
@@ -503,7 +503,7 @@ def leave_video_session(
     participant_role = _resolve_participant_role(video_session, current_user)
 
     now = datetime.now(timezone.utc)
-    # El cronometro solo corre con ambos presentes: al salir cualquiera de los
+    # El cronómetro solo corre con ambos presentes: al salir cualquiera de los
     # dos, se pausa y se acumula unicamente el tiempo en el que ambos estuvieron.
     video_session_service.set_participant_presence(video_session, participant_role, False, now)
     video_session_service.pause_timer(video_session, now)
@@ -536,7 +536,7 @@ def update_video_session_doctor_note(
 
     participant_role = _resolve_participant_role(video_session, current_user)
     if participant_role != "doctor":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el medico puede actualizar notas clinicas")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico puede actualizar notas clinicas")
 
     video_session.doctor_note = payload.doctor_note
     db.add(
@@ -572,7 +572,7 @@ def complete_video_session(
 
     participant_role = _resolve_participant_role(video_session, current_user)
     if participant_role != "doctor":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el medico puede cerrar la videoconsulta")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico puede cerrar la videoconsulta")
     if video_session.status in {VideoSessionStatus.completed, VideoSessionStatus.cancelled, VideoSessionStatus.expired, VideoSessionStatus.failed}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya fue cerrada")
 

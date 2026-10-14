@@ -161,7 +161,7 @@ class LLMClient:
             parse=self._parse_json_content,
         )
         if not isinstance(result, dict):
-            logger.error("Triage: todos los proveedores LLM fallaron o devolvieron JSON invalido")
+            logger.error("Triage: todos los proveedores LLM fallaron o devolvieron JSON inválido")
             return self._get_fallback_response()
 
         logger.info(f"Triage completed: urgency={result.get('urgency')}")
@@ -176,7 +176,7 @@ class LLMClient:
     ) -> Optional[dict]:
         """Ejecuta una consulta al LLM forzando una respuesta JSON.
 
-        Devuelve el dict parseado, o ``None`` si el cliente esta en modo mock
+        Devuelve el dict parseado, o ``None`` si el cliente está en modo mock
         o si todos los proveedores fallan.
         """
         if self.is_mock:

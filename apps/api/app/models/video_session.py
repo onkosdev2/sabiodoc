@@ -50,14 +50,14 @@ class VideoSession(Base):
     ended_at = Column(DateTime(timezone=True), nullable=True)
     joined_patient_at = Column(DateTime(timezone=True), nullable=True)
     joined_doctor_at = Column(DateTime(timezone=True), nullable=True)
-    # Presencia actual en la sala (se limpia al salir) y ultima senal de vida
+    # Presencia actual en la sala (se limpia al salir) y última senal de vida
     # (heartbeat via polling de estado), para facturar solo el tiempo con ambos.
     patient_present = Column(Boolean, nullable=False, server_default="false")
     doctor_present = Column(Boolean, nullable=False, server_default="false")
     patient_last_seen_at = Column(DateTime(timezone=True), nullable=True)
     doctor_last_seen_at = Column(DateTime(timezone=True), nullable=True)
     # Presencia real en la conferencia de Jitsi (eventos del cliente).
-    # El cronometro y el cobro exigen que ambos hayan entrado a la sala.
+    # El cronómetro y el cobro exigen que ambos hayan entrado a la sala.
     jitsi_patient_present = Column(Boolean, nullable=False, server_default="false")
     jitsi_doctor_present = Column(Boolean, nullable=False, server_default="false")
     jitsi_patient_joined_at = Column(DateTime(timezone=True), nullable=True)

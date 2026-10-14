@@ -98,22 +98,22 @@ def get_doctor_profile_or_403(
     require_approved: bool = False,
 ) -> DoctorProfile:
     """
-    Devuelve el perfil medico del usuario sin depender de su rol principal.
+    Devuelve el perfil médico del usuario sin depender de su rol principal.
 
-    La capacidad de ejercer como medico depende de tener un DoctorProfile, no de
-    que el rol sea exactamente "doctor". Asi un admin o revisor que ademas sea
-    medico puede seguir usando el panel medico.
+    La capacidad de ejercer como médico depende de tener un DoctorProfile, no de
+    que el rol sea exactamente "doctor". Asi un admin o revisor que además sea
+    médico puede seguir usando el panel médico.
     """
     profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == user.id).first()
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes un perfil medico",
+            detail="No tienes un perfil médico",
         )
     if require_approved and profile.status != DoctorApprovalStatus.approved:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu perfil medico aun no esta aprobado",
+            detail="Tu perfil médico aún no está aprobado",
         )
     return profile
 

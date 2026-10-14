@@ -249,21 +249,21 @@ def seed_demo_doctors():
                 presence = DoctorPresence(doctor_id=profile.id)
                 db.add(presence)
 
-            # La presencia es real: se deriva de la ultima actividad y de las
-            # sesiones. En el seed los medicos demo no estan usando la app, por
-            # eso aparecen "Desconectado" hasta que inicien sesion (heartbeat).
+            # La presencia es real: se deriva de la última actividad y de las
+            # sesiones. En el seed los médicos demo no están usando la app, por
+            # eso aparecen "Desconectado" hasta que inicien sesión (heartbeat).
             presence.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=1)
             presence.status = DoctorPresenceStatus.offline
             presence.status_message = "Desconectado"
             inserted += 1
 
         db.commit()
-        print(f"✅ Se actualizaron {inserted} perfiles medicos demo.")
+        print(f"✅ Se actualizaron {inserted} perfiles médicos demo.")
         print("Credenciales demo: cardio.demo@sabiodoc.app / DemoDoctor123!")
 
     except Exception as e:
         db.rollback()
-        print(f"❌ Error al insertar medicos demo: {e}")
+        print(f"❌ Error al insertar médicos demo: {e}")
         raise
     finally:
         db.close()
@@ -277,11 +277,11 @@ REVIEW_TEMPLATES = [
 
 
 def seed_demo_reviews():
-    """Crea resenas de ejemplo para los medicos demo (con citas completadas)."""
+    """Crea reseñas de ejemplo para los médicos demo (con citas completadas)."""
     db = SessionLocal()
     try:
         if db.query(ConsultationReview).count() > 0:
-            print("Ya existen resenas. Saltando seed de resenas.")
+            print("Ya existen reseñas. Saltando seed de reseñas.")
             return
 
         # Pacientes "puros": tienen el rol base pero ningún rol profesional.
@@ -300,7 +300,7 @@ def seed_demo_reviews():
             .all()
         )
         if not patients:
-            print("No hay pacientes para sembrar resenas.")
+            print("No hay pacientes para sembrar reseñas.")
             return
 
         doctors = (
@@ -356,7 +356,7 @@ def seed_demo_reviews():
                 created += 1
 
         # Recalculamos el promedio y la cantidad reales desde consultation_reviews
-        # para todos los medicos (no se usan valores en duro).
+        # para todos los médicos (no se usan valores en duro).
         db.flush()
         rows = (
             db.query(
@@ -377,10 +377,10 @@ def seed_demo_reviews():
             doctor.rating_count = total
 
         db.commit()
-        print(f"✅ Se crearon {created} resenas demo para {len(doctors)} medicos.")
+        print(f"✅ Se crearon {created} reseñas demo para {len(doctors)} médicos.")
     except Exception as e:
         db.rollback()
-        print(f"❌ Error al sembrar resenas demo: {e}")
+        print(f"❌ Error al sembrar reseñas demo: {e}")
         raise
     finally:
         db.close()
