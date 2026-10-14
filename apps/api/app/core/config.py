@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 8.0
 
     FRONTEND_ORIGIN: str = "http://localhost:5173"
-    # Jitsi self-hosted (videoconsultas)
-    JITSI_DOMAIN: str = "192.168.1.123:7443"
-    JITSI_BASE_URL: str = "https://192.168.1.123:7443"
+    # Jitsi (videoconsultas). Por defecto el servicio publico (salas publicas, sin JWT).
+    JITSI_DOMAIN: str = "meet.jit.si"
+    JITSI_BASE_URL: str = "https://meet.jit.si"
     JITSI_ROOM_PREFIX: str = "SabioDoc"
     JITSI_JWT_APP_ID: str = "sabiodoc"
     JITSI_JWT_AUDIENCE: str = "jitsi"

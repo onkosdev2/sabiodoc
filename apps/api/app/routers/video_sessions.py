@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.video_session import VideoSession, VideoSessionStatus
 from app.models.video_session_event import VideoSessionEvent
 from app.schemas.video_session import (
+    JitsiEventRequest,
     VideoSessionCompleteRequest,
     VideoSessionDoctorNoteRequest,
     VideoSessionFileResponse,
@@ -115,6 +116,10 @@ def _serialize_status(
     patient_present = video_session_service.participant_present(video_session, "patient", now)
     doctor_present = video_session_service.participant_present(video_session, "doctor", now)
     both_present = patient_present and doctor_present
+    jitsi_required = video_session_service.requires_jitsi(video_session)
+    jitsi_patient_present = bool(getattr(video_session, "jitsi_patient_present", False))
+    jitsi_doctor_present = bool(getattr(video_session, "jitsi_doctor_present", False))
+    both_in_jitsi = jitsi_patient_present and jitsi_doctor_present
 
     return VideoSessionStatusResponse(
         video_session_id=video_session.id,
@@ -150,6 +155,12 @@ def _serialize_status(
         patient_present=patient_present,
         doctor_present=doctor_present,
         both_present=both_present,
+        jitsi_required=jitsi_required,
+        jitsi_patient_present=jitsi_patient_present,
+        jitsi_doctor_present=jitsi_doctor_present,
+        both_in_jitsi=both_in_jitsi,
+        jitsi_patient_joined_at=getattr(video_session, "jitsi_patient_joined_at", None),
+        jitsi_doctor_joined_at=getattr(video_session, "jitsi_doctor_joined_at", None),
         files_enabled=settings.cloudinary_enabled,
         files=files or [],
         doctor_note=video_session.doctor_note,
@@ -304,6 +315,51 @@ def join_video_session(
     db.commit()
     db.refresh(video_session)
     return _serialize_status_with_billing(db, video_session, participant_role)
+
+
+@router.post("/{video_session_id}/jitsi-event", status_code=status.HTTP_204_NO_CONTENT)
+def report_jitsi_event(
+    video_session_id: int,
+    payload: JitsiEventRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Registra la entrada/salida real de un participante en la conferencia de Jitsi.
+
+    El cronómetro y el cobro exigen que ambos roles estén dentro de la sala.
+    """
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if video_session.status in {
+        VideoSessionStatus.completed,
+        VideoSessionStatus.cancelled,
+        VideoSessionStatus.expired,
+        VideoSessionStatus.failed,
+    }:
+        return None
+
+    now = datetime.now(timezone.utc)
+    present = payload.event == "joined"
+    video_session_service.set_jitsi_presence(video_session, participant_role, present, now)
+    if present:
+        # Estar en la conferencia implica estar presente en la sala de la app.
+        video_session_service.set_participant_presence(video_session, participant_role, True, now)
+    video_session_service.reconcile_timer(video_session, now)
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type=f"jitsi_{payload.event}",
+            source="client",
+            payload_json=json.dumps(
+                {"participant_role": participant_role, "user_id": current_user.id}
+            ),
+        )
+    )
+    db.commit()
+    return None
 
 
 @router.post("/{video_session_id}/intro", response_model=VideoSessionStatusResponse)

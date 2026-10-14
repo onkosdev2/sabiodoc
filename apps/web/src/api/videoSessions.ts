@@ -1,4 +1,5 @@
-import client from './client'
+import client, { API_URL } from './client'
+import { getStoredToken } from '../utils/authStorage'
 
 export interface VideoSessionFile {
   id: number
@@ -50,6 +51,12 @@ export interface VideoSessionStatus {
   patient_present: boolean
   doctor_present: boolean
   both_present: boolean
+  jitsi_required: boolean
+  jitsi_patient_present: boolean
+  jitsi_doctor_present: boolean
+  both_in_jitsi: boolean
+  jitsi_patient_joined_at: string | null
+  jitsi_doctor_joined_at: string | null
   doctor_note: string | null
   followup_instructions: string | null
   intro_script: string | null
@@ -66,6 +73,38 @@ export const getVideoSessionStatus = async (videoSessionId: number): Promise<Vid
 export const joinVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
   const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/join`)
   return response.data
+}
+
+/** Reporta la entrada/salida real de la conferencia de Jitsi (best-effort). */
+export const reportJitsiEvent = async (
+  videoSessionId: number,
+  event: 'joined' | 'left',
+): Promise<void> => {
+  try {
+    await client.post(`/video-sessions/${videoSessionId}/jitsi-event`, { event })
+  } catch {
+    /* best-effort: no debe romper la videollamada */
+  }
+}
+
+/** Variante con `keepalive` para el cierre de pestaña/navegación. */
+export const reportJitsiEventBeacon = (videoSessionId: number, event: 'joined' | 'left'): void => {
+  try {
+    const token = getStoredToken()
+    void fetch(`${API_URL}/video-sessions/${videoSessionId}/jitsi-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ event }),
+      keepalive: true,
+    }).catch(() => {
+      /* silencioso */
+    })
+  } catch {
+    /* silencioso */
+  }
 }
 
 export const listVideoSessionFiles = async (videoSessionId: number): Promise<VideoSessionFile[]> => {

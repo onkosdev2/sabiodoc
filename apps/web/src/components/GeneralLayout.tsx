@@ -79,7 +79,7 @@ export default function GeneralLayout() {
               <span className="text-2xl font-bold tracking-tight text-slate-800">SabioDoc</span>
             </Link>
 
-            <nav className="flex items-center gap-4" aria-label="Principal">
+            <nav className="flex items-center gap-2 sm:gap-4" aria-label="Principal">
               {isAuthenticated ? (
                 <>
                   <Link
@@ -119,14 +119,14 @@ export default function GeneralLayout() {
                   <Link
                     to="/login"
                     replace={isAuthPage}
-                    className="font-medium text-slate-600 transition-colors hover:text-primary-600"
+                    className="whitespace-nowrap font-medium text-slate-600 transition-colors hover:text-primary-600"
                   >
                     Iniciar sesión
                   </Link>
                   <Link
                     to="/register"
                     replace={isAuthPage}
-                    className="rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                    className="whitespace-nowrap rounded-lg bg-primary-600 px-3 py-2 font-medium text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 sm:px-4"
                   >
                     Registrarse
                   </Link>
@@ -148,8 +148,22 @@ export default function GeneralLayout() {
 
       <footer className="border-t border-slate-100 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-6 text-center text-sm text-slate-500">
+          <nav className="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2" aria-label="Legal">
+            <Link to="/telemedicina" className="text-slate-600 hover:text-primary-600 hover:underline">
+              Telemedicina
+            </Link>
+            <Link to="/privacidad" className="text-slate-600 hover:text-primary-600 hover:underline">
+              Privacidad
+            </Link>
+            <Link to="/terminos" className="text-slate-600 hover:text-primary-600 hover:underline">
+              Términos
+            </Link>
+            <Link to="/help" className="text-slate-600 hover:text-primary-600 hover:underline">
+              Ayuda y soporte
+            </Link>
+          </nav>
           <p className="font-medium">SabioDoc - Orientación médica inteligente</p>
-          <p className="mt-2 inline-block rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-600">
+          <p className="mt-2 inline-block rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800">
             ⚠️ Los servicios de IA no reemplazan una consulta médica profesional
           </p>
         </div>

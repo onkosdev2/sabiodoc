@@ -1,0 +1,15 @@
+/login              /index.html  200
+/register           /index.html  200
+/forgot-password    /index.html  200
+/reset-password     /index.html  200
+/verify-email       /index.html  200
+/notifications      /index.html  200
+/help               /index.html  200
+/video-room         /index.html  200
+/me/*               /index.html  200
+/consultation/*     /index.html  200
+/doctor/*           /index.html  200
+/admin/*            /index.html  200
+/reviewer/*         /index.html  200
+/support/*          /index.html  200
+/doctors/*          /index.html  200

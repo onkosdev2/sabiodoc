@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Send, Stethoscope } from 'lucide-react'
 
 import { submitTriage, TriageResult } from '../api/triage'
@@ -11,6 +11,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { Input, Select, Textarea } from '../components/ui/Field'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
+import { focusFirstInvalid } from '../utils/forms'
 
 export default function Triage() {
   const { isAuthenticated } = useAuth()
@@ -22,6 +23,7 @@ export default function Triage() {
   const [result, setResult] = useState<TriageResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [symptomsError, setSymptomsError] = useState<string | undefined>()
+  const formRef = useRef<HTMLFormElement>(null)
 
   // Prellena edad y sexo con los datos del perfil del paciente, si existen.
   useEffect(() => {
@@ -52,6 +54,7 @@ export default function Triage() {
 
     if (symptomsText.trim().length < 10) {
       setSymptomsError('Describe tus síntomas con al menos 10 caracteres.')
+      focusFirstInvalid(formRef.current)
       return
     }
     setSymptomsError(undefined)
@@ -94,7 +97,7 @@ export default function Triage() {
       />
 
       {!result ? (
-        <form onSubmit={handleSubmit} noValidate className="card mb-8 space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate className="card mb-8 space-y-6">
           <Textarea
             label="¿Qué síntomas tienes?"
             required

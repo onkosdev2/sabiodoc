@@ -39,6 +39,9 @@ const STATIC_ROUTES = [
   { path: '/triage', changefreq: 'monthly', priority: '0.6' },
   { path: '/guide', changefreq: 'monthly', priority: '0.6' },
   { path: '/emergency', changefreq: 'yearly', priority: '0.4' },
+  { path: '/telemedicina', changefreq: 'yearly', priority: '0.4' },
+  { path: '/privacidad', changefreq: 'yearly', priority: '0.4' },
+  { path: '/terminos', changefreq: 'yearly', priority: '0.4' },
   { path: '/doctor/apply', changefreq: 'monthly', priority: '0.7' },
 ]
 

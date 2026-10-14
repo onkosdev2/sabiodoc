@@ -33,6 +33,8 @@ import {
   joinVideoSession,
   leaveVideoSession,
   pauseVideoSession,
+  reportJitsiEvent,
+  reportJitsiEventBeacon,
   startVideoSession,
   updateVideoSessionDoctorNote,
   uploadVideoSessionFile,
@@ -289,6 +291,13 @@ export default function VideoConsultationRoom() {
     }
   }, [session, statusData?.patient_id])
 
+  useEffect(() => {
+    if (!session) return
+    const handlePageHide = () => reportJitsiEventBeacon(session.video_session_id, 'left')
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
+  }, [session])
+
   const handleJoin = async () => {
     if (!session) {
       return
@@ -372,6 +381,7 @@ export default function VideoConsultationRoom() {
   const handleLeave = async () => {
     if (statusData) {
       try {
+        void reportJitsiEvent(statusData.video_session_id, 'left')
         const updated = await leaveVideoSession(statusData.video_session_id)
         setStatusData(updated)
       } catch (leaveError: any) {
@@ -570,12 +580,22 @@ export default function VideoConsultationRoom() {
   const patientInRoom = Boolean(statusData?.patient_present)
   // Presencia actual (el cronometro solo corre con ambos).
   const bothPresent = Boolean(statusData?.both_present)
+  // Presencia real en Jitsi: si la sala es real, exigimos que ambos hayan entrado.
+  const jitsiRequired = Boolean(statusData?.jitsi_required)
+  const bothInJitsi = Boolean(statusData?.both_in_jitsi)
+  const selfInJitsi = isDoctor
+    ? Boolean(statusData?.jitsi_doctor_present)
+    : Boolean(statusData?.jitsi_patient_present)
+  const counterpartInJitsi = isDoctor
+    ? Boolean(statusData?.jitsi_patient_present)
+    : Boolean(statusData?.jitsi_doctor_present)
+  const canStartSession = bothPresent && (!jitsiRequired || bothInJitsi)
   const heldAmountCents = statusData?.held_amount_cents ?? session?.prepaid_amount_cents ?? 0
   const currentCostCents = statusData?.current_cost_cents ?? 0
   const counterpartJoinedAt = isDoctor ? statusData?.joined_patient_at : statusData?.joined_doctor_at
   const counterpartLabel = isDoctor ? 'Paciente' : 'Médico'
   const selfJoinedAt = isDoctor ? statusData?.joined_doctor_at : statusData?.joined_patient_at
-  const selfInRoom = (isDoctor ? doctorInRoom : patientInRoom) || joined
+  const selfInRoom = isDoctor ? doctorInRoom : patientInRoom
   const counterpartInRoom = isDoctor ? patientInRoom : doctorInRoom
   const counterpartArticle = isDoctor ? 'El paciente' : 'El médico'
   const counterpartNoun = isDoctor ? 'el paciente' : 'el médico'
@@ -674,7 +694,11 @@ export default function VideoConsultationRoom() {
             <UserRound className="h-4 w-4" /> Tú
           </dt>
           <dd className="font-medium text-slate-800">
-            {selfJoinedAt ? `Conectado ${formatClock(selfJoinedAt)}` : 'Aún no entras'}
+            {selfInRoom
+              ? `Conectado${selfJoinedAt ? ` (entró ${formatClock(selfJoinedAt)})` : ''}`
+              : selfJoinedAt
+                ? `Desconectado (entró ${formatClock(selfJoinedAt)})`
+                : 'Aún no entras'}
           </dd>
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -682,9 +706,31 @@ export default function VideoConsultationRoom() {
             <Stethoscope className="h-4 w-4" /> {counterpartLabel}
           </dt>
           <dd className="font-medium text-slate-800">
-            {counterpartJoinedAt ? `En la sala ${formatClock(counterpartJoinedAt)}` : 'Aún no se conecta'}
+            {counterpartInRoom
+              ? `En la sala${counterpartJoinedAt ? ` (entró ${formatClock(counterpartJoinedAt)})` : ''}`
+              : counterpartJoinedAt
+                ? `Salió (entró ${formatClock(counterpartJoinedAt)})`
+                : 'Aún no se conecta'}
           </dd>
         </div>
+        {jitsiRequired && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="inline-flex items-center gap-2 text-slate-500">
+              <Video className="h-4 w-4" /> Videollamada
+            </dt>
+            <dd className="font-medium text-slate-800">
+              {bothInJitsi
+                ? 'Ambos dentro'
+                : selfInJitsi && counterpartInJitsi
+                  ? 'Ambos dentro'
+                  : selfInJitsi
+                    ? `Dentro tú; falta ${counterpartNoun}`
+                    : counterpartInJitsi
+                      ? `Dentro ${counterpartNoun}; faltas tú`
+                      : 'Nadie ha entrado'}
+            </dd>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3">
           <dt className="inline-flex items-center gap-2 text-slate-500">
             <Timer className="h-4 w-4" /> Cronómetro
@@ -1051,7 +1097,11 @@ export default function VideoConsultationRoom() {
                   jwt={session.participant_token}
                   displayName={meetingDisplayName}
                   email={user?.email}
+                  onJoined={() => {
+                    void reportJitsiEvent(session.video_session_id, 'joined')
+                  }}
                   onLeft={() => {
+                    void reportJitsiEvent(session.video_session_id, 'left')
                     void handleLeave()
                   }}
                   onError={(message) => {
@@ -1240,8 +1290,14 @@ export default function VideoConsultationRoom() {
                     ) : (
                       <Button
                         onClick={() => (hasStarted ? handleStartTimer() : setConfirmStart(true))}
-                        disabled={timerBusy || joinBlocked || (!hasStarted && introLoading) || !bothPresent}
-                        title={!bothPresent ? 'El paciente debe estar en la sala para iniciar' : undefined}
+                        disabled={timerBusy || joinBlocked || (!hasStarted && introLoading) || !canStartSession}
+                        title={
+                          !bothPresent
+                            ? 'El paciente debe estar en la sala para iniciar'
+                            : jitsiRequired && !bothInJitsi
+                              ? 'Esperando a que ambos entren a la videollamada'
+                              : undefined
+                        }
                         loading={timerBusy}
                         leftIcon={<Play className="h-4 w-4" />}
                         className="flex-1"
@@ -1261,6 +1317,13 @@ export default function VideoConsultationRoom() {
                   {!bothPresent && !joinBlocked && (
                     <p className="text-xs text-amber-700">
                       El cronómetro solo corre cuando el paciente y tú están en la sala.
+                    </p>
+                  )}
+                  {bothPresent && jitsiRequired && !bothInJitsi && !joinBlocked && (
+                    <p className="text-xs text-amber-700">
+                      El cronómetro solo corre cuando <strong>ambos</strong> están dentro de la videollamada. Si la
+                      sala no carga, pide al paciente que recargue o vuelve a abrirla. No se cobrará hasta que
+                      ambos entren.
                     </p>
                   )}
                 </>

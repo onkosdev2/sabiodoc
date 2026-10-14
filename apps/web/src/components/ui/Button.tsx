@@ -12,7 +12,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   secondary: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-primary-500',
   ghost: 'text-slate-600 hover:bg-slate-100 focus-visible:ring-primary-500',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500',
+  success: 'bg-emerald-700 text-white hover:bg-emerald-800 focus-visible:ring-emerald-500',
 }
 
 const SIZES: Record<ButtonSize, string> = {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
 
@@ -10,6 +10,7 @@ import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { Input, PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { focusFirstInvalid } from '../utils/forms'
 
 interface FieldErrors {
   email?: string
@@ -29,6 +30,7 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const formRef = useRef<HTMLFormElement>(null)
 
   const validate = (): boolean => {
     const next: FieldErrors = {}
@@ -38,7 +40,11 @@ export default function Register() {
     else if (password.length < 8) next.password = 'Debe tener al menos 8 caracteres.'
     if (confirmPassword !== password) next.confirmPassword = 'Las contraseñas no coinciden.'
     setFieldErrors(next)
-    return Object.keys(next).length === 0
+    if (Object.keys(next).length > 0) {
+      focusFirstInvalid(formRef.current)
+      return false
+    }
+    return true
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -83,7 +89,7 @@ export default function Register() {
       <div className="card">
         <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">Crear cuenta</h1>
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4">
           <Input
             label="Correo electrónico"
             type="email"

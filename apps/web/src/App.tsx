@@ -30,6 +30,9 @@ const Guide = lazyWithRetry(() => import('./pages/Guide'))
 const MyConsultations = lazyWithRetry(() => import('./pages/MyConsultations'))
 const MyFavorites = lazyWithRetry(() => import('./pages/MyFavorites'))
 const Emergency = lazyWithRetry(() => import('./pages/Emergency'))
+const Privacy = lazyWithRetry(() => import('./pages/Privacy'))
+const Terms = lazyWithRetry(() => import('./pages/Terms'))
+const Telemedicine = lazyWithRetry(() => import('./pages/Telemedicine'))
 const Login = lazyWithRetry(() => import('./pages/Login'))
 const Register = lazyWithRetry(() => import('./pages/Register'))
 const ForgotPassword = lazyWithRetry(() => import('./pages/ForgotPassword'))
@@ -86,6 +89,9 @@ function App() {
               <Route path="/triage" element={<Triage />} />
               <Route path="/guide" element={<Guide />} />
               <Route path="/emergency" element={<Emergency />} />
+              <Route path="/privacidad" element={<Privacy />} />
+              <Route path="/terminos" element={<Terms />} />
+              <Route path="/telemedicina" element={<Telemedicine />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />

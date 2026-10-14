@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, Camera, Trash2 } from 'lucide-react'
-import { Country, getCitiesOfCountry } from '../utils/locations'
+import { Country, getCitiesOfCountry, localizedCountryName } from '../utils/locations'
 
 import BackButton from '../components/BackButton'
 import CheckEmailNotice from '../components/CheckEmailNotice'
@@ -14,6 +14,7 @@ import { getMyDoctorApplication, updateMyDoctorProfile, uploadMyDoctorPhoto, del
 import { getFinancePolicy } from '../api/finance'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
+import { timeZoneLabel } from '../utils/format'
 import { hasRole } from '../utils/roles'
 
 const centsToDisplay = (value: number) => (value / 100).toFixed(2)
@@ -85,7 +86,6 @@ export default function DoctorOnboarding() {
   
   const [countryIso, setCountryIso] = useState('PE')
   const [cityName, setCityName] = useState('Lima')
-  const [customCity, setCustomCity] = useState('') 
   const [address, setAddress] = useState('')
   
   const [doctorTimezone, setDoctorTimezone] = useState('America/Lima')
@@ -200,12 +200,7 @@ export default function DoctorOnboarding() {
           
           const loadedCities = await getCitiesOfCountry(iso)
           setAvailableCities(loadedCities)
-          if (app.city && loadedCities.includes(app.city)) {
-            setCityName(app.city || '')
-          } else {
-            setCityName('Otra')
-            setCustomCity(app.city || '')
-          }
+          setCityName(app.city || '')
           setAddress(app.address || '')
 
           // Parsear Documento de Identidad
@@ -268,7 +263,7 @@ export default function DoctorOnboarding() {
     setCountryIso(iso)
     const cities = await getCitiesOfCountry(iso)
     setAvailableCities(cities)
-    setCityName(cities.length > 0 ? cities[0] : 'Otra')
+    setCityName(cities.length > 0 ? cities[0] : '')
     
     // Actualizar documentos según el nuevo país
     const docs = getCountryDocs(iso)
@@ -311,7 +306,7 @@ export default function DoctorOnboarding() {
     // --- VALIDACIÓN PASO 1 ---
     if (step === 1) {
       if (!email || !baseName) return setError('Completa los campos obligatorios.')
-      if (cityName === 'Otra' && !customCity) return setError('Por favor especifica tu ciudad.')
+      if (!cityName.trim()) return setError('Por favor especifica tu ciudad.')
       
       if (!isDoctorEditing) {
         if (password.length < 8 || password !== confirmPassword) {
@@ -380,7 +375,7 @@ export default function DoctorOnboarding() {
     setIsSubmitting(true)
     
     const finalDisplayName = `${namePrefix} ${baseName}`.trim()
-    const finalCity = cityName === 'Otra' ? customCity : cityName
+    const finalCity = cityName.trim()
     const finalCountryName = Country.getCountryByCode(countryIso)?.name || ''
     const finalLicenseCountryName = Country.getCountryByCode(licenseCountryIso)?.name || ''
     
@@ -631,36 +626,23 @@ export default function DoctorOnboarding() {
 
                     <Select label="País de residencia" value={countryIso} onChange={handleCountryChange} required>
                       {allCountries.map((c) => (
-                        <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
+                        <option key={c.isoCode} value={c.isoCode}>{localizedCountryName(c.isoCode, c.name)}</option>
                       ))}
                     </Select>
 
-                    {availableCities.length > 0 ? (
-                      <Select label="Ciudad" value={cityName} onChange={(e) => setCityName(e.target.value)} required>
-                        {availableCities.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                        <option value="Otra">Otra…</option>
-                      </Select>
-                    ) : (
-                      <Input
-                        label="Ciudad"
-                        value={customCity}
-                        onChange={(e) => setCustomCity(e.target.value)}
-                        required
-                        placeholder="Escribe tu ciudad"
-                      />
-                    )}
-
-                    {availableCities.length > 0 && cityName === 'Otra' && (
-                      <Input
-                        label="Especifica tu ciudad"
-                        value={customCity}
-                        onChange={(e) => setCustomCity(e.target.value)}
-                        required
-                        placeholder="Escribe tu ciudad"
-                      />
-                    )}
+                    <Input
+                      label="Ciudad"
+                      list={availableCities.length > 0 ? `city-options-${countryIso}` : undefined}
+                      value={cityName}
+                      onChange={(e) => setCityName(e.target.value)}
+                      required
+                      placeholder="Escribe o elige tu ciudad"
+                    />
+                    <datalist id={`city-options-${countryIso}`}>
+                      {availableCities.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
 
                     <div className="md:col-span-2">
                       <Input
@@ -680,7 +662,7 @@ export default function DoctorOnboarding() {
                         required
                       >
                         {timezones.map((tz: string) => (
-                          <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                          <option key={tz} value={tz} title={tz}>{timeZoneLabel(tz)}</option>
                         ))}
                       </Select>
                     </div>
@@ -869,7 +851,7 @@ export default function DoctorOnboarding() {
                       onChange={handleLicenseCountryChange}
                     >
                       {allCountries.map((c) => (
-                        <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
+                        <option key={c.isoCode} value={c.isoCode}>{localizedCountryName(c.isoCode, c.name)}</option>
                       ))}
                     </Select>
 
@@ -978,7 +960,7 @@ export default function DoctorOnboarding() {
                 </Button>
 
                 {isProfileRoute ? (
-                  <Button type="submit" loading={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-500">
+                  <Button type="submit" loading={isSubmitting} className="bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-500">
                     Guardar cambios
                   </Button>
                 ) : step < totalSteps ? (
@@ -1000,7 +982,7 @@ export default function DoctorOnboarding() {
                     key="wizard-submit"
                     type="submit"
                     loading={isSubmitting}
-                    className="bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-500"
+                    className="bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-500"
                   >
                     {isDoctorEditing ? 'Actualizar perfil' : 'Enviar postulación'}
                   </Button>

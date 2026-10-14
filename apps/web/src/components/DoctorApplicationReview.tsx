@@ -344,7 +344,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                   onClick={() => handleReview('approved')}
                   disabled={saving || selectedApplication.status === 'approved'}
                   loading={saving}
-                  className="min-w-[140px] flex-1 bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-500"
+                  className="min-w-[140px] flex-1 bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-500"
                 >
                   Aprobar
                 </Button>

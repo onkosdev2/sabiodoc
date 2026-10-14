@@ -110,11 +110,17 @@ def build_user_response(user: User) -> UserResponse:
             part for part in [patient_profile.first_name, patient_profile.last_name] if part
         ).strip() or None
 
+    # País de la cuenta: preferimos el perfil de paciente y, si no, el médico.
+    user_country = (patient_profile.country if patient_profile else None) or (
+        doctor_profile.country if doctor_profile else None
+    )
+
     return UserResponse(
         id=user.id,
         email=user.email,
         role=user.primary_role,
         roles=sorted_roles(user.roles),
+        country=user_country,
         doctor_status=doctor_profile.status if doctor_profile else None,
         is_email_verified=bool(user.is_email_verified),
         display_name=doctor_name or patient_name,

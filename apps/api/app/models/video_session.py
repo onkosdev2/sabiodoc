@@ -56,6 +56,12 @@ class VideoSession(Base):
     doctor_present = Column(Boolean, nullable=False, server_default="false")
     patient_last_seen_at = Column(DateTime(timezone=True), nullable=True)
     doctor_last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    # Presencia real en la conferencia de Jitsi (eventos del cliente).
+    # El cronometro y el cobro exigen que ambos hayan entrado a la sala.
+    jitsi_patient_present = Column(Boolean, nullable=False, server_default="false")
+    jitsi_doctor_present = Column(Boolean, nullable=False, server_default="false")
+    jitsi_patient_joined_at = Column(DateTime(timezone=True), nullable=True)
+    jitsi_doctor_joined_at = Column(DateTime(timezone=True), nullable=True)
     doctor_note = Column(Text, nullable=True)
     followup_instructions = Column(Text, nullable=True)
     # Guion de apertura generado por IA (ayuda a identificar voces en la transcripcion).

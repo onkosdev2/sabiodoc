@@ -274,17 +274,34 @@ export default function MyAppointments() {
                 )}
 
                 {appointment.payment_amount_cents != null && (
-                  <p className="mt-3 text-sm text-slate-600">
-                    <span className="font-medium text-slate-800">
-                      {appointment.payment_status === 'refunded'
-                        ? 'Reembolsado'
-                        : appointment.payment_status === 'released'
-                          ? 'Pagado al médico'
-                          : 'Pago retenido'}
-                      :
-                    </span>{' '}
-                    {formatMoney(appointment.payment_amount_cents)}
-                  </p>
+                  <div className="mt-3 space-y-1 text-sm text-slate-600">
+                    {appointment.payment_status === 'released' ? (
+                      <>
+                        <p>
+                          <span className="font-medium text-slate-800">Costo final: </span>
+                          {formatMoney(
+                            appointment.payment_final_amount_cents ?? appointment.payment_amount_cents,
+                          )}
+                        </p>
+                        {appointment.payment_refund_cents ? (
+                          <p>
+                            <span className="font-medium text-slate-800">Reembolsado a tu saldo: </span>
+                            {formatMoney(appointment.payment_refund_cents)}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : appointment.payment_status === 'refunded' ? (
+                      <p>
+                        <span className="font-medium text-slate-800">Reembolsado a tu saldo: </span>
+                        {formatMoney(appointment.payment_refund_cents ?? appointment.payment_amount_cents)}
+                      </p>
+                    ) : (
+                      <p>
+                        <span className="font-medium text-slate-800">Pago retenido: </span>
+                        {formatMoney(appointment.payment_amount_cents)}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {appointment.cancellation_reason && (

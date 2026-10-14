@@ -10,6 +10,7 @@ import DoctorFavoriteButton from '../components/DoctorFavoriteButton'
 import { DoctorAvailabilityPreview, DoctorCard, getDoctorsBySpecialty } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
+import { useNoIndex } from '../utils/seo'
 import BackButton from '../components/BackButton'
 import PresenceBadge from '../components/PresenceBadge'
 import { formatMoney } from '../utils/format'
@@ -284,6 +285,7 @@ export default function SpecialtyDetail() {
     title: specialty ? `${specialty.name} · SabioDoc` : undefined,
     description: specialty?.description ?? undefined,
   })
+  useNoIndex(!loading && !specialty)
 
   if (loading) {
     return (

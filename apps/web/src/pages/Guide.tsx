@@ -21,6 +21,10 @@ export default function Guide() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Caché local de pasos ya mostrados y de las respuestas elegidas. Permite que
+  // "Atrás" sea instantáneo y estable, sin volver a generar la pregunta con IA.
+  const [stepCache, setStepCache] = useState<Record<number, GuideStepResponse>>({})
+  const [answers, setAnswers] = useState<Record<number, string>>({})
 
   const fetchStep = async (nextHistory: GuideHistoryItem[]) => {
     setSubmitting(true)
@@ -34,6 +38,7 @@ export default function Guide() {
       } else {
         setCurrent(data)
         setResult(null)
+        setStepCache((prev) => ({ ...prev, [nextHistory.length]: data }))
       }
       setSelected(null)
     } catch (err) {
@@ -65,12 +70,32 @@ export default function Guide() {
       answer: option.value,
       answer_label: option.label,
     }
+    // Guardamos la respuesta de este paso e invalidamos los posteriores: si el
+    // usuario cambia una respuesta, los siguientes pasos deben regenerarse.
+    setAnswers((prev) => ({ ...prev, [history.length]: selected }))
+    setStepCache((prev) => {
+      const next: Record<number, GuideStepResponse> = {}
+      for (const [key, value] of Object.entries(prev)) {
+        if (Number(key) <= history.length) next[Number(key)] = value
+      }
+      return next
+    })
     fetchStep([...history, item])
   }
 
   const handleBack = () => {
     if (submitting || history.length === 0) return
-    fetchStep(history.slice(0, -1))
+    const nextHistory = history.slice(0, -1)
+    const cached = stepCache[nextHistory.length]
+    if (cached) {
+      // Volvemos al paso ya mostrado, con la respuesta que se había elegido.
+      setHistory(nextHistory)
+      setCurrent(cached)
+      setResult(null)
+      setSelected(answers[nextHistory.length] ?? null)
+      return
+    }
+    fetchStep(nextHistory)
   }
 
   const handleReset = () => {
@@ -78,6 +103,8 @@ export default function Guide() {
     setCurrent(null)
     setHistory([])
     setSelected(null)
+    setStepCache({})
+    setAnswers({})
     setLoading(true)
     fetchStep([])
   }

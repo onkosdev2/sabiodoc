@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.video_session import PaymentStatus, VideoProvider, VideoSessionStatus
 
@@ -121,6 +121,13 @@ class VideoSessionStatusResponse(BaseModel):
     patient_present: bool = False
     doctor_present: bool = False
     both_present: bool = False
+    # Presencia real en la conferencia de Jitsi (eventos del cliente).
+    jitsi_required: bool = False
+    jitsi_patient_present: bool = False
+    jitsi_doctor_present: bool = False
+    both_in_jitsi: bool = False
+    jitsi_patient_joined_at: Optional[datetime] = None
+    jitsi_doctor_joined_at: Optional[datetime] = None
     doctor_note: str | None = None
     followup_instructions: str | None = None
     intro_script: str | None = None
@@ -132,6 +139,12 @@ class VideoSessionStatusResponse(BaseModel):
 
 class VideoSessionDoctorNoteRequest(BaseModel):
     doctor_note: str | None = Field(default=None, max_length=4000)
+
+
+class JitsiEventRequest(BaseModel):
+    """Evento de la conferencia de Jitsi enviado por el cliente."""
+
+    event: Literal["joined", "left"]
 
 
 class VideoSessionCompleteRequest(BaseModel):

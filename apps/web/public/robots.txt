@@ -1,9 +1,18 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /me/
+Disallow: /doctor/
 Disallow: /reviewer
+Disallow: /support/
+Disallow: /me/
 Disallow: /video-room
+Disallow: /consultation/
+Disallow: /help
 Disallow: /notifications
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
 Sitemap: %SITE_URL%/sitemap.xml

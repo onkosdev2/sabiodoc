@@ -158,7 +158,27 @@ class AppointmentService:
     def serialize_appointment(self, appointment: Appointment, files: list | None = None):
         review = appointment.review[0] if appointment.review else None
         payment = getattr(appointment, "payment", None)
+        from app.models.wallet import AppointmentPaymentStatus
         from app.schemas.appointment import AppointmentResponse
+
+        # Liquidación real: costo final y lo devuelto (independiente del monto retenido).
+        final_amount_cents = None
+        refund_cents = None
+        if payment:
+            held = payment.amount_cents or 0
+            overtime = payment.overtime_amount_cents or 0
+            if payment.status == AppointmentPaymentStatus.released:
+                final_amount_cents = (
+                    payment.billable_amount_cents
+                    if payment.billable_amount_cents is not None
+                    else held
+                )
+                refund_cents = max(0, held + overtime - final_amount_cents)
+            elif payment.status == AppointmentPaymentStatus.refunded:
+                final_amount_cents = 0
+                refund_cents = held + overtime
+            else:
+                refund_cents = 0
 
         # La consulta vinculada es la fuente de verdad: si su resumen o ficha
         # cambió después de agendar, mostramos el vigente en vez del snapshot.
@@ -199,6 +219,8 @@ class AppointmentService:
             payment_status=payment.status if payment else None,
             payment_platform_fee_cents=payment.platform_fee_cents if payment else None,
             payment_doctor_amount_cents=payment.doctor_amount_cents if payment else None,
+            payment_final_amount_cents=final_amount_cents,
+            payment_refund_cents=refund_cents,
             platform_fee_percent=round(settings.PLATFORM_FEE_BPS / 100, 2),
             files=files or [],
             files_enabled=settings.cloudinary_enabled,

@@ -32,6 +32,7 @@ import { reportReview } from '../api/reviews'
 import Modal from '../components/ui/Modal'
 import { useToast } from '../context/ToastContext'
 import { formatMoney as currency } from '../utils/format'
+import { useNoIndex } from '../utils/seo'
 
 function Stars({ value, className = 'h-4 w-4' }: { value: number; className?: string }) {
   return (
@@ -237,6 +238,7 @@ export default function DoctorDetailPage() {
       : undefined,
     image: doctor?.photo_url ?? undefined,
   })
+  useNoIndex(!loading && !doctor)
 
   const handleBook = async () => {
     if (!isAuthenticated) {
@@ -573,6 +575,15 @@ export default function DoctorDetailPage() {
                           <button
                             key={slot.starts_at}
                             type="button"
+                            aria-pressed={selectedSlot === slot.starts_at}
+                            aria-label={`${new Date(slot.starts_at).toLocaleDateString('es-ES', {
+                              weekday: 'long',
+                              day: 'numeric',
+                              month: 'long',
+                            })}, ${new Date(slot.starts_at).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}`}
                             onClick={() => setSelectedSlot(slot.starts_at)}
                             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                               selectedSlot === slot.starts_at
@@ -635,14 +646,24 @@ export default function DoctorDetailPage() {
                 <Button
                   onClick={handleBook}
                   disabled={
-                    !selectedSlot || booking || !acceptedTerms || !acceptedOvertime || !hasEnoughCredits
+                    !isAuthenticated ||
+                    !selectedSlot ||
+                    booking ||
+                    !acceptedTerms ||
+                    !acceptedOvertime ||
+                    !hasEnoughCredits
                   }
                   loading={booking}
                   leftIcon={<CalendarPlus className="h-4 w-4" />}
                   className="w-full"
                 >
-                  Confirmar cita
+                  {isAuthenticated ? 'Confirmar cita' : 'Inicia sesión para confirmar'}
                 </Button>
+                {!isAuthenticated && (
+                  <p className="text-center text-xs text-slate-500">
+                    Debes iniciar sesión para confirmar la cita.
+                  </p>
+                )}
               </div>
             )}
           </Card>

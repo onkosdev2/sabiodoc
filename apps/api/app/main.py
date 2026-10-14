@@ -92,6 +92,11 @@ async def request_context_middleware(request: Request, call_next):
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
     response.headers["X-Request-ID"] = request_id
+    # Cabeceras de seguridad de la API.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if elapsed_ms > 5000:
         logger.warning(
             f"Petición lenta: {request.method} {request.url.path} "

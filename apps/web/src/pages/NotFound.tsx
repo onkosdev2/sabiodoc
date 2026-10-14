@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom'
 import { Compass, Home } from 'lucide-react'
 
+import { useNoIndex } from '../utils/seo'
+
 export default function NotFound() {
+  useNoIndex()
   return (
     <div className="mx-auto max-w-xl py-10 text-center">
       <Compass className="mx-auto mb-4 h-12 w-12 text-slate-300" aria-hidden="true" />

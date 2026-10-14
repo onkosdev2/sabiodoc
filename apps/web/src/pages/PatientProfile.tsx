@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Loader2, Save, Sparkles, UserRound } from 'lucide-react'
-import { Country, getCitiesOfCountry } from '../utils/locations'
+import { Country, getCitiesOfCountry, localizedCountryName } from '../utils/locations'
 
 import {
   getMyPatientProfile,
@@ -21,6 +21,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import { Field, Input, Select, Textarea } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { timeZoneLabel } from '../utils/format'
 import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
 
 const SEX_OPTIONS: Array<{ value: PatientSex; label: string }> = [
@@ -95,7 +96,6 @@ export default function PatientProfilePage() {
   // Estado de ubicación (se deriva del perfil al cargar).
   const [countryIso, setCountryIso] = useState('')
   const [cityName, setCityName] = useState('')
-  const [customCity, setCustomCity] = useState('')
   const [timezone, setTimezone] = useState('')
 
   // Teléfono: prefijo (ISO del país) + número.
@@ -118,13 +118,7 @@ export default function PatientProfilePage() {
 
         const cities = await getCitiesOfCountry(iso)
         setAvailableCities(cities)
-        if (data.city && cities.includes(data.city)) {
-          setCityName(data.city)
-          setCustomCity('')
-        } else if (data.city) {
-          setCityName('Otra')
-          setCustomCity(data.city)
-        }
+        setCityName(data.city || '')
 
         setTimezone(data.timezone || '')
 
@@ -158,13 +152,7 @@ export default function PatientProfilePage() {
     setCountryIso(iso)
     const cities = await getCitiesOfCountry(iso)
     setAvailableCities(cities)
-    if (cities.length > 0) {
-      setCityName(cities[0])
-      setCustomCity('')
-    } else {
-      setCityName('Otra')
-      setCustomCity('')
-    }
+    setCityName(cities.length > 0 ? cities[0] : '')
     // Sugerimos el prefijo telefónico del país si aún no hay uno elegido.
     if (iso) {
       setPhoneIso((current) => current || iso)
@@ -185,10 +173,7 @@ export default function PatientProfilePage() {
     setSaving(true)
     setError(null)
     try {
-      const finalCity =
-        availableCities.length > 0 && cityName !== 'Otra'
-          ? cityName
-          : customCity.trim() || (countryIso ? '' : profile.city || '')
+      const finalCity = cityName.trim()
       const finalCountry =
         allCountries.find((country) => country.isoCode === countryIso)?.name ||
         (countryIso ? null : profile.country || null)
@@ -330,45 +315,30 @@ export default function PatientProfilePage() {
               <option value="">Selecciona un país</option>
               {allCountries.map((country) => (
                 <option key={country.isoCode} value={country.isoCode}>
-                  {country.name}
+                  {localizedCountryName(country.isoCode, country.name)}
                 </option>
               ))}
             </Select>
 
-            {availableCities.length === 0 ? (
-              <Input
-                label="Ciudad"
-                value={customCity}
-                onChange={(e) => setCustomCity(e.target.value)}
-                placeholder="Escribe tu ciudad"
-              />
-            ) : (
-              <Select label="Ciudad" value={cityName} onChange={(e) => setCityName(e.target.value)}>
-                <option value="">Selecciona una ciudad</option>
-                {availableCities.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-                <option value="Otra">Otra…</option>
-              </Select>
-            )}
-
-            {cityName === 'Otra' && availableCities.length > 0 && (
-              <Input
-                label="Especifica tu ciudad"
-                value={customCity}
-                onChange={(e) => setCustomCity(e.target.value)}
-                placeholder="Escribe tu ciudad"
-              />
-            )}
+            <Input
+              label="Ciudad"
+              list={availableCities.length > 0 ? `patient-city-options-${countryIso}` : undefined}
+              value={cityName}
+              onChange={(e) => setCityName(e.target.value)}
+              placeholder="Escribe o elige tu ciudad"
+            />
+            <datalist id={`patient-city-options-${countryIso}`}>
+              {availableCities.map((city) => (
+                <option key={city} value={city} />
+              ))}
+            </datalist>
 
             <div className="md:col-span-2">
               <Select label="Zona horaria" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
                 <option value="">Sin especificar</option>
                 {timezones.map((zone: string) => (
-                  <option key={zone} value={zone}>
-                    {zone.replace(/_/g, ' ')}
+                  <option key={zone} value={zone} title={zone}>
+                    {timeZoneLabel(zone)}
                   </option>
                 ))}
               </Select>
@@ -387,7 +357,7 @@ export default function PatientProfilePage() {
                     <option value="">Código</option>
                     {allCountries.map((country) => (
                       <option key={country.isoCode} value={country.isoCode}>
-                        +{country.phonecode} {country.name}
+                        +{country.phonecode} {localizedCountryName(country.isoCode, country.name)}
                       </option>
                     ))}
                   </select>
@@ -517,7 +487,7 @@ export default function PatientProfilePage() {
                   <option value="">Código</option>
                   {allCountries.map((country) => (
                     <option key={country.isoCode} value={country.isoCode}>
-                      +{country.phonecode} {country.name}
+                      +{country.phonecode} {localizedCountryName(country.isoCode, country.name)}
                     </option>
                   ))}
                 </select>

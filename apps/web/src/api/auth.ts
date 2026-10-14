@@ -8,6 +8,7 @@ export interface User {
   // ``role`` es el rol primario (para mostrar); ``roles`` es el conjunto real.
   role: UserRole
   roles: UserRole[]
+  country?: string | null
   doctor_status?: 'pending' | 'approved' | 'rejected' | 'suspended' | null
   is_email_verified?: boolean
   display_name?: string | null

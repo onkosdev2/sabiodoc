@@ -31,6 +31,6 @@ describe('Button', () => {
 
   it('aplica el estilo de la variante success', () => {
     render(<Button variant="success">Aceptar</Button>)
-    expect(screen.getByRole('button', { name: 'Aceptar' })).toHaveClass('bg-emerald-600')
+    expect(screen.getByRole('button', { name: 'Aceptar' })).toHaveClass('bg-emerald-700')
   })
 })

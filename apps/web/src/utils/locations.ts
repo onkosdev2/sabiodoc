@@ -2,6 +2,33 @@ import Country from 'country-state-city/lib/country'
 
 export { Country }
 
+/**
+ * Nombre de país localizado al español a partir de su código ISO.
+ *
+ * El dataset de `country-state-city` trae los nombres en inglés ("Peru",
+ * "United States"); `Intl.DisplayNames` los traduce sin cargar tablas.
+ */
+const REGION_NAMES = (() => {
+  try {
+    return new Intl.DisplayNames(['es'], { type: 'region' })
+  } catch {
+    return null
+  }
+})()
+
+export function localizedCountryName(isoCode: string, fallback?: string): string {
+  const code = (isoCode || '').trim().toUpperCase()
+  if (!code) return fallback ?? ''
+  try {
+    const name = REGION_NAMES?.of(code)
+    // `Intl.DisplayNames` devuelve el propio código si no lo reconoce.
+    if (name && name !== code) return name
+  } catch {
+    /* Intl no disponible */
+  }
+  return fallback ?? code
+}
+
 // El dataset de ciudades se divide por país en `public/cities/<ISO>.json`
 // (ver scripts/generate-cities.mjs). Así solo se descarga el país seleccionado
 // (KBs) en lugar del dataset completo (~8 MB).

@@ -335,6 +335,38 @@ Uso
  │ cardio.demo@sabiodoc.app, derma.demo@sabiodoc.app, neuro.demo@sabiodoc.app, dummy.* │ DemoDoctor123!   │ doctor           │                                                        
  └─────────────────────────────────────────────────────────────────────────────────────┴──────────────────┴──────────────────┘                                                                                     
 
+## 🚀 Despliegue (Render)
+
+Dos servicios:
+
+- **API** (Web Service Python): Root Directory `apps/api`, Build `pip install -r requirements.txt`,
+  **Pre-Deploy** `alembic upgrade head`, Start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- **Frontend** (Static Site): Root Directory `apps/web`, Build `npm ci && npm run build`, Publish `dist`.
+
+> **Imprescindible:** ejecutar `alembic upgrade head` en cada despliegue (hay migraciones nuevas).
+> Si el servicio no arranca con la BD al día, fallará.
+
+Variables clave:
+
+- API: `DATABASE_URL`, `ENVIRONMENT=production`, `JWT_SECRET` (≥32), `FRONTEND_ORIGIN` (dominio del frontend),
+  `JITSI_BASE_URL=https://meet.jit.si` y `JITSI_JWT_SECRET=` **vacío** (salas públicas), `SMTP_*`, `CLOUDINARY_*`, `PAYOUT_PROVIDER`.
+- Frontend (en tiempo de build): `VITE_API_URL` (URL pública de la API) y `VITE_SITE_URL` (dominio del sitio).
+
+Cabeceras, caché y redirecciones: el frontend incluye `apps/web/public/_headers`, `apps/web/public/_redirects` y
+`apps/web/public/404.html`. Si Render no los aplica automáticamente, replica lo mismo en la configuración de
+Headers/Redirects del sitio.
+
+**404 real (sin SSR):** las rutas **públicas** se sirven como HTML prerenderizado, así que una ruta desconocida
+(p. ej. `/ruta-inexistente` o `/specialties/slug-inexistente`) devuelve **HTTP 404** con `404.html`. Las rutas de la
+aplicación (paneles, cuenta, `/login`, etc.) se reescriben a `/index.html` según `_redirects`; **no hay `catch-all`**.
+Consecuencia asumida: `/doctors/{id}` se reescribe a la SPA (para que médicos nuevos funcionen sin recompilar), por lo
+que un perfil inexistente responde 200 pero con `noindex` desde el cliente. Si el hosting no aplica `_redirects`,
+replica esas reglas (rewrite 200) en el dashboard de Render y borra cualquier `catch-all` previo.
+
+SEO: el `postbuild` genera HTML por ruta con meta tags, JSON-LD y `sitemap.xml`
+(`scripts/generate-meta-pages.mjs` y `generate-sitemap.mjs`). Necesitan `VITE_API_URL` accesible durante el build;
+si no, generan solo las rutas fijas sin romper el build. Las páginas no encontradas se marcan `noindex` desde el cliente.
+
 ## 📝 Licencia
 
 > Todos los usuarios tienen además el rol base **`patient`**. Un mismo usuario puede

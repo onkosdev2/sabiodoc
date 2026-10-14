@@ -98,6 +98,8 @@ class UserResponse(BaseModel):
     # ``role`` es el rol primario (para mostrar); ``roles`` es el conjunto real.
     role: UserRole
     roles: list[UserRole] = []
+    # País configurado en la cuenta (perfil de paciente o de médico).
+    country: Optional[str] = None
     doctor_status: Optional[DoctorApprovalStatus] = None
     is_email_verified: bool = True
     display_name: Optional[str] = None

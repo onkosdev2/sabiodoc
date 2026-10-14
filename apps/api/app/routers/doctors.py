@@ -561,7 +561,12 @@ def get_doctor_dashboard(
     )
     total_scheduled = (
         db.query(Appointment)
-        .filter(Appointment.doctor_id == doctor_profile.id, Appointment.status == AppointmentStatus.scheduled)
+        .filter(
+            Appointment.doctor_id == doctor_profile.id,
+            Appointment.status == AppointmentStatus.scheduled,
+            # "Programadas" = próximas (mismas que muestra la lista).
+            Appointment.scheduled_at >= now,
+        )
         .count()
     )
     total_completed = (
@@ -835,7 +840,7 @@ def get_doctor_bookable_slots(
 ):
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
     if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
     if doctor_profile.status != DoctorApprovalStatus.approved or not doctor_profile.is_accepting_consultations:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico no esta disponible para nuevas citas")
     slots = appointment_service.compute_bookable_slots(
@@ -1051,7 +1056,7 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
         .first()
     )
     if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
 
     video_session_service.expire_stale_sessions(db, doctor_id=doctor_id)
     resolved = resolve_presence(db, doctor_profile)

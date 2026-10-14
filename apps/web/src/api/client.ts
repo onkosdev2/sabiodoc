@@ -2,7 +2,8 @@ import axios from 'axios'
 
 import { clearStoredAuth, getStoredToken } from '../utils/authStorage'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Se normaliza sin barra final para evitar URLs con doble barra (p. ej. SSE).
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
 
 export { API_URL }
 

@@ -1,7 +1,9 @@
+import ipaddress
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
+from urllib.parse import urlparse
 
 from jose import jwt
 
@@ -10,12 +12,37 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Proveedores públicos conocidos: no usan JWT propio (el primer participante es moderador).
+_PUBLIC_JITSI_HOSTS = {"meet.jit.si"}
+
+
+def _host_from_url(url: str) -> str:
+    try:
+        return (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def is_private_or_local_host(host: str) -> bool:
+    """True si el host es localhost, una IP privada o un dominio .local."""
+    if not host:
+        return False
+    if host in {"localhost"} or host.endswith(".local") or host.endswith(".internal"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+
 
 class JitsiService:
-    """Salas de video basadas en Jitsi Meet self-hosted.
+    """Salas de video basadas en Jitsi Meet.
 
-    Genera la URL de la sala y, si ``JITSI_JWT_SECRET`` está configurado, un
-    JWT por participante (paciente/medico) para salas protegidas.
+    Genera la URL de la sala y, si ``JITSI_JWT_SECRET`` está configurado **y el
+    proveedor lo admite** (Jitsi propio/JaaS), un JWT por participante
+    (paciente/medico) para salas protegidas. En ``meet.jit.si`` las salas son
+    públicas y el JWT se ignora (el primer participante es moderador).
     """
 
     def __init__(self):
@@ -25,12 +52,38 @@ class JitsiService:
         self.jwt_app_id = settings.JITSI_JWT_APP_ID
         self.jwt_audience = settings.JITSI_JWT_AUDIENCE
         self.is_mock = not self.base_url
+        host = _host_from_url(self.base_url)
+        self.is_public_provider = host in _PUBLIC_JITSI_HOSTS
+        self.host = host
+
+        # meet.jit.si no acepta JWTs propios: enviarlos deja la sala esperando
+        # moderador. Si hay secreto configurado con un proveedor público, se ignora.
+        if self.is_public_provider and self.jwt_secret:
+            logger.warning(
+                "JITSI_BASE_URL es un proveedor público (%s): se ignora JITSI_JWT_SECRET",
+                host,
+            )
+            self.jwt_secret = None
 
         if self.is_mock:
             logger.warning("Jitsi service running in MOCK mode - JITSI_BASE_URL not configured")
+        elif settings.is_production and is_private_or_local_host(host):
+            logger.error(
+                "JITSI_BASE_URL apunta a un host privado/local (%s) en producción",
+                self.base_url,
+            )
         else:
             logger.info(
                 f"Jitsi service initialized for {self.base_url} (jwt={'on' if self.jwt_secret else 'off'})"
+            )
+
+    def _ensure_safe_host(self) -> None:
+        """En producción no se permite un host privado/local para la sala."""
+        if self.is_mock:
+            return
+        if settings.is_production and is_private_or_local_host(self.host):
+            raise RuntimeError(
+                f"JITSI_BASE_URL '{self.base_url}' no es válido en producción: usa un dominio público con TLS."
             )
 
     def prepare_room(
@@ -42,6 +95,7 @@ class JitsiService:
         expires_at: datetime,
         appointment_id: int | None = None,
     ) -> dict:
+        self._ensure_safe_host()
         unique_room = f"{self.room_prefix}-{room_name}-{secrets.token_hex(3)}"
         room_url = self.build_room_url(unique_room) if not self.is_mock else ""
 

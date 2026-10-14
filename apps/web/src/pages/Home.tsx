@@ -60,7 +60,7 @@ export default function Home() {
             Tu asistente de orientación médica inteligente
           </p>
           <p className="mt-2 text-base text-slate-500">
-            Te ayudamos a encontrar la especialidad médica adecuada para tus necesidades y agendar videollamadas con medicos, todo apoyado por inteligencia artificial.
+            Te ayudamos a encontrar la especialidad médica adecuada para tus necesidades y agendar videollamadas con médicos, todo apoyado por inteligencia artificial.
           </p>
           {!isLoading && !isAuthenticated && (
             <Link
@@ -205,7 +205,7 @@ export default function Home() {
             <div className="shrink-0">
               <Link 
                 to="/doctor/apply" 
-                className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-emerald-600 px-6 py-3.5 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:w-auto"
+                className="inline-flex w-full items-center justify-center whitespace-nowrap rounded-xl bg-emerald-700 px-6 py-3.5 font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 md:w-auto"
               >
                 Postular como médico
               </Link>

@@ -19,3 +19,17 @@ export function formatLongDate(value: string | Date): string {
 export function formatTime(value: string | Date): string {
   return new Date(value).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 }
+
+/** Etiqueta legible de una zona horaria IANA, p. ej. "Lima (GMT-5)". */
+export function timeZoneLabel(timeZone: string, date: Date = new Date()): string {
+  if (!timeZone) return ''
+  const city = timeZone.split('/').pop()?.replace(/_/g, ' ') ?? timeZone
+  try {
+    const offset = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
+      .formatToParts(date)
+      .find((part) => part.type === 'timeZoneName')?.value
+    return offset ? `${city} (${offset})` : city
+  } catch {
+    return city
+  }
+}

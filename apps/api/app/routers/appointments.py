@@ -98,7 +98,7 @@ def create_appointment(
 ):
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == payload.doctor_id).first()
     if not doctor_profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
 
     consultation = None
     specialty_id = payload.specialty_id

@@ -9,6 +9,9 @@ def test_health_check():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    # Cabeceras de seguridad de la API.
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_root():
@@ -68,6 +71,7 @@ def test_register_doctor_application():
     payload = register_response.json()
     assert payload["user"]["email"] == unique_email
     assert payload["user"]["role"] == "doctor"
+    assert payload["user"]["country"] == "Colombia"
     assert payload["user"]["doctor_status"] == "pending"
 
     access_token = payload["access_token"]

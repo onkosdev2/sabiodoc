@@ -1,7 +1,7 @@
 /**
  * Genera copias de `dist/index.html` con las meta etiquetas (title, description,
- * Open Graph, Twitter y canonical) ya inyectadas para las rutas públicas:
- * fijas + especialidades + perfiles de médicos.
+ * Open Graph, Twitter, canonical y JSON-LD) ya inyectadas para las rutas
+ * públicas: fijas + especialidades + perfiles de médicos.
  *
  * Esto mejora cómo se ven los enlaces al compartirlos (WhatsApp, Facebook, X) y
  * lo que leen los crawlers sin ejecutar JavaScript. El contenido sigue siendo la
@@ -36,6 +36,28 @@ const fileEnv = {
 const apiUrl = (process.env.VITE_API_URL || fileEnv.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '')
 const siteUrl = (process.env.VITE_SITE_URL || fileEnv.VITE_SITE_URL || 'https://sabiodoc.app').replace(/\/+$/, '')
 
+const DEFAULT_TITLE = 'SabioDoc - Orientación Médica Inteligente'
+const DEFAULT_DESCRIPTION =
+  'Orientación médica con IA, agenda de videoconsultas y pago por minuto. Encuentra la especialidad adecuada y atiéndete con profesionales verificados.'
+const DEFAULT_IMAGE = `${siteUrl}/og-image.png`
+const DEFAULT_IMAGE_ALT = 'SabioDoc - Orientación médica inteligente con IA'
+
+const SITE_JSONLD = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'SabioDoc',
+    url: siteUrl,
+    logo: `${siteUrl}/og-image.png`,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'SabioDoc',
+    url: siteUrl,
+  },
+]
+
 const STATIC_META = {
   '/como-funciona': {
     title: 'Cómo funciona SabioDoc',
@@ -61,6 +83,20 @@ const STATIC_META = {
     title: 'Emergencias',
     description:
       'Información importante sobre cuándo acudir a urgencias y cómo actuar ante una emergencia médica.',
+  },
+  '/telemedicina': {
+    title: 'Política de telemedicina',
+    description: 'Alcances, límites y consentimiento de la atención médica a distancia en SabioDoc.',
+  },
+  '/privacidad': {
+    title: 'Política de privacidad',
+    description:
+      'Cómo SabioDoc trata tus datos personales y de salud: finalidades, encargados, conservación y derechos.',
+  },
+  '/terminos': {
+    title: 'Términos y condiciones',
+    description:
+      'Reglas de uso de SabioDoc: cuenta, pagos, cancelaciones, responsabilidad y propiedad intelectual.',
   },
   '/doctor/apply': {
     title: 'Postular como médico',
@@ -94,7 +130,22 @@ function replaceAttr(html, attrPattern, value) {
   return html.replace(regex, `$1${escapeHtml(value)}$2`)
 }
 
-function injectMeta(html, { title, description, url, image }) {
+function imageTypeFromUrl(url) {
+  const clean = String(url).split('?')[0].toLowerCase()
+  if (clean.endsWith('.png')) return 'image/png'
+  if (clean.endsWith('.webp')) return 'image/webp'
+  if (clean.endsWith('.gif')) return 'image/gif'
+  if (clean.endsWith('.svg')) return 'image/svg+xml'
+  return 'image/jpeg'
+}
+
+function removeMeta(html, attrPattern) {
+  const regex = new RegExp(`\\s*<meta\\s+${attrPattern}[^>]*>`, 'g')
+  return html.replace(regex, '')
+}
+
+function injectMeta(html, meta) {
+  const { title, description, url, image, imageType, imageWidth, imageHeight, imageAlt, jsonLd } = meta
   let out = html
   out = out.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeHtml(title)}</title>`)
   out = replaceAttr(out, 'name="description"', description)
@@ -106,21 +157,48 @@ function injectMeta(html, { title, description, url, image }) {
   if (image) {
     out = replaceAttr(out, 'property="og:image"', image)
     out = replaceAttr(out, 'name="twitter:image"', image)
+    if (imageType) out = replaceAttr(out, 'property="og:image:type"', imageType)
+    if (imageAlt) out = replaceAttr(out, 'property="og:image:alt"', imageAlt)
+    // Solo afirmamos dimensiones cuando son las de la tarjeta social conocida.
+    if (imageWidth) out = replaceAttr(out, 'property="og:image:width"', String(imageWidth))
+    else out = removeMeta(out, 'property="og:image:width"')
+    if (imageHeight) out = replaceAttr(out, 'property="og:image:height"', String(imageHeight))
+    else out = removeMeta(out, 'property="og:image:height"')
   }
+
   if (!/rel="canonical"/.test(out)) {
     out = out.replace('</head>', `    <link rel="canonical" href="${url}" />\n  </head>`)
   } else {
-    out = out.replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${url}$2`)
+    out = out.replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${escapeHtml(url)}$2`)
+  }
+
+  if (jsonLd) {
+    const payload = Array.isArray(jsonLd) ? jsonLd : [jsonLd]
+    const script = `<script type="application/ld+json">${JSON.stringify(payload)}</script>`
+    out = out.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '')
+    out = out.replace('</head>', `    ${script}\n  </head>`)
   }
   return out
 }
 
 function writePage(baseHtml, routePath, meta) {
   const html = injectMeta(baseHtml, meta)
-  const dir =
-    routePath === '/' ? distDir : resolve(distDir, routePath.replace(/^\/+/, ''))
+  const dir = routePath === '/' ? distDir : resolve(distDir, routePath.replace(/^\/+/, ''))
   mkdirSync(dir, { recursive: true })
   writeFileSync(resolve(dir, 'index.html'), html)
+}
+
+function breadcrumb(items) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  }
 }
 
 async function main() {
@@ -130,11 +208,29 @@ async function main() {
   }
   const baseHtml = readFileSync(baseHtmlPath, 'utf8')
 
+  // Portada: refuerza meta y añade JSON-LD de organización/sitio.
+  writePage(baseHtml, '/', {
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: `${siteUrl}/`,
+    image: DEFAULT_IMAGE,
+    imageType: 'image/png',
+    imageWidth: 1200,
+    imageHeight: 630,
+    imageAlt: DEFAULT_IMAGE_ALT,
+    jsonLd: SITE_JSONLD,
+  })
+
   for (const [route, meta] of Object.entries(STATIC_META)) {
     writePage(baseHtml, route, {
       ...meta,
       url: `${siteUrl}${route}`,
-      image: `${siteUrl}/og-image.png`,
+      image: DEFAULT_IMAGE,
+      imageType: 'image/png',
+      imageWidth: 1200,
+      imageHeight: 630,
+      imageAlt: DEFAULT_IMAGE_ALT,
+      jsonLd: SITE_JSONLD,
     })
   }
 
@@ -148,13 +244,32 @@ async function main() {
 
   const doctors = new Map()
   for (const specialty of specialties) {
+    const url = `${siteUrl}/specialties/${specialty.slug}`
     writePage(baseHtml, `/specialties/${specialty.slug}`, {
       title: `${specialty.name} · SabioDoc`,
       description:
         specialty.description?.slice(0, 300) ||
         `Encuentra especialistas en ${specialty.name} y agenda tu videoconsulta en SabioDoc.`,
-      url: `${siteUrl}/specialties/${specialty.slug}`,
-      image: `${siteUrl}/og-image.png`,
+      url,
+      image: DEFAULT_IMAGE,
+      imageType: 'image/png',
+      imageWidth: 1200,
+      imageHeight: 630,
+      imageAlt: DEFAULT_IMAGE_ALT,
+      jsonLd: [
+        ...SITE_JSONLD,
+        {
+          '@context': 'https://schema.org',
+          '@type': 'MedicalSpecialty',
+          name: specialty.name,
+          url,
+        },
+        breadcrumb([
+          { name: 'Inicio', url: siteUrl },
+          { name: 'Especialidades', url: `${siteUrl}/specialties` },
+          { name: specialty.name, url },
+        ]),
+      ],
     })
     try {
       const data = await fetchJson(`/doctors/specialty/${specialty.slug}`)
@@ -170,11 +285,35 @@ async function main() {
     const description =
       [doctor.professional_title, doctor.bio_short].filter(Boolean).join(' — ').slice(0, 300) ||
       `Perfil del médico ${doctor.display_name} en SabioDoc.`
+    const url = `${siteUrl}/doctors/${id}`
+    const hasPhoto = Boolean(doctor.photo_url)
+    const image = hasPhoto ? doctor.photo_url : DEFAULT_IMAGE
     writePage(baseHtml, `/doctors/${id}`, {
       title: `${doctor.display_name} · SabioDoc`,
       description,
-      url: `${siteUrl}/doctors/${id}`,
-      image: doctor.photo_url || `${siteUrl}/og-image.png`,
+      url,
+      image,
+      // Si es la foto del médico, no afirmamos dimensiones/alt genéricos.
+      imageType: hasPhoto ? imageTypeFromUrl(image) : 'image/png',
+      imageWidth: hasPhoto ? undefined : 1200,
+      imageHeight: hasPhoto ? undefined : 630,
+      imageAlt: hasPhoto ? `Foto de ${doctor.display_name}` : DEFAULT_IMAGE_ALT,
+      jsonLd: [
+        ...SITE_JSONLD,
+        {
+          '@context': 'https://schema.org',
+          '@type': 'Physician',
+          name: doctor.display_name,
+          medicalSpecialty: doctor.professional_title || undefined,
+          image: hasPhoto ? doctor.photo_url : undefined,
+          url,
+        },
+        breadcrumb([
+          { name: 'Inicio', url: siteUrl },
+          { name: 'Especialidades', url: `${siteUrl}/specialties` },
+          { name: doctor.display_name, url },
+        ]),
+      ],
     })
   }
 

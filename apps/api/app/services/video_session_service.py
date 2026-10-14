@@ -154,11 +154,51 @@ class VideoSessionService:
         else:
             video_session.doctor_last_seen_at = now
 
+    # --- Presencia real en Jitsi -----------------------------------------
+    def set_jitsi_presence(
+        self,
+        video_session: VideoSession,
+        role: str,
+        present: bool,
+        now: datetime | None = None,
+    ) -> None:
+        """Registra los eventos 'joined'/'left' de la conferencia de Jitsi."""
+        now = now or datetime.now(timezone.utc)
+        if role == "patient":
+            video_session.jitsi_patient_present = present
+            if present and video_session.jitsi_patient_joined_at is None:
+                video_session.jitsi_patient_joined_at = now
+        else:
+            video_session.jitsi_doctor_present = present
+            if present and video_session.jitsi_doctor_joined_at is None:
+                video_session.jitsi_doctor_joined_at = now
+
+    def requires_jitsi(self, video_session: VideoSession) -> bool:
+        """El cobro por Jitsi solo aplica a salas reales (no al modo mock)."""
+        return getattr(video_session, "provider", None) == VideoProvider.jitsi and not jitsi_service.is_mock
+
+    def participant_in_jitsi(self, video_session: VideoSession, role: str) -> bool:
+        if role == "patient":
+            return bool(video_session.jitsi_patient_present)
+        return bool(video_session.jitsi_doctor_present)
+
+    def both_in_jitsi(self, video_session: VideoSession) -> bool:
+        return self.participant_in_jitsi(video_session, "patient") and self.participant_in_jitsi(
+            video_session, "doctor"
+        )
+
     def both_participants_present(self, video_session: VideoSession, now: datetime | None = None) -> bool:
         now = now or datetime.now(timezone.utc)
-        return self.participant_present(video_session, "patient", now) and self.participant_present(
-            video_session, "doctor", now
-        )
+        if not (
+            self.participant_present(video_session, "patient", now)
+            and self.participant_present(video_session, "doctor", now)
+        ):
+            return False
+        # Si la sala usa Jitsi real, ambos deben estar además dentro de la
+        # conferencia: no se cobra por estar solo en la ruta /video-room.
+        if self.requires_jitsi(video_session) and not self.both_in_jitsi(video_session):
+            return False
+        return True
 
     def participant_present(
         self,
@@ -471,7 +511,7 @@ class VideoSessionService:
     ) -> dict:
         doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_profile_id).first()
         if not doctor_profile:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
 
         if not doctor_profile.user.is_doctor:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario seleccionado no es medico")
@@ -656,7 +696,7 @@ class VideoSessionService:
 
         doctor_profile = appointment.doctor
         if not doctor_profile:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medico no encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
         if doctor_profile.status != DoctorApprovalStatus.approved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El medico aun no esta aprobado")
         if appointment.status != AppointmentStatus.scheduled:

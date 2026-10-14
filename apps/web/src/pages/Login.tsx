@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn } from 'lucide-react'
 
@@ -12,6 +12,7 @@ import Button from '../components/ui/Button'
 import Checkbox from '../components/ui/Checkbox'
 import { Input, PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { focusFirstInvalid } from '../utils/forms'
 import { hasRole } from '../utils/roles'
 import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
 
@@ -42,6 +43,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const formRef = useRef<HTMLFormElement>(null)
 
   const validate = (): boolean => {
     const next: FieldErrors = {}
@@ -50,7 +52,11 @@ export default function Login() {
     if (!password) next.password = 'Ingresa tu contraseña.'
     else if (password.length < 6) next.password = 'Debe tener al menos 6 caracteres.'
     setFieldErrors(next)
-    return Object.keys(next).length === 0
+    if (Object.keys(next).length > 0) {
+      focusFirstInvalid(formRef.current)
+      return false
+    }
+    return true
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -105,7 +111,7 @@ export default function Login() {
       <div className="card">
         <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">Iniciar sesión</h1>
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4">
           <Input
             label="Correo electrónico"
             type="email"
