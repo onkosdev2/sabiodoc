@@ -44,6 +44,16 @@ describe('AuthenticatedRoute', () => {
     expect(screen.getByText('Contenido privado')).toBeInTheDocument()
   })
 
+  it('marca las rutas privadas como noindex', () => {
+    mockedUseAuth.mockReturnValue({ isAuthenticated: true, isLoading: false } as never)
+
+    renderAt('/privado')
+
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+      'noindex, nofollow',
+    )
+  })
+
   it('no redirige mientras la sesión está cargando', () => {
     mockedUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: true } as never)
 

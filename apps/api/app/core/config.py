@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     JITSI_JWT_SECRET: Optional[str] = None
     
     STRIPE_SECRET_KEY: Optional[str] = None
+    # Deploy hook del frontend en Render. Si está configurado, se dispara un
+    # rebuild cuando cambia un perfil público (médico aprobado, foto, datos).
+    FRONTEND_DEPLOY_HOOK_URL: Optional[str] = None
     STRIPE_CURRENCY: str = "usd"
 
     # Pasarela de payouts (retiros). "mock" no mueve dinero real; "stripe" usa
@@ -167,6 +170,18 @@ class Settings(BaseSettings):
         elif url.startswith("postgresql://"):
             url = "postgresql+psycopg2://" + url[len("postgresql://"):]
         self.DATABASE_URL = url
+        return self
+
+    @model_validator(mode="after")
+    def _validate_stripe_mode(self):
+        """Evita mezclar claves de prueba con producción (y viceversa)."""
+        key = self.STRIPE_SECRET_KEY
+        if not key:
+            return self
+        if self.is_production and key.startswith("sk_test_"):
+            raise ValueError("STRIPE_SECRET_KEY de prueba no es válida en producción")
+        if not self.is_production and key.startswith("sk_live_"):
+            raise ValueError("STRIPE_SECRET_KEY live no debe usarse fuera de producción")
         return self
 
     @model_validator(mode="after")

@@ -469,6 +469,9 @@ def pause_video_session_timer(
 
     now = datetime.now(timezone.utc)
     video_session_service.touch_participant(video_session, "doctor", now)
+    # Acumula solo hasta el último momento con ambos presentes. Si el paciente
+    # ya había salido, evita cobrar el tiempo en solitario.
+    video_session_service.reconcile_timer(video_session, now)
     video_session_service.pause_timer(video_session, now)
     video_session_service.process_overtime_billing(db, video_session, now)
     db.add(
@@ -505,6 +508,8 @@ def leave_video_session(
     now = datetime.now(timezone.utc)
     # El cronómetro solo corre con ambos presentes: al salir cualquiera de los
     # dos, se pausa y se acumula unicamente el tiempo en el que ambos estuvieron.
+    # Primero reconciliamos por si el otro ya había dejado de dar señales.
+    video_session_service.reconcile_timer(video_session, now)
     video_session_service.set_participant_presence(video_session, participant_role, False, now)
     video_session_service.pause_timer(video_session, now)
     video_session_service.process_overtime_billing(db, video_session, now)

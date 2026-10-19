@@ -4,6 +4,7 @@ import { CheckCircle2, MailWarning } from 'lucide-react'
 
 import { resendVerification, verifyEmail } from '../api/auth'
 import { getApiErrorMessage } from '../utils/apiError'
+import { useNoIndex } from '../utils/seo'
 import Alert from '../components/ui/Alert'
 import BackButton from '../components/BackButton'
 import Button from '../components/ui/Button'
@@ -12,6 +13,7 @@ import { Input } from '../components/ui/Field'
 type Status = 'loading' | 'success' | 'error'
 
 export default function VerifyEmail() {
+  useNoIndex()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token') || ''
   const [status, setStatus] = useState<Status>('loading')

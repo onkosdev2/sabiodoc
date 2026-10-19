@@ -6,9 +6,9 @@ import JitsiMeeting from './JitsiMeeting'
 const instances: MockJitsiApi[] = []
 
 class MockJitsiApi {
-  listeners: Record<string, () => void> = {}
+  listeners: Record<string, (...args: any[]) => void> = {}
   dispose = vi.fn()
-  addListener = vi.fn((event: string, handler: () => void) => {
+  addListener = vi.fn((event: string, handler: (...args: any[]) => void) => {
     this.listeners[event] = handler
   })
 
@@ -65,6 +65,42 @@ describe('JitsiMeeting', () => {
 
     unmount()
     expect(api.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('traduce los eventos de Jitsi a callbacks de presencia y salida', async () => {
+    const onLeft = vi.fn()
+    const onError = vi.fn()
+    const onRemoteParticipantJoined = vi.fn()
+    const onRemoteParticipantLeft = vi.fn()
+
+    render(
+      <JitsiMeeting
+        roomUrl="https://meet.jit.si/SabioDoc-123"
+        onLeft={onLeft}
+        onError={onError}
+        onRemoteParticipantJoined={onRemoteParticipantJoined}
+        onRemoteParticipantLeft={onRemoteParticipantLeft}
+      />,
+    )
+
+    await waitFor(() => expect(instances).toHaveLength(1))
+    const api = instances[0]
+
+    api.listeners.participantJoined?.({ id: 'paciente-1' })
+    expect(onRemoteParticipantJoined).toHaveBeenCalledWith('paciente-1')
+
+    api.listeners.participantLeft?.({ id: 'paciente-1' })
+    expect(onRemoteParticipantLeft).toHaveBeenCalledWith('paciente-1')
+
+    api.listeners.videoConferenceLeft?.()
+    expect(onLeft).toHaveBeenCalledTimes(1)
+
+    // readyToClose no duplica la salida.
+    api.listeners.readyToClose?.()
+    expect(onLeft).toHaveBeenCalledTimes(1)
+
+    api.listeners.connectionFailed?.({ error: 'network lost' })
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('network lost'))
   })
 
   it('notifica cuando la URL de la sala no es válida', async () => {

@@ -308,6 +308,7 @@ class VideoSessionService:
     ) -> None:
         """Finaliza la videollamada de golpe porque el paciente se quedo sin créditos."""
         now = now or datetime.now(timezone.utc)
+        self.reconcile_timer(video_session, now)
         self.pause_timer(video_session, now)
         video_session.status = VideoSessionStatus.completed
         video_session.ended_at = now

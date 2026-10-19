@@ -114,6 +114,8 @@ const ALARM_RULES: AlarmRule[] = [
     patterns: [
       'sangrado vaginal embarazo',
       'embarazo sangrado',
+      'embarazo con sangrado',
+      'sangrado en el embarazo',
       'dolor abdominal intenso embarazo',
       'no siento al bebe',
     ],

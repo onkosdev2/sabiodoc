@@ -12,6 +12,7 @@ import Button from '../components/ui/Button'
 import Checkbox from '../components/ui/Checkbox'
 import { Input, PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { useNoIndex } from '../utils/seo'
 import { focusFirstInvalid } from '../utils/forms'
 import { hasRole } from '../utils/roles'
 import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
@@ -34,6 +35,7 @@ async function getPatientLandingPath(): Promise<string> {
 }
 
 export default function Login() {
+  useNoIndex()
   const navigate = useNavigate()
   const { login: authLogin } = useAuth()
   const [email, setEmail] = useState('')

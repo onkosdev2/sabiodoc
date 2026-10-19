@@ -132,6 +132,7 @@ export default function VideoConsultationRoom() {
   const [fileToDelete, setFileToDelete] = useState<VideoSessionFile | null>(null)
   const [deletingFile, setDeletingFile] = useState(false)
   const [statusData, setStatusData] = useState<VideoSessionStatus | null>(null)
+  const [statusRefreshToken, setStatusRefreshToken] = useState(0)
   const [clockNow, setClockNow] = useState(Date.now())
   const [doctorNote, setDoctorNote] = useState('')
   const [followupInstructions, setFollowupInstructions] = useState('')
@@ -226,7 +227,7 @@ export default function VideoConsultationRoom() {
       window.clearInterval(pollId)
       window.clearInterval(clockId)
     }
-  }, [session])
+  }, [session, statusRefreshToken])
 
   // Si la videollamada termina (por ejemplo, al agotarse los créditos), cerramos la sala.
   const videoStatus = statusData?.status
@@ -597,11 +598,22 @@ export default function VideoConsultationRoom() {
   const selfJoinedAt = isDoctor ? statusData?.joined_doctor_at : statusData?.joined_patient_at
   const selfInRoom = isDoctor ? doctorInRoom : patientInRoom
   const counterpartInRoom = isDoctor ? patientInRoom : doctorInRoom
+  // Presencia efectiva: si la sala es real, la fuente de verdad es Jitsi.
+  const selfPresent = jitsiRequired ? selfInJitsi : selfInRoom
+  const counterpartPresent = jitsiRequired ? counterpartInJitsi : counterpartInRoom
+  const selfJitsiJoinedAt = isDoctor
+    ? statusData?.jitsi_doctor_joined_at
+    : statusData?.jitsi_patient_joined_at
+  const counterpartJitsiJoinedAt = isDoctor
+    ? statusData?.jitsi_patient_joined_at
+    : statusData?.jitsi_doctor_joined_at
+  const selfPresentAt = jitsiRequired ? selfJitsiJoinedAt : selfJoinedAt
+  const counterpartPresentAt = jitsiRequired ? counterpartJitsiJoinedAt : counterpartJoinedAt
   const counterpartArticle = isDoctor ? 'El paciente' : 'El médico'
   const counterpartNoun = isDoctor ? 'el paciente' : 'el médico'
-  const waitingMessage = counterpartInRoom
-    ? `${counterpartArticle} ya está en la sala. Entra cuando quieras.`
-    : `La sala está lista. Entra y espera a que se conecte ${counterpartNoun}.`
+  const waitingMessage = counterpartPresent
+    ? `${counterpartArticle} ya está ${jitsiRequired ? 'en la videollamada' : 'en la sala'}. Entra cuando quieras.`
+    : `La sala está lista. Entra y espera a que se conecte ${counterpartNoun}${jitsiRequired ? ' a la videollamada' : ''}.`
 
   const statusPresentation = useMemo(() => {
     const status = statusData?.status ?? 'prepared'
@@ -616,19 +628,39 @@ export default function VideoConsultationRoom() {
       case 'failed':
         return { label: 'Sala no disponible', tone: 'border-rose-200 bg-rose-100 text-rose-800', Icon: VideoOff }
       default: {
-        if (selfInRoom && counterpartInRoom) {
-          return { label: 'Ambos conectados', tone: 'border-emerald-200 bg-emerald-100 text-emerald-800', Icon: Video }
+        if (canStartSession) {
+          return {
+            label: jitsiRequired ? 'Ambos en la videollamada' : 'Ambos conectados',
+            tone: 'border-emerald-200 bg-emerald-100 text-emerald-800',
+            Icon: Video,
+          }
         }
-        if (counterpartInRoom) {
-          return { label: `${counterpartLabel} en la sala`, tone: 'border-emerald-200 bg-emerald-100 text-emerald-800', Icon: Video }
+        if (counterpartPresent) {
+          return {
+            label: jitsiRequired
+              ? `${counterpartLabel} en la videollamada`
+              : `${counterpartLabel} en la sala`,
+            tone: 'border-emerald-200 bg-emerald-100 text-emerald-800',
+            Icon: Video,
+          }
         }
-        if (selfInRoom) {
-          return { label: `Esperando al ${counterpartLabel.toLowerCase()}`, tone: 'border-sky-200 bg-sky-100 text-sky-800', Icon: Video }
+        if (selfPresent) {
+          return {
+            label: jitsiRequired
+              ? `Esperando al ${counterpartLabel.toLowerCase()} en la videollamada`
+              : `Esperando al ${counterpartLabel.toLowerCase()}`,
+            tone: 'border-sky-200 bg-sky-100 text-sky-800',
+            Icon: Video,
+          }
         }
-        return { label: 'Sala preparada', tone: 'border-sky-200 bg-sky-100 text-sky-800', Icon: VideoOff }
+        return {
+          label: jitsiRequired ? 'Nadie ha entrado a la videollamada' : 'Sala preparada',
+          tone: 'border-sky-200 bg-sky-100 text-sky-800',
+          Icon: VideoOff,
+        }
       }
     }
-  }, [statusData?.status, selfInRoom, counterpartInRoom, counterpartLabel])
+  }, [statusData?.status, canStartSession, jitsiRequired, selfPresent, counterpartPresent, counterpartLabel])
 
   const joinBlocked = ['completed', 'cancelled', 'expired', 'failed'].includes(statusData?.status || '')
   const canJoin = !joined && !joinBlocked && (session?.provider === 'jitsi_mock' || Boolean(session?.room_url))
@@ -694,10 +726,10 @@ export default function VideoConsultationRoom() {
             <UserRound className="h-4 w-4" /> Tú
           </dt>
           <dd className="font-medium text-slate-800">
-            {selfInRoom
-              ? `Conectado${selfJoinedAt ? ` (entró ${formatClock(selfJoinedAt)})` : ''}`
-              : selfJoinedAt
-                ? `Desconectado (entró ${formatClock(selfJoinedAt)})`
+            {selfPresent
+              ? `${jitsiRequired ? 'Dentro de la videollamada' : 'Conectado'}${selfPresentAt ? ` (entró ${formatClock(selfPresentAt)})` : ''}`
+              : selfPresentAt
+                ? `${jitsiRequired ? 'Fuera de la videollamada' : 'Desconectado'} (entró ${formatClock(selfPresentAt)})`
                 : 'Aún no entras'}
           </dd>
         </div>
@@ -706,10 +738,10 @@ export default function VideoConsultationRoom() {
             <Stethoscope className="h-4 w-4" /> {counterpartLabel}
           </dt>
           <dd className="font-medium text-slate-800">
-            {counterpartInRoom
-              ? `En la sala${counterpartJoinedAt ? ` (entró ${formatClock(counterpartJoinedAt)})` : ''}`
-              : counterpartJoinedAt
-                ? `Salió (entró ${formatClock(counterpartJoinedAt)})`
+            {counterpartPresent
+              ? `${jitsiRequired ? 'Dentro de la videollamada' : 'En la sala'}${counterpartPresentAt ? ` (entró ${formatClock(counterpartPresentAt)})` : ''}`
+              : counterpartPresentAt
+                ? `Salió (entró ${formatClock(counterpartPresentAt)})`
                 : 'Aún no se conecta'}
           </dd>
         </div>
@@ -785,12 +817,16 @@ export default function VideoConsultationRoom() {
 
       <div
         className={`rounded-xl px-3 py-2 text-sm ${
-          bothPresent ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
+          canStartSession ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
         }`}
       >
-        {bothPresent
-          ? 'Ambos están en la sala: el cronómetro puede correr.'
-          : `El cronómetro está en pausa: falta ${isDoctor ? 'el paciente' : 'el médico'} en la sala.`}
+        {canStartSession
+          ? jitsiRequired
+            ? 'Ambos están dentro de la videollamada: el cronómetro puede correr.'
+            : 'Ambos están en la sala: el cronómetro puede correr.'
+          : jitsiRequired && !bothInJitsi
+            ? 'El cronómetro está en pausa: falta que ambos entren a la videollamada.'
+            : `El cronómetro está en pausa: falta ${isDoctor ? 'el paciente' : 'el médico'} en la sala.`}
       </div>
     </div>
   )
@@ -1104,6 +1140,8 @@ export default function VideoConsultationRoom() {
                     void reportJitsiEvent(session.video_session_id, 'left')
                     void handleLeave()
                   }}
+                  onRemoteParticipantJoined={() => setStatusRefreshToken((value) => value + 1)}
+                  onRemoteParticipantLeft={() => setStatusRefreshToken((value) => value + 1)}
                   onError={(message) => {
                     setError(message)
                     reportClientError({

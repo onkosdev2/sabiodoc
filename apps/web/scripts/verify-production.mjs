@@ -11,7 +11,8 @@
  *   SITE_URL=https://sabiodoc-1.onrender.com API_URL=https://sabiodoc.onrender.com node scripts/verify-production.mjs
  *   node scripts/verify-production.mjs --strict
  *
- * Sale con código 1 si hay fallos críticos y se usa `--strict`.
+ * `--strict` también falla con advertencias (por ejemplo, datos de prueba
+ * publicados). Úsalo antes de pasar a producción real.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -139,8 +140,6 @@ async function check404() {
     '/ruta-inexistente-auditoria',
     '/specialties/slug-que-no-existe',
     '/doctors/999999',
-    '/specialties/cardiologia',
-    '/doctors/2',
   ]
   for (const path of paths) {
     const res = await request(`${siteUrl}${path}`, { follow: true })
@@ -266,15 +265,18 @@ async function checkApiAndData() {
   add(
     'data:test-doctors',
     'No hay médicos de prueba publicados en Cardiología',
-    testDoctors.length === 0 ? 'PASS' : 'FAIL',
-    testDoctors.length ? testDoctors.map((d) => `${d.id}:${d.display_name}`).join(', ') : 'ok',
-    true,
+    testDoctors.length === 0 ? 'PASS' : 'WARN',
+    testDoctors.length
+      ? `${testDoctors.map((d) => `${d.id}:${d.display_name}`).join(', ')} — aceptado temporalmente para testeo; retirar antes de producción real`
+      : 'ok',
+    false,
   )
 }
 
 function renderMarkdown() {
   const failed = results.filter((r) => r.status === 'FAIL')
   const criticalFailed = failed.filter((r) => r.critical)
+  const warnings = results.filter((r) => r.status === 'WARN')
   const lines = [
     '# Verificación de producción — SabioDoc',
     '',
@@ -283,16 +285,23 @@ function renderMarkdown() {
     `- **Fecha:** ${new Date().toISOString()}`,
     `- **Resultado:** ${results.length - failed.length}/${results.length} comprobaciones OK`,
     `- **Fallos críticos:** ${criticalFailed.length}`,
+    `- **Advertencias:** ${warnings.length}`,
     '',
     '| ID | Comprobación | Resultado | Detalle |',
     '|---|---|---|---|',
-    ...results.map((r) => `| \`${r.id}\` | ${r.label} | ${r.status === 'PASS' ? '✅ PASS' : '❌ FAIL'} | ${String(r.detail).replace(/\|/g, '\\|')} |`),
+    ...results.map((r) => `| \`${r.id}\` | ${r.label} | ${r.status === 'PASS' ? '✅ PASS' : r.status === 'WARN' ? '⚠️ WARN' : '❌ FAIL'} | ${String(r.detail).replace(/\|/g, '\\|')} |`),
     '',
     '## Fallos críticos',
     '',
     ...(criticalFailed.length
       ? criticalFailed.map((r) => `- **${r.id}:** ${r.label} — ${r.detail}`)
       : ['Sin fallos críticos.']),
+    '',
+    '## Advertencias',
+    '',
+    ...(warnings.length
+      ? warnings.map((r) => `- **${r.id}:** ${r.label} — ${r.detail}`)
+      : ['Sin advertencias.']),
     '',
   ]
   return lines.join('\n')
@@ -310,7 +319,11 @@ writeFileSync(resolve(outDir, 'verificacion-produccion.json'), JSON.stringify({ 
 
 const failed = results.filter((r) => r.status === 'FAIL')
 const criticalFailed = failed.filter((r) => r.critical)
-console.log(`Verificación: ${results.length - failed.length}/${results.length} OK; ${criticalFailed.length} fallos críticos.`)
+const warnings = results.filter((r) => r.status === 'WARN')
+console.log(
+  `Verificación: ${results.length - failed.length - warnings.length}/${results.length} OK; ${criticalFailed.length} fallos críticos; ${warnings.length} advertencias.`,
+)
 console.log(`Evidencia: ${outDir}`)
 for (const item of failed.slice(0, 20)) console.log(`- ${item.id}: ${item.detail}`)
-if (strict && criticalFailed.length > 0) process.exit(1)
+for (const item of warnings) console.log(`! ${item.id}: ${item.detail}`)
+if (strict && (criticalFailed.length > 0 || warnings.length > 0)) process.exit(1)

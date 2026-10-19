@@ -8,8 +8,18 @@
 
 ## Estado de ejecución
 
-- **0.1 Configurar Render:** repo preparado (barra final en canonical/sitemap, redirects y script de verificación). Falta aplicar la configuración en el dashboard; ver `docs/evidencias/2026-10-19/render-config.md`.
-- **0.2 Verificación de producción:** ejecutada el 19/10/2026. Resultado inicial: 27/67 comprobaciones OK, 18 fallos críticos. Evidencia en `docs/evidencias/2026-10-19/`.
+- **0.1 Configurar Render:** completado. Redirects, 404, cabeceras, caché y MIME del manifest aplicados. Ver `docs/evidencias/2026-10-19/render-config.md`.
+- **0.2 Verificación de producción:** completado el 19/10/2026. Resultado final: 65/66 comprobaciones OK, 0 fallos críticos y 1 advertencia (`Dr. Test`, aceptado temporalmente). Evidencia en `docs/evidencias/2026-10-19/`. Antes de producción real, `npm run verify:prod -- --strict` debe pasar sin advertencias.
+- **0.3 Retirar datos de prueba:** aplazado por decisión del usuario. Se hará manualmente al terminar el testeo y antes de pasar a producción real. No es un bloqueo para seguir probando, pero sí para cobros reales.
+- **1.1 Emergencias:** números de Perú verificados en código, con fecha, fuente y tests. Pendiente la firma de revisión clínica formal.
+- **1.2 Síntomas de alarma:** reglas ampliadas y tests para dolor torácico, disnea, ACV, convulsiones, sangrado, anafilaxia, intoxicación, riesgo suicida y embarazo. Pendiente validación clínica.
+- **1.3 Transcripción:** copy restaurado y preparado. El guion, la sala y las políticas vuelven a describir la transcripción como funcionalidad prevista. Falta la implementación técnica (proveedor, consentimiento, retención).
+- **2.1 Proveedor:** decidido Jitsi self-hosted para poder ofrecer transcripción. Queda pendiente de provisión y credenciales; no bloquea el resto del código.
+- **2.4 Eventos Jitsi:** completado. `JitsiMeeting` escucha `participantJoined`, `participantLeft`, `videoConferenceLeft`, `conferenceFailed`, `connectionFailed` y `errorOccurred`; la sala refresca el estado al entrar/salir el participante remoto.
+- **2.5 Estados y mensajes:** completado. La presencia, el estado, el botón y el mensaje del cronómetro usan la misma fuente de verdad (Jitsi cuando la sala es real). Se eliminó la contradicción “Ambos conectados” + “Nadie ha entrado”.
+- **2.6 Cobro y pago:** completado. `pause`, `leave` y cierre por falta de créditos reconcilian presencia antes de acumular. Se validan claves Stripe test/live. Webhooks con firma e idempotencia ya cubiertos por tests.
+- **3.3 Vigencia del prerender:** completado. `FRONTEND_DEPLOY_HOOK_URL` dispara rebuild al aprobar/editar médicos o cambiar su foto. OG de perfiles correcto.
+- **3.4 Sitemap y noindex:** completado. Sitemap solo con rutas públicas, `/login` y `/register` fuera; rutas privadas con `noindex` en cliente y guía de `X-Robots-Tag` en Render. Pendiente configurar Search Console/Bing.
 
 ---
 
@@ -74,9 +84,9 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 
 | ID | Decisión | Opciones | Recomendación |
 |---|---|---|---|
-| D1 | Proveedor de videollamada | JaaS, Jitsi self-hosted o `meet.jit.si` | JaaS/self-hosted con JWT para que el médico sea moderador. `meet.jit.si` no admite JWT propio. |
+| D1 | Proveedor de videollamada | JaaS, Jitsi self-hosted o `meet.jit.si` | **Decidido: Jitsi self-hosted**, necesario para la transcripción. Pendiente de provisión y credenciales. |
 | D2 | Estrategia de SEO y 404 | SSR, edge function o prerender + redirects | Prerender + barra final, sin reglas comodín para rutas dinámicas. Los médicos nuevos requieren redespliegue; se reconsidera edge/SSR si el volumen lo exige. |
-| D3 | Transcripción | Eliminar la promesa o implementarla con consentimiento | Mientras no exista función, eliminar toda mención de transcripción. |
+| D3 | Transcripción | Funcionalidad prevista para producción; aún no implementada | Mantener el copy preparado como funcionalidad prevista. No presentarla como activa hasta implementar consentimiento específico, retención y proveedor. |
 | D4 | Alcance legal | Perú solamente o varios países | Definir país(es) antes de aprobar políticas y consentimientos. |
 | D5 | Staging | Servicio aparte o preview por rama | Servicio aparte con BD, Jitsi, correo y Cloudinary separados. |
 | D6 | Pagos | Solo créditos ficticios o PSP real | Mantener ficticio hasta cerrar P0; separar claves test/live y webhooks. |
@@ -166,14 +176,14 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 
 **Aceptación:** todos los casos muestran aviso de urgencia y no una recomendación clínica normal.
 
-### 1.3 Resolver la contradicción de transcripción (C, S)
+### 1.3 Preparar la transcripción (C, S)
 
-- Eliminar del guion de `video_session_service.py` la frase de que la sesión puede ser transcrita.
-- Eliminar de `VideoConsultationRoom.tsx` la instrucción de identificar voces.
-- Alinear `Privacy.tsx` y `Telemedicine.tsx` con la funcionalidad real.
-- Si se decide implementar transcripción: consentimiento específico, proveedor, retención y DPA antes de activarla.
+- Mantener en el guion de `video_session_service.py` la mención de que la sesión puede ser transcrita y la identificación de voces.
+- Mantener en `VideoConsultationRoom.tsx` la instrucción de identificar voces.
+- Mantener `Privacy.tsx` y `Telemedicine.tsx` describiendo la transcripción como funcionalidad prevista.
+- Antes de activarla: consentimiento específico, proveedor, retención y DPA.
 
-**Aceptación:** la sala, la reserva y las políticas describen exactamente la misma funcionalidad.
+**Aceptación:** el copy queda preparado y consistente; la activación técnica queda bloqueada hasta cerrar 1.4.
 
 ### 1.4 Consentimientos separados y versionados (C/O, L)
 

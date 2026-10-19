@@ -8,10 +8,12 @@ import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { Input } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { useNoIndex } from '../utils/seo'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function ForgotPassword() {
+  useNoIndex()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)

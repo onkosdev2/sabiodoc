@@ -60,6 +60,7 @@ from app.services.jitsi_service import jitsi_service
 from app.services.doctor_onboarding_service import doctor_onboarding_service
 from app.services import doctor_photo_service
 from app.services.notification_service import notification_service
+from app.services.prerender_service import prerender_service
 from app.services.patient_profile_service import get_patient_display_name, serialize_patient_profile
 from app.services.patient_profile_change_service import (
     create_change_request,
@@ -322,6 +323,9 @@ def upsert_my_doctor_profile(
     db.refresh(doctor_profile)
     db.refresh(presence)
 
+    if doctor_profile.status == DoctorApprovalStatus.approved:
+        prerender_service.request_rebuild("doctor_profile_updated")
+
     logger.info(f"Doctor profile upserted: doctor_profile_id={doctor_profile.id}, specialties={len(set(payload.specialty_ids))}")
     rating_avg, rating_count = _rating_for(db, doctor_profile.id)
     return DoctorCardResponse(
@@ -351,6 +355,8 @@ def upload_my_doctor_photo(
     """Sube (o reemplaza) la foto de perfil del médico en Cloudinary."""
     doctor_profile = get_doctor_profile_or_403(db, current_user)
     doctor_photo_service.upload_doctor_photo(db, doctor_profile, file)
+    if doctor_profile.status == DoctorApprovalStatus.approved:
+        prerender_service.request_rebuild("doctor_photo_updated")
     return DoctorPhotoResponse(photo_url=doctor_profile.photo_url)
 
 
@@ -362,6 +368,8 @@ def delete_my_doctor_photo(
     """Elimina la foto de perfil del médico (Cloudinary y base de datos)."""
     doctor_profile = get_doctor_profile_or_403(db, current_user)
     doctor_photo_service.delete_doctor_photo(db, doctor_profile)
+    if doctor_profile.status == DoctorApprovalStatus.approved:
+        prerender_service.request_rebuild("doctor_photo_deleted")
 
 
 @router.get("/me/application", response_model=DoctorApplicationResponse)
@@ -429,6 +437,13 @@ def update_doctor_application_status(
     )
     db.commit()
     db.refresh(doctor_profile)
+
+    if doctor_profile.status in {
+        DoctorApprovalStatus.approved,
+        DoctorApprovalStatus.rejected,
+        DoctorApprovalStatus.suspended,
+    }:
+        prerender_service.request_rebuild(f"doctor_application_{doctor_profile.status.value}")
 
     logger.info(f"Doctor application reviewed: doctor_profile_id={doctor_profile.id}, status={doctor_profile.status.value}")
     return doctor_onboarding_service.build_application_response_from_relations(doctor_profile)

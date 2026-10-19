@@ -2,9 +2,10 @@
 
 - **Sitio:** https://sabiodoc-1.onrender.com
 - **API:** https://sabiodoc.onrender.com
-- **Fecha:** 2026-10-19T16:02:42.825Z
-- **Resultado:** 68/71 comprobaciones OK
-- **Fallos críticos:** 3
+- **Fecha:** 2026-10-19T18:15:34.426Z
+- **Resultado:** 65/66 comprobaciones OK
+- **Fallos críticos:** 1
+- **Advertencias:** 1
 
 | ID | Comprobación | Resultado | Detalle |
 |---|---|---|---|
@@ -25,11 +26,6 @@
 | `canonical:/specialties/` | /specialties/ canonical coincide con la URL servida | ✅ PASS | canonical=https://sabiodoc-1.onrender.com/specialties/ esperado=https://sabiodoc-1.onrender.com/specialties/ |
 | `og:/specialties/` | /specialties/ og:url coincide con la URL servida | ✅ PASS | og:url=https://sabiodoc-1.onrender.com/specialties/ esperado=https://sabiodoc-1.onrender.com/specialties/ |
 | `robots:/specialties/` | /specialties/ es indexable | ✅ PASS | robots=index,follow |
-| `page:/specialties/cardiologia` | /specialties/cardiologia responde 200 | ✅ PASS | HTTP 200 |
-| `title:/specialties/cardiologia` | /specialties/cardiologia tiene el título esperado | ✅ PASS | “Cardiología · SabioDoc” |
-| `canonical:/specialties/cardiologia` | /specialties/cardiologia canonical coincide con la URL servida | ✅ PASS | canonical=https://sabiodoc-1.onrender.com/specialties/cardiologia/ esperado=https://sabiodoc-1.onrender.com/specialties/cardiologia/ |
-| `og:/specialties/cardiologia` | /specialties/cardiologia og:url coincide con la URL servida | ✅ PASS | og:url=https://sabiodoc-1.onrender.com/specialties/cardiologia/ esperado=https://sabiodoc-1.onrender.com/specialties/cardiologia/ |
-| `robots:/specialties/cardiologia` | /specialties/cardiologia es indexable | ✅ PASS | robots=index,follow |
 | `page:/specialties/cardiologia/` | /specialties/cardiologia/ responde 200 | ✅ PASS | HTTP 200 |
 | `title:/specialties/cardiologia/` | /specialties/cardiologia/ tiene el título esperado | ✅ PASS | “Cardiología · SabioDoc” |
 | `canonical:/specialties/cardiologia/` | /specialties/cardiologia/ canonical coincide con la URL servida | ✅ PASS | canonical=https://sabiodoc-1.onrender.com/specialties/cardiologia/ esperado=https://sabiodoc-1.onrender.com/specialties/cardiologia/ |
@@ -54,14 +50,14 @@
 | `og:/doctor/apply/` | /doctor/apply/ og:url coincide con la URL servida | ✅ PASS | og:url=https://sabiodoc-1.onrender.com/doctor/apply/ esperado=https://sabiodoc-1.onrender.com/doctor/apply/ |
 | `robots:/doctor/apply/` | /doctor/apply/ es indexable | ✅ PASS | robots=index,follow |
 | `404:/ruta-inexistente-auditoria` | /ruta-inexistente-auditoria devuelve 404 o noindex real | ✅ PASS | HTTP 404; robots=noindex, nofollow |
-| `404:/specialties/slug-que-no-existe` | /specialties/slug-que-no-existe devuelve 404 o noindex real | ❌ FAIL | HTTP 200; robots=(vacío) |
-| `404:/doctors/999999` | /doctors/999999 devuelve 404 o noindex real | ❌ FAIL | HTTP 200; robots=(vacío) |
+| `404:/specialties/slug-que-no-existe` | /specialties/slug-que-no-existe devuelve 404 o noindex real | ✅ PASS | HTTP 404; robots=noindex, nofollow |
+| `404:/doctors/999999` | /doctors/999999 devuelve 404 o noindex real | ✅ PASS | HTTP 404; robots=noindex, nofollow |
 | `header:content-security-policy` | Cabecera content-security-policy presente | ✅ PASS | default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none' |
 | `header:referrer-policy` | Cabecera referrer-policy presente | ✅ PASS | strict-origin-when-cross-origin |
 | `header:permissions-policy` | Cabecera permissions-policy presente | ✅ PASS | camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(self), display-capture=(self "https://meet.jit.si") |
 | `header:framing` | Protección de framing presente | ✅ PASS | DENY |
 | `cache:html` | HTML no se cachea como inmutable | ✅ PASS | public, max-age=0, must-revalidate |
-| `cache:asset` | Assets con hash usan caché inmutable | ✅ PASS | public, max-age=31536000, immutable |
+| `cache:asset` | Assets con hash usan caché inmutable | ❌ FAIL | public, max-age=0, must-revalidate |
 | `manifest:mime` | manifest.webmanifest se sirve como application/manifest+json | ✅ PASS | application/manifest+json |
 | `sitemap` | Sitemap accesible | ✅ PASS | 48 URLs |
 | `sitemap:slash` | Todas las URLs del sitemap usan la forma canónica con barra final | ✅ PASS | ok |
@@ -78,10 +74,12 @@
 | `sitemap:url:/specialties/anatomia-patologica/` | /specialties/anatomia-patologica/ responde 200 y canonical coincide | ✅ PASS | HTTP 200; canonical=https://sabiodoc-1.onrender.com/specialties/anatomia-patologica/ |
 | `sitemap:url:/specialties/anestesiologia/` | /specialties/anestesiologia/ responde 200 y canonical coincide | ✅ PASS | HTTP 200; canonical=https://sabiodoc-1.onrender.com/specialties/anestesiologia/ |
 | `api:specialties` | API de especialidades responde | ✅ PASS | HTTP 200 |
-| `data:test-doctors` | No hay médicos de prueba publicados en Cardiología | ❌ FAIL | 2:Dr. Test |
+| `data:test-doctors` | No hay médicos de prueba publicados en Cardiología | ⚠️ WARN | 2:Dr. Test — aceptado temporalmente para testeo; retirar antes de producción real |
 
 ## Fallos críticos
 
-- **404:/specialties/slug-que-no-existe:** /specialties/slug-que-no-existe devuelve 404 o noindex real — HTTP 200; robots=(vacío)
-- **404:/doctors/999999:** /doctors/999999 devuelve 404 o noindex real — HTTP 200; robots=(vacío)
-- **data:test-doctors:** No hay médicos de prueba publicados en Cardiología — 2:Dr. Test
+- **cache:asset:** Assets con hash usan caché inmutable — public, max-age=0, must-revalidate
+
+## Advertencias
+
+- **data:test-doctors:** No hay médicos de prueba publicados en Cardiología — 2:Dr. Test — aceptado temporalmente para testeo; retirar antes de producción real

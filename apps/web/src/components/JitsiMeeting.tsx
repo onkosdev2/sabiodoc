@@ -49,6 +49,10 @@ interface JitsiMeetingProps {
   onJoined?: () => void
   onLeft?: () => void
   onError?: (message: string) => void
+  /** Se dispara cuando otro participante entra a la conferencia. */
+  onRemoteParticipantJoined?: (participantId?: string) => void
+  /** Se dispara cuando otro participante sale de la conferencia. */
+  onRemoteParticipantLeft?: (participantId?: string) => void
 }
 
 export default function JitsiMeeting({
@@ -59,14 +63,28 @@ export default function JitsiMeeting({
   onJoined,
   onLeft,
   onError,
+  onRemoteParticipantJoined,
+  onRemoteParticipantLeft,
 }: JitsiMeetingProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<JitsiApi | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   // Callbacks en refs para no reiniciar la reunión si el padre re-renderiza.
-  const callbacksRef = useRef({ onJoined, onLeft, onError })
-  callbacksRef.current = { onJoined, onLeft, onError }
+  const callbacksRef = useRef({
+    onJoined,
+    onLeft,
+    onError,
+    onRemoteParticipantJoined,
+    onRemoteParticipantLeft,
+  })
+  callbacksRef.current = {
+    onJoined,
+    onLeft,
+    onError,
+    onRemoteParticipantJoined,
+    onRemoteParticipantLeft,
+  }
 
   useEffect(() => {
     const container = containerRef.current
@@ -108,8 +126,48 @@ export default function JitsiMeeting({
 
         apiRef.current = api
         setStatus('ready')
+
+        let leftReported = false
+        const notifyLeft = () => {
+          if (leftReported) return
+          leftReported = true
+          callbacksRef.current.onLeft?.()
+        }
+        const participantId = (event: unknown) => {
+          const participant = event as { id?: string; participantId?: string } | undefined
+          return participant?.id || participant?.participantId
+        }
+        const notifyError = (event: unknown, fallback: string) => {
+          const payload = event as { error?: unknown; message?: unknown } | undefined
+          const detail =
+            typeof payload?.error === 'string'
+              ? payload.error
+              : typeof payload?.message === 'string'
+                ? payload.message
+                : ''
+          callbacksRef.current.onError?.(detail ? `${fallback}: ${detail}` : fallback)
+        }
+
         api.addListener('videoConferenceJoined', () => callbacksRef.current.onJoined?.())
-        api.addListener('readyToClose', () => callbacksRef.current.onLeft?.())
+        api.addListener('participantJoined', (event) => {
+          callbacksRef.current.onRemoteParticipantJoined?.(participantId(event))
+        })
+        api.addListener('participantLeft', (event) => {
+          callbacksRef.current.onRemoteParticipantLeft?.(participantId(event))
+        })
+        api.addListener('videoConferenceLeft', notifyLeft)
+        api.addListener('readyToClose', notifyLeft)
+        api.addListener('conferenceFailed', (event) => {
+          notifyError(event, 'La conferencia no pudo iniciarse')
+          notifyLeft()
+        })
+        api.addListener('connectionFailed', (event) => {
+          notifyError(event, 'Se perdió la conexión con la videollamada')
+          notifyLeft()
+        })
+        api.addListener('errorOccurred', (event) => {
+          notifyError(event, 'Ocurrió un error en la videollamada')
+        })
       })
       .catch((error: Error) => {
         if (disposed) return

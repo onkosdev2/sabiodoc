@@ -8,6 +8,7 @@ import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { useNoIndex } from '../utils/seo'
 
 interface FieldErrors {
   password?: string
@@ -15,6 +16,7 @@ interface FieldErrors {
 }
 
 export default function ResetPassword() {
+  useNoIndex()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token') ?? ''
 

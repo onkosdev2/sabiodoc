@@ -349,7 +349,8 @@ Dos servicios:
 Variables clave:
 
 - API: `DATABASE_URL`, `ENVIRONMENT=production`, `JWT_SECRET` (≥32), `FRONTEND_ORIGIN` (dominio del frontend),
-  `JITSI_BASE_URL=https://meet.jit.si` y `JITSI_JWT_SECRET=` **vacío** (salas públicas), `SMTP_*`, `CLOUDINARY_*`, `PAYOUT_PROVIDER`.
+  `JITSI_BASE_URL` (Jitsi self-hosted), `JITSI_JWT_SECRET`/`JITSI_JWT_APP_ID`, `SMTP_*`, `CLOUDINARY_*`,
+  `PAYOUT_PROVIDER` y `FRONTEND_DEPLOY_HOOK_URL` (opcional, para regenerar el prerender público).
 - Frontend (en tiempo de build): `VITE_API_URL` (URL pública de la API) y `VITE_SITE_URL` (dominio del sitio).
 
 Cabeceras, caché y redirecciones: el frontend incluye `apps/web/public/_headers`, `apps/web/public/_redirects` y
@@ -364,6 +365,10 @@ responde 404 y `404.html` redirige al cliente a la forma canónica. Así se evit
 Los médicos nuevos necesitan un redespliegue para generar su HTML; hasta entonces su perfil devuelve 404.
 Si el hosting no aplica `_redirects`, replica esas reglas en el dashboard de Render y borra cualquier `catch-all` previo.
 
+**Prerender público:** el build genera HTML para especialidades y médicos aprobados. Si se configura
+`FRONTEND_DEPLOY_HOOK_URL`, la API dispara un rebuild al aprobar o editar un médico, cambiar su foto o sus datos.
+Sin hook, hay que redesplegar manualmente el frontend para que el perfil nuevo tenga HTML propio.
+
 SEO: el `postbuild` genera HTML por ruta con meta tags, JSON-LD y `sitemap.xml`
 (`scripts/generate-meta-pages.mjs` y `generate-sitemap.mjs`). Necesitan `VITE_API_URL` accesible durante el build;
 si no, generan solo las rutas fijas sin romper el build. Las páginas no encontradas se marcan `noindex` desde el cliente.
@@ -374,6 +379,8 @@ Si se cambia esta convención, actualizar a la vez `generate-meta-pages.mjs`, `g
 
 **Verificación de producción:** desde `apps/web`, ejecutar `npm run verify:prod`. Comprueba códigos HTTP, canonical,
 OG, 404, cabeceras, caché, manifest y datos de prueba. Guarda la evidencia en `docs/evidencias/AAAA-MM-DD/`.
+Antes de pasar a producción real, ejecutar `npm run verify:prod -- --strict`: también falla si quedan datos de prueba
+publicados (por ejemplo, `Dr. Test`).
 
 ## 📝 Licencia
 

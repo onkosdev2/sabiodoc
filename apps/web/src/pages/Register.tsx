@@ -10,6 +10,7 @@ import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import { Input, PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
+import { useNoIndex } from '../utils/seo'
 import { focusFirstInvalid } from '../utils/forms'
 
 interface FieldErrors {
@@ -21,6 +22,7 @@ interface FieldErrors {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Register() {
+  useNoIndex()
   const navigate = useNavigate()
   const { login: authLogin } = useAuth()
   const [email, setEmail] = useState('')

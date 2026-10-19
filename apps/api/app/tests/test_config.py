@@ -60,3 +60,18 @@ def test_login_acepta_contrasenas_legadas_cortas():
     # No imponemos longitud mínima al iniciar sesión para no bloquear cuentas
     # creadas antes del endurecimiento de la política.
     assert UserLogin(email="ana@example.com", password="seis66").password == "seis66"
+
+
+def test_produccion_rechaza_clave_stripe_de_prueba():
+    with pytest.raises(ValidationError):
+        _settings(
+            ENVIRONMENT="production",
+            JWT_SECRET="x" * 40,
+            FRONTEND_ORIGIN="https://app.example",
+            STRIPE_SECRET_KEY="sk_test_123",
+        )
+
+
+def test_desarrollo_rechaza_clave_stripe_live():
+    with pytest.raises(ValidationError):
+        _settings(ENVIRONMENT="development", STRIPE_SECRET_KEY="sk_live_123")

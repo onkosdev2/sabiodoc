@@ -109,6 +109,28 @@ Notas:
 - Si Render duplica `Cache-Control` entre `/*` y `/assets/*`, elimina la fila global de `Cache-Control`; el HTML ya se sirve con `max-age=0` por defecto.
 - `Content-Type` para el manifest es necesario porque hoy Render lo sirve como `binary/octet-stream`.
 
+### 4.3 Noindex para rutas privadas
+
+Además del `useNoIndex` del cliente, añadir en **Headers**:
+
+| Path | Name | Value |
+|---|---|---|
+| `/login` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/register` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/forgot-password` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/reset-password` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/verify-email` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/notifications` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/video-room` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/help` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/me/*` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/admin/*` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/reviewer/*` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/support/*` | `X-Robots-Tag` | `noindex, nofollow` |
+| `/consultation/*` | `X-Robots-Tag` | `noindex, nofollow` |
+
+> No uses `/doctor/*`: también incluye `/doctor/apply`, que es una página pública y debe indexarse. Las rutas privadas del panel médico se marcan con `useNoIndex` en el cliente. Si quieres cubrirlas por header, enumera las rutas exactas (`/doctor`, `/doctor/appointments`, `/doctor/profile`, etc.).
+
 ## 5. Página 404
 
 - Confirmar que el servicio tiene `404.html` como página de error.

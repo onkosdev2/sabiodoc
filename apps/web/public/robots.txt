@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Allow: /doctor/apply
+Allow: /doctor/apply/
 Disallow: /doctor/
 Disallow: /reviewer
 Disallow: /support/
