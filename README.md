@@ -367,6 +367,13 @@ SEO: el `postbuild` genera HTML por ruta con meta tags, JSON-LD y `sitemap.xml`
 (`scripts/generate-meta-pages.mjs` y `generate-sitemap.mjs`). Necesitan `VITE_API_URL` accesible durante el build;
 si no, generan solo las rutas fijas sin romper el build. Las páginas no encontradas se marcan `noindex` desde el cliente.
 
+**Barra final:** las rutas prerenderizadas viven en `dist/<ruta>/index.html`, así que su forma canónica lleva barra
+final (`/como-funciona/`). `_redirects` redirige 301 la forma sin barra y el sitemap publica solo la forma canónica.
+Si se cambia esta convención, actualizar a la vez `generate-meta-pages.mjs`, `generate-sitemap.mjs` y `_redirects`.
+
+**Verificación de producción:** desde `apps/web`, ejecutar `npm run verify:prod`. Comprueba códigos HTTP, canonical,
+OG, 404, cabeceras, caché, manifest y datos de prueba. Guarda la evidencia en `docs/evidencias/AAAA-MM-DD/`.
+
 ## 📝 Licencia
 
 > Todos los usuarios tienen además el rol base **`patient`**. Un mismo usuario puede

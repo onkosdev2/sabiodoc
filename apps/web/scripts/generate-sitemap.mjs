@@ -32,6 +32,15 @@ const apiUrl = (process.env.VITE_API_URL || fileEnv.VITE_API_URL || 'http://loca
 const siteUrl = (process.env.VITE_SITE_URL || fileEnv.VITE_SITE_URL || 'https://sabiodoc.app').replace(/\/+$/, '')
 const outFile = resolve(projectRoot, 'dist', 'sitemap.xml')
 
+/**
+ * Forma canónica de las rutas públicas. Debe coincidir con
+ * `generate-meta-pages.mjs` y con las redirecciones de `_redirects`.
+ */
+function publicPath(path) {
+  if (path === '/') return '/'
+  return `${path.replace(/\/+$/, '')}/`
+}
+
 const STATIC_ROUTES = [
   { path: '/', changefreq: 'weekly', priority: '1.0' },
   { path: '/como-funciona', changefreq: 'monthly', priority: '0.8' },
@@ -62,7 +71,7 @@ function buildXml(entries) {
     .map(
       (entry) =>
         `  <url>\n` +
-        `    <loc>${siteUrl}${entry.path}</loc>\n` +
+        `    <loc>${siteUrl}${publicPath(entry.path)}</loc>\n` +
         (entry.lastmod ? `    <lastmod>${entry.lastmod}</lastmod>\n` : '') +
         (entry.changefreq ? `    <changefreq>${entry.changefreq}</changefreq>\n` : '') +
         (entry.priority ? `    <priority>${entry.priority}</priority>\n` : '') +

@@ -1,3 +1,30 @@
+# Redirecciones y rewrites del frontend.
+#
+# Las páginas públicas se prerenderizan como `dist/<ruta>/index.html`, por lo
+# que su URL canónica lleva barra final. Estas reglas unifican la forma sin
+# barra y evitan que el HTML servido y el canonical no coincidan.
+#
+# Nota: `_redirects` usa la sintaxis de Netlify/Render. Si el hosting no aplica
+# este archivo, replica estas reglas en el dashboard.
+
+# Rutas públicas prerenderizadas.
+/como-funciona      /como-funciona/     301
+/specialties        /specialties/       301
+/triage             /triage/            301
+/guide              /guide/             301
+/emergency          /emergency/         301
+/telemedicina       /telemedicina/      301
+/privacidad         /privacidad/        301
+/terminos           /terminos/          301
+/doctor/apply       /doctor/apply/      301
+
+# Rutas dinámicas prerenderizadas (especialidades y médicos publicados).
+# Usar rewrite, no redirect: un redirect a "/:slug/" entra en bucle cuando el
+# recurso no existe y la regla vuelve a coincidir con la barra final.
+/specialties/:slug  /specialties/:slug/index.html  200
+/doctors/:id        /doctors/:id/index.html        200
+
+# Rutas de la SPA (paneles y flujos autenticados).
 /login              /index.html  200
 /register           /index.html  200
 /forgot-password    /index.html  200

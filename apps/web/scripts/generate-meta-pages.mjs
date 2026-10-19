@@ -42,6 +42,16 @@ const DEFAULT_DESCRIPTION =
 const DEFAULT_IMAGE = `${siteUrl}/og-image.png`
 const DEFAULT_IMAGE_ALT = 'SabioDoc - Orientación médica inteligente con IA'
 
+/**
+ * URL pública canónica. Las páginas prerenderizadas viven en
+ * `dist/<ruta>/index.html`, así que la forma canónica lleva barra final.
+ * Esto debe coincidir con `generate-sitemap.mjs` y con `_redirects`.
+ */
+function publicUrl(path) {
+  if (path === '/') return `${siteUrl}/`
+  return `${siteUrl}${path.replace(/\/+$/, '')}/`
+}
+
 const SITE_JSONLD = [
   {
     '@context': 'https://schema.org',
@@ -212,7 +222,7 @@ async function main() {
   writePage(baseHtml, '/', {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
-    url: `${siteUrl}/`,
+    url: publicUrl('/'),
     image: DEFAULT_IMAGE,
     imageType: 'image/png',
     imageWidth: 1200,
@@ -224,7 +234,7 @@ async function main() {
   for (const [route, meta] of Object.entries(STATIC_META)) {
     writePage(baseHtml, route, {
       ...meta,
-      url: `${siteUrl}${route}`,
+      url: publicUrl(route),
       image: DEFAULT_IMAGE,
       imageType: 'image/png',
       imageWidth: 1200,
@@ -244,7 +254,7 @@ async function main() {
 
   const doctors = new Map()
   for (const specialty of specialties) {
-    const url = `${siteUrl}/specialties/${specialty.slug}`
+    const url = publicUrl(`/specialties/${specialty.slug}`)
     writePage(baseHtml, `/specialties/${specialty.slug}`, {
       title: `${specialty.name} · SabioDoc`,
       description:
@@ -265,8 +275,8 @@ async function main() {
           url,
         },
         breadcrumb([
-          { name: 'Inicio', url: siteUrl },
-          { name: 'Especialidades', url: `${siteUrl}/specialties` },
+          { name: 'Inicio', url: publicUrl('/') },
+          { name: 'Especialidades', url: publicUrl('/specialties') },
           { name: specialty.name, url },
         ]),
       ],
@@ -285,7 +295,7 @@ async function main() {
     const description =
       [doctor.professional_title, doctor.bio_short].filter(Boolean).join(' — ').slice(0, 300) ||
       `Perfil del médico ${doctor.display_name} en SabioDoc.`
-    const url = `${siteUrl}/doctors/${id}`
+    const url = publicUrl(`/doctors/${id}`)
     const hasPhoto = Boolean(doctor.photo_url)
     const image = hasPhoto ? doctor.photo_url : DEFAULT_IMAGE
     writePage(baseHtml, `/doctors/${id}`, {
@@ -309,8 +319,8 @@ async function main() {
           url,
         },
         breadcrumb([
-          { name: 'Inicio', url: siteUrl },
-          { name: 'Especialidades', url: `${siteUrl}/specialties` },
+          { name: 'Inicio', url: publicUrl('/') },
+          { name: 'Especialidades', url: publicUrl('/specialties') },
           { name: doctor.display_name, url },
         ]),
       ],
