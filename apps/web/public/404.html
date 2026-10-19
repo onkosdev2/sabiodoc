@@ -64,5 +64,16 @@
         <a class="secondary" href="/specialties">Ver especialidades</a>
       </div>
     </main>
+    <script>
+      // Las rutas públicas dinámicas viven como /<ruta>/index.html.
+      // Si alguien llega sin barra final, se redirige a la forma canónica.
+      // La respuesta inicial sigue siendo 404 para no crear soft 404.
+      (function () {
+        var path = window.location.pathname;
+        if (path.charAt(path.length - 1) !== '/' && /^\/(specialties|doctors)\/[^/]+$/.test(path)) {
+          window.location.replace(path + '/' + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
   </body>
 </html>

@@ -268,7 +268,7 @@ function ConsultationCard({ consultation, expanded, onToggle, onClose, onDelete 
   const statusKey = statusKeyOf(consultation)
   const badge = STATUS_BADGES[statusKey]
   const specialtyName = consultation.specialty?.name || 'Especialidad'
-  const specialtyLink = consultation.specialty ? `/specialties/${consultation.specialty.slug}` : '/specialties'
+  const specialtyLink = consultation.specialty ? `/specialties/${consultation.specialty.slug}/` : '/specialties/'
   const hasDetails = Boolean(consultation.summary)
   const canClose = consultation.status !== 'closed'
   const canDelete = consultation.status === 'created'

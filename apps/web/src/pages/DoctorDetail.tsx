@@ -299,7 +299,7 @@ export default function DoctorDetailPage() {
     .map((part) => part.charAt(0).toUpperCase())
     .join('')
 
-  const backTo = selectedSpecialty ? `/specialties/${selectedSpecialty.slug}` : '/specialties'
+  const backTo = selectedSpecialty ? `/specialties/${selectedSpecialty.slug}/` : '/specialties/'
 
   const submitReport = async () => {
     if (!reportTarget) return

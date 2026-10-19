@@ -359,9 +359,10 @@ Headers/Redirects del sitio.
 **404 real (sin SSR):** las rutas **públicas** se sirven como HTML prerenderizado, así que una ruta desconocida
 (p. ej. `/ruta-inexistente` o `/specialties/slug-inexistente`) devuelve **HTTP 404** con `404.html`. Las rutas de la
 aplicación (paneles, cuenta, `/login`, etc.) se reescriben a `/index.html` según `_redirects`; **no hay `catch-all`**.
-Consecuencia asumida: `/doctors/{id}` se reescribe a la SPA (para que médicos nuevos funcionen sin recompilar), por lo
-que un perfil inexistente responde 200 pero con `noindex` desde el cliente. Si el hosting no aplica `_redirects`,
-replica esas reglas (rewrite 200) en el dashboard de Render y borra cualquier `catch-all` previo.
+Las rutas dinámicas (`/specialties/{slug}`, `/doctors/{id}`) se sirven solo con barra final; la forma sin barra
+responde 404 y `404.html` redirige al cliente a la forma canónica. Así se evita el 200 vacío y el soft 404.
+Los médicos nuevos necesitan un redespliegue para generar su HTML; hasta entonces su perfil devuelve 404.
+Si el hosting no aplica `_redirects`, replica esas reglas en el dashboard de Render y borra cualquier `catch-all` previo.
 
 SEO: el `postbuild` genera HTML por ruta con meta tags, JSON-LD y `sitemap.xml`
 (`scripts/generate-meta-pages.mjs` y `generate-sitemap.mjs`). Necesitan `VITE_API_URL` accesible durante el build;

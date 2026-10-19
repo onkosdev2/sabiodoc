@@ -2,7 +2,13 @@
 #
 # Las páginas públicas se prerenderizan como `dist/<ruta>/index.html`, por lo
 # que su URL canónica lleva barra final. Estas reglas unifican la forma sin
-# barra y evitan que el HTML servido y el canonical no coincidan.
+# barra de las rutas fijas.
+#
+# Las rutas dinámicas (/specialties/:slug y /doctors/:id) NO se redirigen aquí:
+# un redirect o rewrite comodín devuelve 200 vacío o entra en bucle cuando el
+# recurso no existe. Se sirven solo en su forma canónica con barra final; la
+# forma sin barra cae en `404.html`, que redirige al cliente a la forma con
+# barra. Así se evita el soft 404.
 #
 # Nota: `_redirects` usa la sintaxis de Netlify/Render. Si el hosting no aplica
 # este archivo, replica estas reglas en el dashboard.
@@ -17,12 +23,6 @@
 /privacidad         /privacidad/        301
 /terminos           /terminos/          301
 /doctor/apply       /doctor/apply/      301
-
-# Rutas dinámicas prerenderizadas (especialidades y médicos publicados).
-# Usar rewrite, no redirect: un redirect a "/:slug/" entra en bucle cuando el
-# recurso no existe y la regla vuelve a coincidir con la barra final.
-/specialties/:slug  /specialties/:slug/index.html  200
-/doctors/:id        /doctors/:id/index.html        200
 
 # Rutas de la SPA (paneles y flujos autenticados).
 /login              /index.html  200
@@ -39,4 +39,3 @@
 /admin/*            /index.html  200
 /reviewer/*         /index.html  200
 /support/*          /index.html  200
-/doctors/*          /index.html  200

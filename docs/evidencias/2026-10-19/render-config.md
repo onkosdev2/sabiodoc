@@ -54,8 +54,6 @@ Crear estas reglas en **Redirects/Rewrites**, en este orden:
 | `/privacidad` | `/privacidad/` | Redirect |
 | `/terminos` | `/terminos/` | Redirect |
 | `/doctor/apply` | `/doctor/apply/` | Redirect |
-| `/specialties/:slug` | `/specialties/:slug/index.html` | **Rewrite** |
-| `/doctors/:id` | `/doctors/:id/index.html` | **Rewrite** |
 | `/login` | `/index.html` | Rewrite |
 | `/register` | `/index.html` | Rewrite |
 | `/forgot-password` | `/index.html` | Rewrite |
@@ -70,14 +68,13 @@ Crear estas reglas en **Redirects/Rewrites**, en este orden:
 | `/admin/*` | `/index.html` | Rewrite |
 | `/reviewer/*` | `/index.html` | Rewrite |
 | `/support/*` | `/index.html` | Rewrite |
-| `/doctors/*` | `/index.html` | Rewrite |
 
 Notas:
 
 - Render soporta placeholders `:slug`/`:id` y wildcards `*`; no hace falta una regla por especialidad o médico.
-- **Importante:** las rutas dinámicas van como **Rewrite**, no como Redirect. Un Redirect `/specialties/:slug` → `/specialties/:slug/` entra en bucle cuando el slug no existe, porque la regla vuelve a coincidir con la barra final. Con Rewrite se sirve el `index.html` si existe y se evita el bucle.
+- **Importante:** no crear reglas comodín para `/specialties/:slug` ni `/doctors/:id`. Con Redirect entran en bucle cuando el recurso no existe; con Rewrite devuelven 200 vacío. Esas páginas se sirven solo en su forma canónica con barra final y la forma sin barra cae en `404.html`, que redirige al cliente. Así se evita el soft 404 sin romper las páginas válidas.
 - Render **no aplica** una regla si ya existe un recurso en esa ruta. Por eso los HTML prerenderizados con barra final ganan sin problema.
-- No eliminar `/doctors/*` hasta decidir la estrategia de 404 para médicos nuevos (decisión D2 del plan).
+- Los médicos nuevos se prerenderizan en el build. Si se aprueba un médico después del despliegue, hay que redesplegar para que tenga HTML propio; hasta entonces su perfil devuelve 404 (no soft 404).
 - El archivo `apps/web/public/_redirects` sigue siendo la referencia para otros hostings, pero en Render hay que replicar estas reglas en el dashboard.
 
 ## 4. Cabeceras

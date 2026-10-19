@@ -227,7 +227,7 @@ export default function AdminSpecialties() {
                     <td className="hidden px-4 py-3 text-slate-500 md:table-cell">{specialty.slug}</td>
                     <td className="hidden px-4 py-3 lg:table-cell">
                       <Link
-                        to={`/specialties/${specialty.slug}`}
+                        to={`/specialties/${specialty.slug}/`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700"

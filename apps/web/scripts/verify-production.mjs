@@ -77,7 +77,6 @@ const pages = [
   { path: '/como-funciona/', expectedTitle: 'Cómo funciona SabioDoc', canonical: '/como-funciona/' },
   { path: '/specialties', expectedRedirect: true },
   { path: '/specialties/', expectedTitle: 'Especialidades', canonical: '/specialties/' },
-  { path: '/specialties/cardiologia', expectedRedirect: true },
   { path: '/specialties/cardiologia/', expectedTitle: 'Cardiología', canonical: '/specialties/cardiologia/' },
   { path: '/privacidad', expectedRedirect: true },
   { path: '/privacidad/', expectedTitle: 'Política de privacidad', canonical: '/privacidad/' },
@@ -140,6 +139,8 @@ async function check404() {
     '/ruta-inexistente-auditoria',
     '/specialties/slug-que-no-existe',
     '/doctors/999999',
+    '/specialties/cardiologia',
+    '/doctors/2',
   ]
   for (const path of paths) {
     const res = await request(`${siteUrl}${path}`, { follow: true })

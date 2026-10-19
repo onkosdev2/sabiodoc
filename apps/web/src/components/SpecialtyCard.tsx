@@ -22,7 +22,7 @@ export default function SpecialtyCard({ specialty }: SpecialtyCardProps) {
       </div>
 
       <Link
-        to={`/specialties/${specialty.slug}`}
+        to={`/specialties/${specialty.slug}/`}
         className="mt-4 inline-flex items-center gap-1 rounded text-sm font-medium text-primary-600 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         Ver detalles

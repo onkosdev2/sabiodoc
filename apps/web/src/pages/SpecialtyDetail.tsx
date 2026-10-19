@@ -564,7 +564,7 @@ export default function SpecialtyDetail() {
         ) : (
           <div className="space-y-4">
             {visibleDoctors.map((doctor) => {
-              const detailUrl = `/doctors/${doctor.id}?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`
+              const detailUrl = `/doctors/${doctor.id}/?specialty=${specialty.slug}${consultationId ? `&consultation=${consultationId}` : ''}`
               const previewGroups = groupAvailability(doctor.availability_preview ?? [])
               return (
               <div key={doctor.id} className="relative">

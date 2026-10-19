@@ -152,7 +152,7 @@ export default function MyFavorites() {
                     </div>
 
                     <Link
-                      to={`/doctors/${doctor.id}`}
+                      to={`/doctors/${doctor.id}/`}
                       className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700"
                     >
                       Ver perfil

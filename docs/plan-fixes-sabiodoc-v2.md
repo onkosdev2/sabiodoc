@@ -75,7 +75,7 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 | ID | Decisión | Opciones | Recomendación |
 |---|---|---|---|
 | D1 | Proveedor de videollamada | JaaS, Jitsi self-hosted o `meet.jit.si` | JaaS/self-hosted con JWT para que el médico sea moderador. `meet.jit.si` no admite JWT propio. |
-| D2 | Estrategia de SEO y 404 | SSR, edge function o prerender + redirects | Mantener prerender y unificar barra final; para `/doctors/*` nuevos, decidir edge/SSR o aceptar 200 + `noindex` hasta rebuild. |
+| D2 | Estrategia de SEO y 404 | SSR, edge function o prerender + redirects | Prerender + barra final, sin reglas comodín para rutas dinámicas. Los médicos nuevos requieren redespliegue; se reconsidera edge/SSR si el volumen lo exige. |
 | D3 | Transcripción | Eliminar la promesa o implementarla con consentimiento | Mientras no exista función, eliminar toda mención de transcripción. |
 | D4 | Alcance legal | Perú solamente o varios países | Definir país(es) antes de aprobar políticas y consentimientos. |
 | D5 | Staging | Servicio aparte o preview por rama | Servicio aparte con BD, Jitsi, correo y Cloudinary separados. |
@@ -295,7 +295,7 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 - Médico inexistente.
 - Añadir `noindex, follow` y retirar canonical autorreferente.
 - Excluir del sitemap.
-- Resolver `/doctors/*`: prerender por médico, edge/SSR o aceptar 200 + `noindex` hasta rebuild.
+- No usar reglas comodín para `/specialties/:slug` ni `/doctors/:id`: provocan 200 vacío o bucles. La forma sin barra cae en `404.html`, que redirige al cliente; los médicos nuevos requieren rebuild.
 
 **Aceptación:** las tres clases devuelven HTTP 404 o, como mínimo, `noindex` real y ausencia de sitemap; la decisión está documentada.
 

@@ -66,7 +66,7 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
       <div className="mb-4">
         <h4 className="font-semibold text-slate-800 mb-2">Especialidad recomendada:</h4>
         <Link 
-          to={`/specialties/${result.recommended_specialty_slug}`}
+          to={`/specialties/${result.recommended_specialty_slug}/`}
           className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
         >
           Ir a {result.recommended_specialty_slug.replace(/-/g, ' ')}
@@ -101,7 +101,7 @@ export default function TriageResultCard({ result }: TriageResultCardProps) {
             {result.alternatives.map((alt, index) => (
               <div key={index} className="flex items-center gap-2">
                 <Link 
-                  to={`/specialties/${alt.specialty_slug}`}
+                  to={`/specialties/${alt.specialty_slug}/`}
                   className="text-primary-600 hover:underline"
                 >
                   {alt.specialty_slug.replace(/-/g, ' ')}
