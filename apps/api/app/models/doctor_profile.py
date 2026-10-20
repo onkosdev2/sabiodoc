@@ -36,6 +36,10 @@ class DoctorProfile(Base):
     rating_avg = Column(Numeric(3, 2), nullable=False, server_default="0")
     rating_count = Column(Integer, nullable=False, server_default="0")
     is_accepting_consultations = Column(Boolean, nullable=False, server_default="true")
+    # Visibilidad pública. Permite despublicar un perfil sin borrar su historial.
+    is_published = Column(Boolean, nullable=False, server_default="true")
+    # Marca datos de demostración/seed. No deben publicarse en producción.
+    is_seed = Column(Boolean, nullable=False, server_default="false")
     status = Column(Enum(DoctorApprovalStatus), nullable=False, server_default=DoctorApprovalStatus.pending.value)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

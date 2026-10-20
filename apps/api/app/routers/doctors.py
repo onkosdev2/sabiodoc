@@ -142,6 +142,7 @@ def list_doctors_by_specialty(slug: str, db: Session = Depends(get_db)):
         .filter(
             DoctorSpecialty.specialty_id == specialty.id,
             DoctorProfile.status == DoctorApprovalStatus.approved,
+            DoctorProfile.is_published == True,
             DoctorProfile.is_accepting_consultations == True,
         )
         .all()
@@ -856,7 +857,11 @@ def get_doctor_bookable_slots(
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
     if not doctor_profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
-    if doctor_profile.status != DoctorApprovalStatus.approved or not doctor_profile.is_accepting_consultations:
+    if (
+        doctor_profile.status != DoctorApprovalStatus.approved
+        or not doctor_profile.is_published
+        or not doctor_profile.is_accepting_consultations
+    ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no está disponible para nuevas citas")
     slots = appointment_service.compute_bookable_slots(
         db,
@@ -1067,7 +1072,11 @@ def get_doctor_detail(doctor_id: int, db: Session = Depends(get_db)):
     """Perfil publico de un médico aprobado con sus especialidades y reseñas."""
     doctor_profile = (
         db.query(DoctorProfile)
-        .filter(DoctorProfile.id == doctor_id, DoctorProfile.status == DoctorApprovalStatus.approved)
+        .filter(
+            DoctorProfile.id == doctor_id,
+            DoctorProfile.status == DoctorApprovalStatus.approved,
+            DoctorProfile.is_published == True,
+        )
         .first()
     )
     if not doctor_profile:

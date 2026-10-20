@@ -62,7 +62,7 @@ def add_favorite(
     current_user: User = Depends(get_current_user),
 ):
     doctor = db.query(DoctorProfile).filter(DoctorProfile.id == data.doctor_id).first()
-    if not doctor or doctor.status != DoctorApprovalStatus.approved:
+    if not doctor or doctor.status != DoctorApprovalStatus.approved or not doctor.is_published:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
 
     existing = (
@@ -89,8 +89,9 @@ def get_my_favorites(
 ):
     favorites = (
         db.query(Favorite)
+        .join(DoctorProfile, Favorite.doctor_id == DoctorProfile.id)
         .options(joinedload(Favorite.doctor))
-        .filter(Favorite.user_id == current_user.id)
+        .filter(Favorite.user_id == current_user.id, DoctorProfile.is_published == True)
         .order_by(Favorite.created_at.desc())
         .all()
     )

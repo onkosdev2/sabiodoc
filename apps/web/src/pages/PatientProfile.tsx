@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Loader2, Save, Sparkles, UserRound } from 'lucide-react'
-import { Country, getCitiesOfCountry, localizedCountryName } from '../utils/locations'
+import { Country, getCitiesOfCountry, localizedCountryName, sortCountries } from '../utils/locations'
 
 import {
   getMyPatientProfile,
@@ -21,7 +21,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import { Field, Input, Select, Textarea } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
-import { timeZoneLabel } from '../utils/format'
+import { getTimeZoneOptions, timeZoneLabel } from '../utils/format'
 import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
 
 const SEX_OPTIONS: Array<{ value: PatientSex; label: string }> = [
@@ -32,12 +32,7 @@ const SEX_OPTIONS: Array<{ value: PatientSex; label: string }> = [
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
-const FALLBACK_TIMEZONES = ['UTC', 'America/Lima', 'America/Bogota', 'America/Mexico_City', 'Europe/Madrid']
-
-/** Lista nativa de zonas horarias (igual que en el perfil médico). */
-const NATIVE_TIMEZONES: string[] = (Intl as any).supportedValuesOf
-  ? (Intl as any).supportedValuesOf('timeZone')
-  : FALLBACK_TIMEZONES
+const TIMEZONE_OPTIONS = getTimeZoneOptions()
 
 type CountryList = ReturnType<typeof Country.getAllCountries>
 
@@ -59,17 +54,19 @@ function parsePhone(value: string | null, countries: CountryList): { iso: string
   const trimmed = value.trim()
 
   if (trimmed.startsWith('+')) {
-    const digits = trimmed.slice(1)
+    const digits = trimmed.slice(1).replace(/^\+/, '')
     let best: CountryList[number] | null = null
     for (const country of countries) {
-      if (digits.startsWith(country.phonecode)) {
-        if (!best || country.phonecode.length > best.phonecode.length) {
+      const code = country.phonecode.replace(/^\+/, '')
+      if (digits.startsWith(code)) {
+        if (!best || code.length > best.phonecode.length) {
           best = country
         }
       }
     }
     if (best) {
-      return { iso: best.isoCode, number: digits.slice(best.phonecode.length).trim() }
+      const code = best.phonecode.replace(/^\+/, '')
+      return { iso: best.isoCode, number: digits.slice(code.length).trim() }
     }
   }
 
@@ -80,11 +77,8 @@ export default function PatientProfilePage() {
   const { refreshUser } = useAuth()
   const toast = useToast()
   const location = useLocation()
-  const allCountries = useMemo(() => Country.getAllCountries(), [])
-  const timezones = useMemo(
-    () => (NATIVE_TIMEZONES.includes('UTC') ? NATIVE_TIMEZONES : ['UTC', ...NATIVE_TIMEZONES]),
-    [],
-  )
+  const allCountries = useMemo(() => sortCountries(Country.getAllCountries()), [])
+  const timezones = TIMEZONE_OPTIONS
 
   const [profile, setProfile] = useState<PatientProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -161,10 +155,11 @@ export default function PatientProfilePage() {
   }
 
   const buildPhone = (iso: string, number: string): string | null => {
-    const value = number.trim()
+    const value = number.trim().replace(/^\+/, '')
     if (!value) return null
     const country = allCountries.find((item) => item.isoCode === iso)
-    return country ? `+${country.phonecode} ${value}`.trim() : value
+    const code = country?.phonecode.replace(/^\+/, '')
+    return code ? `+${code} ${value}`.trim() : value
   }
 
   const handleSave = async (event: React.FormEvent) => {

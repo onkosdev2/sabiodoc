@@ -7,6 +7,7 @@ from sqlalchemy import func
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.db.session import SessionLocal
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation_review import ConsultationReview
@@ -221,6 +222,9 @@ def seed_demo_doctors():
             profile.is_accepting_consultations = True
             profile.status = DoctorApprovalStatus(doctor_data["status"])
             profile.review_notes = None
+            profile.is_seed = True
+            # En producción los datos demo nunca se publican, aunque se fuerce el seed.
+            profile.is_published = not settings.is_production
 
             db.query(DoctorSpecialty).filter(DoctorSpecialty.doctor_id == profile.id).delete()
             db.query(DoctorAvailabilitySlot).filter(DoctorAvailabilitySlot.doctor_id == profile.id).delete()
@@ -388,9 +392,12 @@ def seed_demo_reviews():
 
 if __name__ == "__main__":
     seed_specialties()
-    seed_demo_admin()
-    seed_demo_reviewer()
-    seed_demo_support()
-    seed_demo_doctors()
-    seed_demo_patient()
-    seed_demo_reviews()
+    if settings.is_production and not settings.ALLOW_SEED_IN_PRODUCTION:
+        print("⏭️  Seed demo omitido en producción (ALLOW_SEED_IN_PRODUCTION=false).")
+    else:
+        seed_demo_admin()
+        seed_demo_reviewer()
+        seed_demo_support()
+        seed_demo_doctors()
+        seed_demo_patient()
+        seed_demo_reviews()

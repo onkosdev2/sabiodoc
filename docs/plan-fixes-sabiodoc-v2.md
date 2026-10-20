@@ -20,6 +20,13 @@
 - **2.6 Cobro y pago:** completado. `pause`, `leave` y cierre por falta de créditos reconcilian presencia antes de acumular. Se validan claves Stripe test/live. Webhooks con firma e idempotencia ya cubiertos por tests.
 - **3.3 Vigencia del prerender:** completado. `FRONTEND_DEPLOY_HOOK_URL` dispara rebuild al aprobar/editar médicos o cambiar su foto. OG de perfiles correcto.
 - **3.4 Sitemap y noindex:** completado. Sitemap solo con rutas públicas, `/login` y `/register` fuera; rutas privadas con `noindex` en cliente y guía de `X-Robots-Tag` en Render. Pendiente configurar Search Console/Bing.
+- **5.2 Errores de formulario:** completado. Resumen de errores en Login, Registro y postulación médica; foco al primer campo inválido; `aria-describedby` en campos personalizados.
+- **5.4 Estados de carga:** completado. Búsqueda muestra “Buscando…” y skeleton durante debounce/carga, sin “Resultados (0)” prematuro. La guía IA ya tenía skeleton y “Pensando…”.
+- **5.1 Cabecera móvil:** completado. Menú compacto en móvil, logo ajustado, objetivos táctiles de 44 px y dropdown sin desbordar.
+- **5.3 Contraste y estados accesibles:** parcial. `aria-pressed`/`aria-selected` presentes en horarios, filtros y tabs; pares de color revisados. Pendiente auditoría automatizada WCAG 2.2 AA.
+- **5.5 Localización y zona horaria:** parcial. Zonas con Perú primero y etiquetas `Lima (UTC−5)`, países priorizados, teléfonos sin doble `+` y tests. Pendiente buscador de país y traducción masiva de ciudades.
+- **5.6 Validación de datos seed:** completado. Campos `is_seed`/`is_published`, filtros públicos, seed bloqueado en producción y script `validate_seed_data.py`. Pendiente ejecutarlo contra producción antes del lanzamiento real.
+- **4.2 CSP en bloqueo:** completado en repo. `_headers` usa `Content-Security-Policy` con `worker-src`, `manifest-src`, `frame-ancestors` y `upgrade-insecure-requests`. Pendiente aplicar en Render y revisar consola.
 
 ---
 

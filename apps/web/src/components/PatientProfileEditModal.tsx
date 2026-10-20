@@ -11,6 +11,7 @@ import { Input, Select, Textarea } from './ui/Field'
 import { useToast } from '../context/ToastContext'
 import { getApiErrorMessage } from '../utils/apiError'
 import { buildProfilePayload } from '../utils/patientProfileFields'
+import { getTimeZoneOptions, timeZoneLabel } from '../utils/format'
 
 const SEX_OPTIONS: Array<{ value: PatientSex; label: string }> = [
   { value: 'female', label: 'Femenino' },
@@ -19,6 +20,7 @@ const SEX_OPTIONS: Array<{ value: PatientSex; label: string }> = [
 ]
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const TIMEZONE_OPTIONS = getTimeZoneOptions()
 
 type EditableProfile = {
   first_name: string | null
@@ -180,7 +182,12 @@ export default function PatientProfileEditModal({
               <Input label="Teléfono" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value || null)} />
               <Input label="País" value={form.country ?? ''} onChange={(e) => set('country', e.target.value || null)} />
               <Input label="Ciudad" value={form.city ?? ''} onChange={(e) => set('city', e.target.value || null)} />
-              <Input label="Zona horaria" value={form.timezone ?? ''} onChange={(e) => set('timezone', e.target.value || null)} />
+              <Select label="Zona horaria" value={form.timezone ?? ''} onChange={(e) => set('timezone', e.target.value || null)}>
+                <option value="">Sin especificar</option>
+                {TIMEZONE_OPTIONS.map((zone) => (
+                  <option key={zone} value={zone} title={zone}>{timeZoneLabel(zone)}</option>
+                ))}
+              </Select>
             </div>
           </section>
 

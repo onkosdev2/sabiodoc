@@ -1,0 +1,475 @@
+{
+  "siteUrl": "https://sabiodoc-1.onrender.com",
+  "apiUrl": "https://sabiodoc.onrender.com",
+  "results": [
+    {
+      "id": "page:/",
+      "label": "/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/",
+      "label": "/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“SabioDoc - Orientación Médica Inteligente”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/",
+      "label": "/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/ esperado=https://sabiodoc-1.onrender.com/",
+      "critical": true
+    },
+    {
+      "id": "og:/",
+      "label": "/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/ esperado=https://sabiodoc-1.onrender.com/",
+      "critical": false
+    },
+    {
+      "id": "robots:/",
+      "label": "/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "page:/como-funciona",
+      "label": "/como-funciona responde 301",
+      "status": "PASS",
+      "detail": "HTTP 301 → /como-funciona/",
+      "critical": false
+    },
+    {
+      "id": "page:/como-funciona/",
+      "label": "/como-funciona/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/como-funciona/",
+      "label": "/como-funciona/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“Cómo funciona SabioDoc”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/como-funciona/",
+      "label": "/como-funciona/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/como-funciona/ esperado=https://sabiodoc-1.onrender.com/como-funciona/",
+      "critical": true
+    },
+    {
+      "id": "og:/como-funciona/",
+      "label": "/como-funciona/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/como-funciona/ esperado=https://sabiodoc-1.onrender.com/como-funciona/",
+      "critical": false
+    },
+    {
+      "id": "robots:/como-funciona/",
+      "label": "/como-funciona/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "page:/specialties",
+      "label": "/specialties responde 301",
+      "status": "PASS",
+      "detail": "HTTP 301 → /specialties/",
+      "critical": false
+    },
+    {
+      "id": "page:/specialties/",
+      "label": "/specialties/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/specialties/",
+      "label": "/specialties/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“Especialidades médicas”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/specialties/",
+      "label": "/specialties/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/specialties/ esperado=https://sabiodoc-1.onrender.com/specialties/",
+      "critical": true
+    },
+    {
+      "id": "og:/specialties/",
+      "label": "/specialties/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/specialties/ esperado=https://sabiodoc-1.onrender.com/specialties/",
+      "critical": false
+    },
+    {
+      "id": "robots:/specialties/",
+      "label": "/specialties/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "page:/specialties/cardiologia/",
+      "label": "/specialties/cardiologia/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/specialties/cardiologia/",
+      "label": "/specialties/cardiologia/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“Cardiología · SabioDoc”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/specialties/cardiologia/",
+      "label": "/specialties/cardiologia/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/specialties/cardiologia/ esperado=https://sabiodoc-1.onrender.com/specialties/cardiologia/",
+      "critical": true
+    },
+    {
+      "id": "og:/specialties/cardiologia/",
+      "label": "/specialties/cardiologia/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/specialties/cardiologia/ esperado=https://sabiodoc-1.onrender.com/specialties/cardiologia/",
+      "critical": false
+    },
+    {
+      "id": "robots:/specialties/cardiologia/",
+      "label": "/specialties/cardiologia/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "page:/privacidad",
+      "label": "/privacidad responde 301",
+      "status": "PASS",
+      "detail": "HTTP 301 → /privacidad/",
+      "critical": false
+    },
+    {
+      "id": "page:/privacidad/",
+      "label": "/privacidad/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/privacidad/",
+      "label": "/privacidad/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“Política de privacidad”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/privacidad/",
+      "label": "/privacidad/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/privacidad/ esperado=https://sabiodoc-1.onrender.com/privacidad/",
+      "critical": true
+    },
+    {
+      "id": "og:/privacidad/",
+      "label": "/privacidad/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/privacidad/ esperado=https://sabiodoc-1.onrender.com/privacidad/",
+      "critical": false
+    },
+    {
+      "id": "robots:/privacidad/",
+      "label": "/privacidad/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "page:/emergency",
+      "label": "/emergency responde 301",
+      "status": "PASS",
+      "detail": "HTTP 301 → /emergency/",
+      "critical": false
+    },
+    {
+      "id": "page:/emergency/",
+      "label": "/emergency/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/emergency/",
+      "label": "/emergency/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“Emergencias”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/emergency/",
+      "label": "/emergency/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/emergency/ esperado=https://sabiodoc-1.onrender.com/emergency/",
+      "critical": true
+    },
+    {
+      "id": "og:/emergency/",
+      "label": "/emergency/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/emergency/ esperado=https://sabiodoc-1.onrender.com/emergency/",
+      "critical": false
+    },
+    {
+      "id": "robots:/emergency/",
+      "label": "/emergency/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "page:/doctor/apply",
+      "label": "/doctor/apply responde 301",
+      "status": "PASS",
+      "detail": "HTTP 301 → /doctor/apply/",
+      "critical": false
+    },
+    {
+      "id": "page:/doctor/apply/",
+      "label": "/doctor/apply/ responde 200",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "title:/doctor/apply/",
+      "label": "/doctor/apply/ tiene el título esperado",
+      "status": "PASS",
+      "detail": "“Postular como médico”",
+      "critical": false
+    },
+    {
+      "id": "canonical:/doctor/apply/",
+      "label": "/doctor/apply/ canonical coincide con la URL servida",
+      "status": "PASS",
+      "detail": "canonical=https://sabiodoc-1.onrender.com/doctor/apply/ esperado=https://sabiodoc-1.onrender.com/doctor/apply/",
+      "critical": true
+    },
+    {
+      "id": "og:/doctor/apply/",
+      "label": "/doctor/apply/ og:url coincide con la URL servida",
+      "status": "PASS",
+      "detail": "og:url=https://sabiodoc-1.onrender.com/doctor/apply/ esperado=https://sabiodoc-1.onrender.com/doctor/apply/",
+      "critical": false
+    },
+    {
+      "id": "robots:/doctor/apply/",
+      "label": "/doctor/apply/ es indexable",
+      "status": "PASS",
+      "detail": "robots=index,follow",
+      "critical": false
+    },
+    {
+      "id": "404:/ruta-inexistente-auditoria",
+      "label": "/ruta-inexistente-auditoria devuelve 404 o noindex real",
+      "status": "PASS",
+      "detail": "HTTP 404; robots=noindex, nofollow",
+      "critical": true
+    },
+    {
+      "id": "404:/specialties/slug-que-no-existe",
+      "label": "/specialties/slug-que-no-existe devuelve 404 o noindex real",
+      "status": "PASS",
+      "detail": "HTTP 404; robots=noindex, nofollow",
+      "critical": true
+    },
+    {
+      "id": "404:/doctors/999999",
+      "label": "/doctors/999999 devuelve 404 o noindex real",
+      "status": "PASS",
+      "detail": "HTTP 404; robots=noindex, nofollow",
+      "critical": true
+    },
+    {
+      "id": "header:content-security-policy",
+      "label": "Cabecera content-security-policy presente",
+      "status": "PASS",
+      "detail": "default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "critical": false
+    },
+    {
+      "id": "header:referrer-policy",
+      "label": "Cabecera referrer-policy presente",
+      "status": "PASS",
+      "detail": "strict-origin-when-cross-origin",
+      "critical": false
+    },
+    {
+      "id": "header:permissions-policy",
+      "label": "Cabecera permissions-policy presente",
+      "status": "PASS",
+      "detail": "camera=(self \"https://meet.jit.si\"), microphone=(self \"https://meet.jit.si\"), geolocation=(self), display-capture=(self \"https://meet.jit.si\")",
+      "critical": false
+    },
+    {
+      "id": "header:csp-enforcing",
+      "label": "CSP está en modo bloqueo (no solo Report-Only)",
+      "status": "FAIL",
+      "detail": "Solo Report-Only o ausente",
+      "critical": false
+    },
+    {
+      "id": "header:framing",
+      "label": "Protección de framing presente",
+      "status": "PASS",
+      "detail": "DENY",
+      "critical": false
+    },
+    {
+      "id": "cache:html",
+      "label": "HTML no se cachea como inmutable",
+      "status": "PASS",
+      "detail": "public, max-age=0, s-maxage=300",
+      "critical": false
+    },
+    {
+      "id": "cache:asset",
+      "label": "Assets con hash usan caché inmutable",
+      "status": "PASS",
+      "detail": "public, max-age=31536000, immutable",
+      "critical": true
+    },
+    {
+      "id": "manifest:mime",
+      "label": "manifest.webmanifest se sirve como application/manifest+json",
+      "status": "PASS",
+      "detail": "application/manifest+json",
+      "critical": false
+    },
+    {
+      "id": "sitemap",
+      "label": "Sitemap accesible",
+      "status": "PASS",
+      "detail": "48 URLs",
+      "critical": false
+    },
+    {
+      "id": "sitemap:slash",
+      "label": "Todas las URLs del sitemap usan la forma canónica con barra final",
+      "status": "PASS",
+      "detail": "ok",
+      "critical": true
+    },
+    {
+      "id": "sitemap:url:/",
+      "label": "/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/como-funciona/",
+      "label": "/como-funciona/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/como-funciona/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/specialties/",
+      "label": "/specialties/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/specialties/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/triage/",
+      "label": "/triage/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/triage/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/guide/",
+      "label": "/guide/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/guide/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/emergency/",
+      "label": "/emergency/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/emergency/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/telemedicina/",
+      "label": "/telemedicina/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/telemedicina/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/privacidad/",
+      "label": "/privacidad/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/privacidad/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/terminos/",
+      "label": "/terminos/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/terminos/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/doctor/apply/",
+      "label": "/doctor/apply/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/doctor/apply/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/specialties/anatomia-patologica/",
+      "label": "/specialties/anatomia-patologica/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/specialties/anatomia-patologica/",
+      "critical": false
+    },
+    {
+      "id": "sitemap:url:/specialties/anestesiologia/",
+      "label": "/specialties/anestesiologia/ responde 200 y canonical coincide",
+      "status": "PASS",
+      "detail": "HTTP 200; canonical=https://sabiodoc-1.onrender.com/specialties/anestesiologia/",
+      "critical": false
+    },
+    {
+      "id": "api:specialties",
+      "label": "API de especialidades responde",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "critical": false
+    },
+    {
+      "id": "data:test-doctors",
+      "label": "No hay médicos de prueba publicados en Cardiología",
+      "status": "WARN",
+      "detail": "2:Dr. Test — aceptado temporalmente para testeo; retirar antes de producción real",
+      "critical": false
+    }
+  ]
+}

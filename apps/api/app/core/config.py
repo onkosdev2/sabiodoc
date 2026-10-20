@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     # Deploy hook del frontend en Render. Si está configurado, se dispara un
     # rebuild cuando cambia un perfil público (médico aprobado, foto, datos).
     FRONTEND_DEPLOY_HOOK_URL: Optional[str] = None
+    # Permite ejecutar el seed de datos demo en producción. Por defecto no.
+    ALLOW_SEED_IN_PRODUCTION: bool = False
     STRIPE_CURRENCY: str = "usd"
 
     # Pasarela de payouts (retiros). "mock" no mueve dinero real; "stripe" usa

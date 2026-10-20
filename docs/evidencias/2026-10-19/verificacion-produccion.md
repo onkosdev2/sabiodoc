@@ -2,9 +2,9 @@
 
 - **Sitio:** https://sabiodoc-1.onrender.com
 - **API:** https://sabiodoc.onrender.com
-- **Fecha:** 2026-10-19T18:15:34.426Z
-- **Resultado:** 65/66 comprobaciones OK
-- **Fallos críticos:** 1
+- **Fecha:** 2026-10-19T18:56:28.768Z
+- **Resultado:** 66/66 comprobaciones OK
+- **Fallos críticos:** 0
 - **Advertencias:** 1
 
 | ID | Comprobación | Resultado | Detalle |
@@ -56,8 +56,8 @@
 | `header:referrer-policy` | Cabecera referrer-policy presente | ✅ PASS | strict-origin-when-cross-origin |
 | `header:permissions-policy` | Cabecera permissions-policy presente | ✅ PASS | camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(self), display-capture=(self "https://meet.jit.si") |
 | `header:framing` | Protección de framing presente | ✅ PASS | DENY |
-| `cache:html` | HTML no se cachea como inmutable | ✅ PASS | public, max-age=0, must-revalidate |
-| `cache:asset` | Assets con hash usan caché inmutable | ❌ FAIL | public, max-age=0, must-revalidate |
+| `cache:html` | HTML no se cachea como inmutable | ✅ PASS | public, max-age=0, s-maxage=300 |
+| `cache:asset` | Assets con hash usan caché inmutable | ✅ PASS | public, max-age=31536000, immutable |
 | `manifest:mime` | manifest.webmanifest se sirve como application/manifest+json | ✅ PASS | application/manifest+json |
 | `sitemap` | Sitemap accesible | ✅ PASS | 48 URLs |
 | `sitemap:slash` | Todas las URLs del sitemap usan la forma canónica con barra final | ✅ PASS | ok |
@@ -78,7 +78,7 @@
 
 ## Fallos críticos
 
-- **cache:asset:** Assets con hash usan caché inmutable — public, max-age=0, must-revalidate
+Sin fallos críticos.
 
 ## Advertencias
 

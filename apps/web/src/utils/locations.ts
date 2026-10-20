@@ -29,6 +29,21 @@ export function localizedCountryName(isoCode: string, fallback?: string): string
   return fallback ?? code
 }
 
+
+/** Países con operación o foco actual, primero en los selectores. */
+const PRIORITY_COUNTRY_CODES = ['PE', 'CO', 'MX', 'CL', 'AR', 'EC', 'BO', 'PY', 'UY', 'VE', 'ES', 'US', 'BR']
+
+/** Ordena países priorizando la operación y luego por nombre en español. */
+export function sortCountries<T extends { isoCode: string; name: string }>(countries: T[]): T[] {
+  const priority = new Map(PRIORITY_COUNTRY_CODES.map((code, index) => [code, index]))
+  return [...countries].sort((a, b) => {
+    const pa = priority.get(a.isoCode) ?? PRIORITY_COUNTRY_CODES.length
+    const pb = priority.get(b.isoCode) ?? PRIORITY_COUNTRY_CODES.length
+    if (pa !== pb) return pa - pb
+    return localizedCountryName(a.isoCode, a.name).localeCompare(localizedCountryName(b.isoCode, b.name), 'es')
+  })
+}
+
 // El dataset de ciudades se divide por país en `public/cities/<ISO>.json`
 // (ver scripts/generate-cities.mjs). Así solo se descarga el país seleccionado
 // (KBs) en lugar del dataset completo (~8 MB).

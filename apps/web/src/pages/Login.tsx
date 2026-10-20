@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
 import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
+import ErrorSummary from '../components/ui/ErrorSummary'
 import Button from '../components/ui/Button'
 import Checkbox from '../components/ui/Checkbox'
 import { Input, PasswordInput } from '../components/ui/Field'
@@ -20,6 +21,7 @@ import { isPatientProfileIncomplete } from '../utils/patientProfileFields'
 interface FieldErrors {
   email?: string
   password?: string
+  [key: string]: string | undefined
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -114,6 +116,7 @@ export default function Login() {
         <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">Iniciar sesión</h1>
 
         <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4">
+          <ErrorSummary errors={fieldErrors} />
           <Input
             label="Correo electrónico"
             type="email"

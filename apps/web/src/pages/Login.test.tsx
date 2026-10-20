@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
@@ -53,8 +53,10 @@ describe('Login', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
 
-    expect(screen.getByText('Ingresa tu correo.')).toBeInTheDocument()
-    expect(screen.getByText('Ingresa tu contraseña.')).toBeInTheDocument()
+    expect(screen.getAllByText('Ingresa tu correo.').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Ingresa tu contraseña.').length).toBeGreaterThan(0)
+    expect(screen.getByText('Revisa los siguientes campos')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText(/Correo electrónico/)).toHaveFocus())
     expect(mockedLogin).not.toHaveBeenCalled()
   })
 

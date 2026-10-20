@@ -96,7 +96,7 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
       <button type="button"
         ref={buttonRef}
         onClick={() => setIsOpen((open) => !open)}
-        className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${buttonTheme}`}
+        className={`flex min-h-[44px] items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${buttonTheme}`}
         aria-expanded={isOpen}
         aria-haspopup="true"
         aria-controls={menuId}
@@ -110,7 +110,7 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
       {isOpen && (
         <div
           id={menuId}
-          className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-xl"
+          className="absolute right-0 z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-xl"
         >
           <div className="border-b border-slate-100 px-4 py-3">
             <p

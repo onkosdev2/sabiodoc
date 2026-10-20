@@ -59,6 +59,7 @@ describe('Triage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Analizar síntomas' }))
 
     expect(screen.getByText('Describe tus síntomas con al menos 10 caracteres.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText(/síntomas/i)).toHaveFocus())
     expect(mockedSubmit).not.toHaveBeenCalled()
   })
 

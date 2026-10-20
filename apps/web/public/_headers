@@ -1,8 +1,10 @@
 # Cabeceras del frontend (sintaxis estilo Netlify; Render las soporta en sitios
 # estáticos. Si tu servicio no las toma, replica estos valores en el dashboard).
 #
-# NOTA: la CSP va en modo *Report-Only* a propósito: primero observamos sin
-# bloquear (Jitsi y Cloudinary requieren permisos concretos).
+# CSP en modo bloqueo. 'unsafe-inline' en script-src es necesario para el
+# JSON-LD inline generado en el build. Si se migra a nonce/hash, retirarlo.
+# Si se cambia a un Jitsi self-hosted, agregar su origen a script-src,
+# frame-src, connect-src y Permissions-Policy.
 
 /*
   X-Content-Type-Options: nosniff
@@ -10,7 +12,7 @@
   X-Frame-Options: DENY
   Permissions-Policy: camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(self), display-capture=(self "https://meet.jit.si")
   Cross-Origin-Opener-Policy: same-origin-allow-popups
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si https://*.jitsi.net; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Cache-Control: public, max-age=0, must-revalidate
 
 # Assets con hash: inmutables.

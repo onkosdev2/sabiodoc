@@ -5,6 +5,7 @@ import { ShieldAlert } from 'lucide-react'
 import { getMyDoctorApplication, DoctorApplication } from '../api/doctors'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
+import { timeZoneLabel } from '../utils/format'
 import { DOCTOR_APPLICATION_STATUS_LABELS } from '../utils/statusLabels'
 import Alert from '../components/ui/Alert'
 import Badge from '../components/ui/Badge'
@@ -107,7 +108,7 @@ export default function DoctorPending() {
                 {application.platform_fee_percent}% de la plataforma.
               </p>
               <p className="mt-1 text-sm text-slate-600">Estado actual: {DOCTOR_APPLICATION_STATUS_LABELS[application.status] || 'Sin estado'}</p>
-              <p className="mt-1 text-sm text-slate-600">Zona horaria: {application.timezone || 'UTC'}</p>
+              <p className="mt-1 text-sm text-slate-600">Zona horaria: {application.timezone ? timeZoneLabel(application.timezone) : 'UTC'}</p>
             </div>
           </div>
 

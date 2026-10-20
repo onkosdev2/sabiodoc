@@ -92,7 +92,7 @@ No son solo tres: son **7 cabeceras globales + 3 específicas**. Hay que agregar
 | `/*` | `X-Frame-Options` | `DENY` |
 | `/*` | `Permissions-Policy` | `camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(self), display-capture=(self "https://meet.jit.si")` |
 | `/*` | `Cross-Origin-Opener-Policy` | `same-origin-allow-popups` |
-| `/*` | `Content-Security-Policy-Report-Only` | `default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` |
+| `/*` | `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si https://*.jitsi.net; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests` |
 | `/*` | `Cache-Control` | `public, max-age=0, must-revalidate` |
 
 ### 4.2 Específicas
@@ -105,7 +105,9 @@ No son solo tres: son **7 cabeceras globales + 3 específicas**. Hay que agregar
 
 Notas:
 
-- La CSP está en `Report-Only` a propósito hasta cerrar la Fase 4. No pasarla a bloqueo sin revisar los reportes de Jitsi y Cloudinary.
+- La CSP ya está en modo bloqueo. `'unsafe-inline'` en `script-src` es necesario para el JSON-LD inline del build; si se migra a nonce/hash, retirarlo.
+- Si aparece una violación en la consola, volver temporalmente a `Content-Security-Policy-Report-Only`, corregir el origen y volver a desplegar.
+- Si el Jitsi self-hosted usa otro dominio, agregarlo a `script-src`, `frame-src`, `connect-src` y `Permissions-Policy`.
 - Si Render duplica `Cache-Control` entre `/*` y `/assets/*`, elimina la fila global de `Cache-Control`; el HTML ya se sirve con `max-age=0` por defecto.
 - `Content-Type` para el manifest es necesario porque hoy Render lo sirve como `binary/octet-stream`.
 

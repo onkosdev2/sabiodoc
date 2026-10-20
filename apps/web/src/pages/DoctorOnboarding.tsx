@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, Camera, Trash2 } from 'lucide-react'
-import { Country, getCitiesOfCountry, localizedCountryName } from '../utils/locations'
+import { Country, getCitiesOfCountry, localizedCountryName, sortCountries } from '../utils/locations'
 
 import BackButton from '../components/BackButton'
 import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
+import ErrorSummary from '../components/ui/ErrorSummary'
 import { Field, Input, PasswordInput, Select, Textarea } from '../components/ui/Field'
 import { registerDoctor } from '../api/auth'
 import { getSpecialties, Specialty } from '../api/specialties'
@@ -15,15 +16,13 @@ import { getFinancePolicy } from '../api/finance'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
 import { focusFirstInvalid } from '../utils/forms'
-import { timeZoneLabel } from '../utils/format'
+import { getTimeZoneOptions, timeZoneLabel } from '../utils/format'
 import { hasRole } from '../utils/roles'
 
 const centsToDisplay = (value: number) => (value / 100).toFixed(2)
 
-// Zonas horarias nativas
-const timezones: string[] = (Intl as any).supportedValuesOf 
-  ? (Intl as any).supportedValuesOf('timeZone') 
-  : ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'Europe/Madrid']
+// Zonas horarias con Perú primero.
+const timezones: string[] = getTimeZoneOptions()
 
 // Diccionario de documentos por ISO de país
 interface CountryDocs {
@@ -75,7 +74,7 @@ export default function DoctorOnboarding() {
   const { user, isAuthenticated, isLoading: authLoading, login: authLogin, refreshUser } = useAuth()
   const isDoctorEditing = isAuthenticated && !!user?.doctor_status
 
-  const allCountries = Country.getAllCountries()
+  const allCountries = useMemo(() => sortCountries(Country.getAllCountries()), [])
 
   // --- Estados del Formulario (Paso 1) ---
   const [email, setEmail] = useState('')
@@ -574,6 +573,7 @@ export default function DoctorOnboarding() {
               {(isProfileRoute || step === 1) && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-semibold mb-4 text-slate-800">Datos personales y ubicación</h2>
+                  <ErrorSummary errors={fieldErrors} className="mb-4" />
                   <div className="grid gap-6 md:grid-cols-2">
                     <Input
                       label="Correo profesional"
@@ -611,6 +611,7 @@ export default function DoctorOnboarding() {
                           required
                           placeholder="Juan Pérez"
                           aria-invalid={fieldErrors.baseName ? true : undefined}
+                          aria-describedby={fieldErrors.baseName ? 'doctor-name-error' : undefined}
                         />
                       </div>
                     </Field>

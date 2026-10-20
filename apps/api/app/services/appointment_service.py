@@ -64,6 +64,8 @@ class AppointmentService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El profesional seleccionado no es médico")
         if doctor_profile.status != DoctorApprovalStatus.approved:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico aún no está aprobado")
+        if not doctor_profile.is_published:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no está disponible públicamente")
         if not doctor_profile.is_accepting_consultations:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no acepta consultas actualmente")
         if not self.doctor_supports_specialty(doctor_profile, specialty_id):

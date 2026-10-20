@@ -365,6 +365,16 @@ responde 404 y `404.html` redirige al cliente a la forma canónica. Así se evit
 Los médicos nuevos necesitan un redespliegue para generar su HTML; hasta entonces su perfil devuelve 404.
 Si el hosting no aplica `_redirects`, replica esas reglas en el dashboard de Render y borra cualquier `catch-all` previo.
 
+**Datos de prueba:** los médicos del seed se marcan `is_seed=true` y no se publican en producción. Antes de
+producción real, ejecutar desde `apps/api`:
+
+```bash
+./venv/bin/python scripts/validate_seed_data.py
+```
+
+El script falla si encuentra un médico aprobado y publicado con nombre/correo de prueba o `is_seed=true`.
+Para despublicar uno, poner `doctor_profiles.is_published=false` (conserva historial y citas).
+
 **Prerender público:** el build genera HTML para especialidades y médicos aprobados. Si se configura
 `FRONTEND_DEPLOY_HOOK_URL`, la API dispara un rebuild al aprobar o editar un médico, cambiar su foto o sus datos.
 Sin hook, hay que redesplegar manualmente el frontend para que el perfil nuevo tenga HTML propio.

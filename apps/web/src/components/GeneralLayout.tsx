@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, History, UserRound, Wallet, LifeBuoy,
+  Menu, X,
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
@@ -19,6 +21,31 @@ export default function GeneralLayout() {
   // El chat IA ocupa toda la altura entre cabecera y footer, sin padding vertical.
   const isChatRoute =
     location.pathname.startsWith('/consultation/') && location.pathname.endsWith('/chat')
+
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [mobileMenuOpen])
 
   // Menú del paciente ordenado por utilidad: primero la actividad clínica
   // diaria, luego las preferencias y al final los paneles por rol.
@@ -75,8 +102,8 @@ export default function GeneralLayout() {
               to="/"
               className="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
-              <Stethoscope className="h-8 w-8 text-primary-600" aria-hidden="true" />
-              <span className="text-2xl font-bold tracking-tight text-slate-800">SabioDoc</span>
+              <Stethoscope className="h-7 w-7 text-primary-600 sm:h-8 sm:w-8" aria-hidden="true" />
+              <span className="text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">SabioDoc</span>
             </Link>
 
             <nav className="flex items-center gap-2 sm:gap-4" aria-label="Principal">
@@ -84,7 +111,7 @@ export default function GeneralLayout() {
                 <>
                   <Link
                     to="/notifications"
-                    className="relative rounded-full p-1 text-slate-500 transition-colors hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="relative rounded-full p-2.5 text-slate-500 transition-colors hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : 'Notificaciones'}
                   >
                     <Bell className="h-6 w-6" aria-hidden="true" />
@@ -102,34 +129,89 @@ export default function GeneralLayout() {
                 </>
               ) : (
                 <>
-                  <Link
-                    to="/como-funciona"
-                    replace={isAuthPage}
-                    className="hidden font-medium text-slate-600 transition-colors hover:text-primary-600 md:inline-flex"
-                  >
-                    ¿Cómo funciona?
-                  </Link>
-                  <Link
-                    to="/doctor/apply"
-                    replace={isAuthPage}
-                    className="hidden font-medium text-slate-600 transition-colors hover:text-primary-600 md:inline-flex"
-                  >
-                    Soy médico
-                  </Link>
-                  <Link
-                    to="/login"
-                    replace={isAuthPage}
-                    className="whitespace-nowrap font-medium text-slate-600 transition-colors hover:text-primary-600"
-                  >
-                    Iniciar sesión
-                  </Link>
-                  <Link
-                    to="/register"
-                    replace={isAuthPage}
-                    className="whitespace-nowrap rounded-lg bg-primary-600 px-3 py-2 font-medium text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 sm:px-4"
-                  >
-                    Registrarse
-                  </Link>
+                  <div className="hidden items-center gap-4 md:flex">
+                    <Link
+                      to="/como-funciona"
+                      replace={isAuthPage}
+                      className="font-medium text-slate-600 transition-colors hover:text-primary-600"
+                    >
+                      ¿Cómo funciona?
+                    </Link>
+                    <Link
+                      to="/doctor/apply"
+                      replace={isAuthPage}
+                      className="font-medium text-slate-600 transition-colors hover:text-primary-600"
+                    >
+                      Soy médico
+                    </Link>
+                    <Link
+                      to="/login"
+                      replace={isAuthPage}
+                      className="whitespace-nowrap font-medium text-slate-600 transition-colors hover:text-primary-600"
+                    >
+                      Iniciar sesión
+                    </Link>
+                    <Link
+                      to="/register"
+                      replace={isAuthPage}
+                      className="whitespace-nowrap rounded-lg bg-primary-600 px-4 py-2 font-medium text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                    >
+                      Registrarse
+                    </Link>
+                  </div>
+
+                  <div className="relative md:hidden" ref={mobileMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setMobileMenuOpen((open) => !open)}
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full p-2.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                      aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+                      aria-expanded={mobileMenuOpen}
+                      aria-controls="mobile-nav"
+                    >
+                      {mobileMenuOpen ? <X className="h-6 w-6" aria-hidden="true" /> : <Menu className="h-6 w-6" aria-hidden="true" />}
+                    </button>
+
+                    {mobileMenuOpen && (
+                      <div
+                        id="mobile-nav"
+                        className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"
+                      >
+                        <Link
+                          to="/como-funciona"
+                          replace={isAuthPage}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          ¿Cómo funciona?
+                        </Link>
+                        <Link
+                          to="/doctor/apply"
+                          replace={isAuthPage}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Soy médico
+                        </Link>
+                        <Link
+                          to="/login"
+                          replace={isAuthPage}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Iniciar sesión
+                        </Link>
+                        <Link
+                          to="/register"
+                          replace={isAuthPage}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="mt-1 flex min-h-[44px] items-center justify-center rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700"
+                        >
+                          Registrarse
+                        </Link>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </nav>
@@ -149,16 +231,16 @@ export default function GeneralLayout() {
       <footer className="border-t border-slate-100 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-6 text-center text-sm text-slate-500">
           <nav className="mb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1" aria-label="Legal">
-            <Link to="/telemedicina" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/telemedicina" className="inline-flex min-h-[44px] items-center px-2 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Telemedicina
             </Link>
-            <Link to="/privacidad" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/privacidad" className="inline-flex min-h-[44px] items-center px-2 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Privacidad
             </Link>
-            <Link to="/terminos" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/terminos" className="inline-flex min-h-[44px] items-center px-2 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Términos
             </Link>
-            <Link to="/help" className="inline-flex items-center px-1 py-2 text-slate-600 hover:text-primary-600 hover:underline">
+            <Link to="/help" className="inline-flex min-h-[44px] items-center px-2 py-2 text-slate-600 hover:text-primary-600 hover:underline">
               Ayuda y soporte
             </Link>
           </nav>

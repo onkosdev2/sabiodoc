@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
 import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
+import ErrorSummary from '../components/ui/ErrorSummary'
 import Button from '../components/ui/Button'
 import { Input, PasswordInput } from '../components/ui/Field'
 import { getApiErrorMessage } from '../utils/apiError'
@@ -17,6 +18,7 @@ interface FieldErrors {
   email?: string
   password?: string
   confirmPassword?: string
+  [key: string]: string | undefined
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -92,6 +94,7 @@ export default function Register() {
         <h1 className="mb-6 text-center text-2xl font-bold text-slate-800">Crear cuenta</h1>
 
         <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4">
+          <ErrorSummary errors={fieldErrors} />
           <Input
             label="Correo electrónico"
             type="email"

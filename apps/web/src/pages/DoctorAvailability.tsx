@@ -4,6 +4,7 @@ import { CalendarDays, Check, Clock3, Copy, Plus, RotateCcw, Trash2 } from 'luci
 import { AvailabilitySlotInput, getDoctorAvailability, updateDoctorAvailability } from '../api/appointments'
 import { useToast } from '../context/ToastContext'
 import { getApiErrorMessage } from '../utils/apiError'
+import { timeZoneLabel } from '../utils/format'
 import Alert from '../components/ui/Alert'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -299,7 +300,7 @@ export default function DoctorAvailability() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Zona horaria</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{timezone}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{timeZoneLabel(timezone)}</p>
             <p className="mt-1 text-xs text-slate-500">Se configura en tu perfil médico.</p>
           </div>
           <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-slate-50">

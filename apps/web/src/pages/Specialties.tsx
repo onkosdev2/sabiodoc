@@ -22,6 +22,7 @@ export default function Specialties() {
   const [allSpecialties, setAllSpecialties] = useState<Specialty[]>([])
   const [searchResults, setSearchResults] = useState<Specialty[]>([])
   const [loading, setLoading] = useState(false)
+  const [debouncing, setDebouncing] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
@@ -64,7 +65,15 @@ export default function Specialties() {
   )
 
   useEffect(() => {
+    if (query.length < 2) {
+      setDebouncing(false)
+      setSearchResults([])
+      return
+    }
+
+    setDebouncing(true)
     const timer = setTimeout(() => {
+      setDebouncing(false)
       searchSpecialties(query)
     }, 300)
 
@@ -72,8 +81,9 @@ export default function Specialties() {
   }, [query, searchSpecialties])
 
   const isSearching = query.length >= 2
+  const isSearchPending = loading || debouncing
   const alarmFlags = useMemo(() => detectAlarmSymptoms(query), [query])
-  const showEmpty = isSearching && !loading && searchResults.length === 0
+  const showEmpty = isSearching && !isSearchPending && searchResults.length === 0
 
   return (
     <div>
@@ -99,7 +109,7 @@ export default function Specialties() {
           onChange={(event) => setQuery(event.target.value)}
           className="input-field py-3 pl-12 pr-10 text-lg"
         />
-        {loading && <Spinner size="sm" className="absolute right-4 top-1/2 -translate-y-1/2" />}
+        {isSearchPending && <Spinner size="sm" className="absolute right-4 top-1/2 -translate-y-1/2" />}
       </div>
 
       <AlarmSymptomsBanner flags={alarmFlags} />
@@ -113,9 +123,9 @@ export default function Specialties() {
       ) : isSearching ? (
         <section className="mb-8">
           <h2 className="mb-4 text-xl font-semibold text-slate-700">
-            {loading && searchResults.length === 0 ? 'Buscando…' : `Resultados (${searchResults.length})`}
+            {isSearchPending && searchResults.length === 0 ? 'Buscando…' : `Resultados (${searchResults.length})`}
           </h2>
-          {loading && searchResults.length === 0 ? (
+          {isSearchPending && searchResults.length === 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
               {[0, 1, 2].map((index) => (
                 <Skeleton key={index} className="h-28 w-full rounded-2xl" />

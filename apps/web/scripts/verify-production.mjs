@@ -168,8 +168,16 @@ async function checkHeaders() {
     const value = headers.get(name) || headers.get(`${name}-report-only`) || ''
     add(`header:${name}`, `Cabecera ${name} presente`, pattern.test(value) ? 'PASS' : 'FAIL', value || '(ausente)')
   }
+  const enforcingCsp = headers.get('content-security-policy') || ''
+  add(
+    'header:csp-enforcing',
+    'CSP está en modo bloqueo (no solo Report-Only)',
+    enforcingCsp ? 'PASS' : 'FAIL',
+    enforcingCsp ? 'Content-Security-Policy presente' : 'Solo Report-Only o ausente',
+  )
+
   const frame = headers.get('x-frame-options') || ''
-  const csp = headers.get('content-security-policy') || headers.get('content-security-policy-report-only') || ''
+  const csp = enforcingCsp || headers.get('content-security-policy-report-only') || ''
   add(
     'header:framing',
     'Protección de framing presente',
