@@ -1,20 +1,33 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, KeyRound, Lock, ShieldCheck } from 'lucide-react'
 
 import { changePassword } from '../api/auth'
+import { getMyConsents, revokeConsent, type ConsentRecord, type ConsentType } from '../api/consents'
 import { useAuth } from '../context/AuthContext'
 import { getApiErrorMessage } from '../utils/apiError'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import ConfirmDialog from '../components/ConfirmDialog'
 import PageHeader from '../components/ui/PageHeader'
 import { PasswordInput } from '../components/ui/Field'
+import { formatDate } from '../utils/format'
 
 interface FieldErrors {
   currentPassword?: string
   newPassword?: string
   confirmPassword?: string
+}
+
+const CONSENT_LABELS: Record<ConsentType, string> = {
+  terms: 'Términos y condiciones',
+  privacy: 'Política de privacidad',
+  clinical_data: 'Tratamiento de datos clínicos',
+  telemedicine: 'Consentimiento de videoconsulta',
+  transcription: 'Transcripción de la consulta',
+  recording: 'Grabación de la consulta',
+  marketing: 'Comunicaciones comerciales',
 }
 
 /** Política mínima de contraseñas, alineada con el backend. */
@@ -40,6 +53,43 @@ export default function SecuritySettings() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  const [consents, setConsents] = useState<ConsentRecord[]>([])
+  const [consentsLoading, setConsentsLoading] = useState(true)
+  const [consentsError, setConsentsError] = useState<string | null>(null)
+  const [consentToRevoke, setConsentToRevoke] = useState<ConsentRecord | null>(null)
+  const [revoking, setRevoking] = useState(false)
+
+  const loadConsents = async () => {
+    setConsentsLoading(true)
+    setConsentsError(null)
+    try {
+      setConsents(await getMyConsents())
+    } catch (err: unknown) {
+      setConsentsError(getApiErrorMessage(err, 'No se pudieron cargar tus consentimientos.'))
+    } finally {
+      setConsentsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadConsents()
+  }, [])
+
+  const handleRevokeConsent = async () => {
+    if (!consentToRevoke) return
+    setRevoking(true)
+    setConsentsError(null)
+    try {
+      await revokeConsent(consentToRevoke.consent_type, consentToRevoke.appointment_id)
+      setConsentToRevoke(null)
+      await loadConsents()
+    } catch (err: unknown) {
+      setConsentsError(getApiErrorMessage(err, 'No se pudo revocar el consentimiento.'))
+    } finally {
+      setRevoking(false)
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -170,6 +220,54 @@ export default function SecuritySettings() {
           </li>
         </ul>
       </Card>
+
+      <Card>
+        <h2 className="text-lg font-semibold text-slate-900">Consentimientos</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Revisa las autorizaciones que otorgaste. Revocar un consentimiento obligatorio puede impedir
+          el uso de la videoconsulta o del servicio correspondiente.
+        </p>
+
+        {consentsError && <Alert tone="danger" className="mt-4">{consentsError}</Alert>}
+
+        {consentsLoading ? (
+          <p className="mt-4 text-sm text-slate-500">Cargando consentimientos…</p>
+        ) : consents.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">No tienes consentimientos activos.</p>
+        ) : (
+          <ul className="mt-4 divide-y divide-slate-100">
+            {consents.map((consent) => (
+              <li key={consent.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">{CONSENT_LABELS[consent.consent_type]}</p>
+                  <p className="text-xs text-slate-500">
+                    Versión {consent.version} · Aceptado el {formatDate(consent.accepted_at)}
+                    {consent.appointment_id ? ` · Cita #${consent.appointment_id}` : ''}
+                  </p>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => setConsentToRevoke(consent)}>
+                  Revocar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <ConfirmDialog
+        open={consentToRevoke !== null}
+        tone="danger"
+        title="¿Revocar consentimiento?"
+        description={
+          consentToRevoke
+            ? `Se revocará «${CONSENT_LABELS[consentToRevoke.consent_type]}». Si es obligatorio, el servicio correspondiente puede quedar bloqueado.`
+            : ''
+        }
+        confirmLabel="Revocar"
+        busy={revoking}
+        onConfirm={handleRevokeConsent}
+        onCancel={() => setConsentToRevoke(null)}
+      />
     </div>
   )
 }

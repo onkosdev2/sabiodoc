@@ -221,7 +221,7 @@ export default function SupportInbox() {
                     <Badge tone={SUPPORT_TICKET_PRIORITY_TONES[ticket.priority] ?? 'neutral'}>
                       {SUPPORT_TICKET_PRIORITY_LABELS[ticket.priority] ?? ticket.priority}
                     </Badge>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-slate-600">
                       {new Date(ticket.updated_at || ticket.created_at || '').toLocaleDateString('es-ES')}
                     </span>
                   </div>

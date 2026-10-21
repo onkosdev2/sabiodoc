@@ -5,6 +5,8 @@ export interface TriageRequest {
   age?: number
   sex?: string
   user_id?: number // Añadido para vincular la consulta al usuario
+  accepted_clinical_data?: boolean
+  consent_text_version?: string
 }
 
 export interface AlternativeSpecialty {

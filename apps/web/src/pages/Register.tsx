@@ -34,6 +34,7 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
 
   const validate = (): boolean => {
@@ -43,6 +44,7 @@ export default function Register() {
     if (!password) next.password = 'Ingresa una contraseña.'
     else if (password.length < 8) next.password = 'Debe tener al menos 8 caracteres.'
     if (confirmPassword !== password) next.confirmPassword = 'Las contraseñas no coinciden.'
+    if (!acceptedTerms) next.terms = 'Debes aceptar los términos y la política de privacidad.'
     setFieldErrors(next)
     if (Object.keys(next).length > 0) {
       focusFirstInvalid(formRef.current)
@@ -58,7 +60,7 @@ export default function Register() {
 
     setLoading(true)
     try {
-      const response = await register(email.trim(), password)
+      const response = await register(email.trim(), password, acceptedTerms, 'v1')
       if (response.verification_required) {
         setPendingEmail(email.trim())
         return
@@ -129,6 +131,27 @@ export default function Register() {
           />
 
           {error && <Alert tone="danger">{error}</Alert>}
+
+          <label className="flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50 p-3 text-xs text-sky-900">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(event) => setAcceptedTerms(event.target.checked)}
+              className="mt-0.5"
+              aria-invalid={fieldErrors.terms ? true : undefined}
+            />
+            <span>
+              Acepto los{' '}
+              <Link to="/terminos" className="font-medium underline">
+                términos
+              </Link>{' '}
+              y la{' '}
+              <Link to="/privacidad" className="font-medium underline">
+                política de privacidad
+              </Link>
+              .
+            </span>
+          </label>
 
           <Button type="submit" size="lg" loading={loading} leftIcon={<UserPlus className="h-5 w-5" />} className="w-full">
             {loading ? 'Registrando...' : 'Crear cuenta'}

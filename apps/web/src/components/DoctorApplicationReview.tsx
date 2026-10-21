@@ -237,7 +237,7 @@ export default function DoctorApplicationReview({ eyebrow, title, description }:
                         <p className="mt-1 truncate text-sm text-slate-600">
                           {application.professional_title || 'Profesional médico'}
                         </p>
-                        <p className="mt-1 truncate text-sm text-slate-500">{application.email}</p>
+                        <p className="mt-1 truncate text-sm text-slate-600">{application.email}</p>
                       </div>
                       <Badge tone={STATUS_TONES[application.status]} className="flex-none whitespace-nowrap">
                         {STATUS_LABELS[application.status]}

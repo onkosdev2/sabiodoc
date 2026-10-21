@@ -33,7 +33,7 @@ export default function Pagination({
       aria-label="Paginación"
       className={`flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 ${className}`.trim()}
     >
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-600">
         Mostrando <span className="font-medium text-slate-700">{start}–{end}</span> de{' '}
         <span className="font-medium text-slate-700">{totalItems}</span>
       </p>

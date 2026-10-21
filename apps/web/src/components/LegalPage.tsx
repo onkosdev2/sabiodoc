@@ -14,6 +14,8 @@ interface LegalPageProps {
   title: string
   description: string
   updated: string
+  version: string
+  status: 'pending_legal_review' | 'approved'
   intro?: ReactNode
   sections: LegalSection[]
 }
@@ -21,22 +23,28 @@ interface LegalPageProps {
 /**
  * Plantilla de páginas legales.
  *
- * Los textos son un **borrador provisional** y deben ser revisados por asesoría
- * legal antes de considerarse definitivos.
+ * El texto está versionado. El estado indica si ya pasó la revisión formal de
+ * asesoría legal; no se presenta como aprobado mientras siga pendiente.
  */
-export default function LegalPage({ title, description, updated, intro, sections }: LegalPageProps) {
+export default function LegalPage({ title, description, updated, version, status, intro, sections }: LegalPageProps) {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title={title} description={description} />
 
-      <Alert tone="warning" title="Borrador provisional">
-        Este documento es un <strong>borrador</strong> y no constituye asesoría legal. Debe ser
-        revisado y aprobado por un profesional antes de considerarse definitivo.
-      </Alert>
+      {status === 'approved' ? (
+        <Alert tone="success" title={`Versión ${version} · Aprobada`}>
+          Este documento fue revisado y aprobado por asesoría legal.
+        </Alert>
+      ) : (
+        <Alert tone="warning" title={`Versión ${version} · Pendiente de revisión legal`}>
+          El texto está completo y versionado. Falta la aprobación formal de asesoría legal antes de
+          considerarse definitivo.
+        </Alert>
+      )}
 
       <Card>
         <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-          Última actualización: {updated}
+          Versión {version} · Última actualización: {updated}
         </p>
 
         {intro && <div className="mt-4 text-sm leading-relaxed text-slate-700">{intro}</div>}

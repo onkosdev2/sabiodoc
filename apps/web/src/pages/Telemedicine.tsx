@@ -1,4 +1,5 @@
 import LegalPage, { LegalSection } from '../components/LegalPage'
+import { LEGAL_STATUS, LEGAL_UPDATED, LEGAL_VERSION } from '../utils/legal'
 
 const SECTIONS: LegalSection[] = [
   {
@@ -30,7 +31,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: 'Privacidad de la videollamada',
     paragraphs: [
-      'La videollamada se realiza mediante Jitsi. Actualmente se usan salas públicas de meet.jit.si; estamos migrando a un servicio con autenticación. Te recomendamos usar un lugar privado y una conexión de confianza.',
+      'La videollamada se realiza mediante Jitsi. Estamos migrando a un servidor propio con autenticación. Te recomendamos usar un lugar privado y una conexión de confianza.',
     ],
   },
   {
@@ -52,7 +53,9 @@ export default function Telemedicine() {
     <LegalPage
       title="Política de telemedicina"
       description="Alcances, límites y consentimiento de la atención a distancia."
-      updated="13 de octubre de 2026"
+      updated={LEGAL_UPDATED}
+      version={LEGAL_VERSION}
+      status={LEGAL_STATUS}
       intro={
         <p>
           Esta política describe cómo funciona la atención médica a distancia en SabioDoc y sus

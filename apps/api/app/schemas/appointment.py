@@ -56,6 +56,7 @@ class AppointmentCreateRequest(BaseModel):
     specialty_id: Optional[int] = None
     patient_note: Optional[str] = Field(default=None, max_length=2000)
     accepted_terms: bool = True
+    accepted_data_terms: bool = True
     accepted_overtime_terms: bool = True
     consent_text_version: str = Field(default="v1", min_length=1, max_length=50)
 

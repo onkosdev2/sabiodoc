@@ -1,0 +1,43 @@
+{
+  "siteUrl": "http://127.0.0.1:5173",
+  "viewportWidth": 1440,
+  "viewportHeight": 900,
+  "results": [
+    {
+      "route": "/doctor/",
+      "url": "http://127.0.0.1:5173/doctor/",
+      "violations": [],
+      "passes": 18
+    },
+    {
+      "route": "/doctor/appointments/",
+      "url": "http://127.0.0.1:5173/doctor/appointments/",
+      "violations": [],
+      "passes": 25
+    },
+    {
+      "route": "/doctor/profile/",
+      "url": "http://127.0.0.1:5173/doctor/profile/",
+      "violations": [],
+      "passes": 25
+    },
+    {
+      "route": "/doctor/availability/",
+      "url": "http://127.0.0.1:5173/doctor/availability/",
+      "violations": [],
+      "passes": 28
+    },
+    {
+      "route": "/doctor/video-sessions/",
+      "url": "http://127.0.0.1:5173/doctor/video-sessions/",
+      "violations": [],
+      "passes": 18
+    },
+    {
+      "route": "/doctor/wallet/",
+      "url": "http://127.0.0.1:5173/doctor/wallet/",
+      "violations": [],
+      "passes": 18
+    }
+  ]
+}

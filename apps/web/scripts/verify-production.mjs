@@ -176,6 +176,23 @@ async function checkHeaders() {
     enforcingCsp ? 'Content-Security-Policy presente' : 'Solo Report-Only o ausente',
   )
 
+  const requiredCsp = [
+    "default-src 'self'",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "frame-ancestors 'none'",
+    'upgrade-insecure-requests',
+  ]
+  const frameSrc = enforcingCsp.match(/frame-src\s+([^;]+)/)?.[1] ?? ''
+  const missingCsp = requiredCsp.filter((directive) => !enforcingCsp.includes(directive))
+  if (!frameSrc.includes('https://*.jitsi.net')) missingCsp.push('frame-src https://*.jitsi.net')
+  add(
+    'header:csp-directives',
+    'CSP incluye las directivas requeridas',
+    enforcingCsp && missingCsp.length === 0 ? 'PASS' : 'FAIL',
+    missingCsp.length ? `faltan: ${missingCsp.join(', ')}` : 'ok',
+  )
+
   const frame = headers.get('x-frame-options') || ''
   const csp = enforcingCsp || headers.get('content-security-policy-report-only') || ''
   add(

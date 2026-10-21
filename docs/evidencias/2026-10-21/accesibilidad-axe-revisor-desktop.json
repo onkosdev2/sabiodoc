@@ -1,0 +1,13 @@
+{
+  "siteUrl": "http://127.0.0.1:5173",
+  "viewportWidth": 1440,
+  "viewportHeight": 900,
+  "results": [
+    {
+      "route": "/reviewer/doctor-applications/",
+      "url": "http://127.0.0.1:5173/reviewer/doctor-applications/",
+      "violations": [],
+      "passes": 27
+    }
+  ]
+}

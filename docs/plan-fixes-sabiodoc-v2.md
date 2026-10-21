@@ -23,10 +23,15 @@
 - **5.2 Errores de formulario:** completado. Resumen de errores en Login, Registro y postulación médica; foco al primer campo inválido; `aria-describedby` en campos personalizados.
 - **5.4 Estados de carga:** completado. Búsqueda muestra “Buscando…” y skeleton durante debounce/carga, sin “Resultados (0)” prematuro. La guía IA ya tenía skeleton y “Pensando…”.
 - **5.1 Cabecera móvil:** completado. Menú compacto en móvil, logo ajustado, objetivos táctiles de 44 px y dropdown sin desbordar.
-- **5.3 Contraste y estados accesibles:** parcial. `aria-pressed`/`aria-selected` presentes en horarios, filtros y tabs; pares de color revisados. Pendiente auditoría automatizada WCAG 2.2 AA.
-- **5.5 Localización y zona horaria:** parcial. Zonas con Perú primero y etiquetas `Lima (UTC−5)`, países priorizados, teléfonos sin doble `+` y tests. Pendiente buscador de país y traducción masiva de ciudades.
+- **5.3 Contraste y estados accesibles:** completado. `aria-pressed`/`aria-selected` presentes; axe-core con 0 violaciones en rutas públicas (desktop/móvil) y autenticadas (paciente, médico, admin, revisor y soporte).
+- **6.1 Regresión automática:** preparada y ejecutada. `scripts/regression.sh` corre migraciones, tests, lint, TypeScript, build y opcionalmente producción/accesibilidad. Evidencia en `docs/evidencias/2026-10-21/regresion-6-1.md`.
+- **6.2 Regresión manual:** checklist en `docs/regresion-6-1-6-2.md`. Pendiente ejecutarla antes de producción; la videollamada queda bloqueada hasta Jitsi self-hosted.
+- **5.5 Localización y zona horaria:** completado. Zonas con Perú primero y etiquetas `Lima (UTC−5)`, países priorizados, buscador de país con datalist, teléfonos sin doble `+` y tests. Los nombres de ciudades siguen viniendo del dataset, pero el campo permite escribir o elegir con datalist.
 - **5.6 Validación de datos seed:** completado. Campos `is_seed`/`is_published`, filtros públicos, seed bloqueado en producción y script `validate_seed_data.py`. Pendiente ejecutarlo contra producción antes del lanzamiento real.
-- **4.2 CSP en bloqueo:** completado en repo. `_headers` usa `Content-Security-Policy` con `worker-src`, `manifest-src`, `frame-ancestors` y `upgrade-insecure-requests`. Pendiente aplicar en Render y revisar consola.
+- **4.2 CSP en bloqueo:** completado y verificado en producción. CSP incluye `worker-src`, `manifest-src`, `frame-ancestors` y `upgrade-insecure-requests`; `verify:prod` lo confirma.
+- **1.4 Consentimientos:** completado. Modelo `Consent`, migración 041, endpoints de consulta/revocación, registro al reservar, en Triage y en la postulación médica; consentimientos separados en la reserva y UI de revocación en Seguridad.
+- **1.5 Legal:** parcial. Documentos versión 1.0 sin “Borrador provisional”, enlaces desde registro/reserva/triaje/sala/pie y consentimiento registrado al registrarse. Pendiente aprobación formal por asesoría legal y revisión de menores/DPA.
+- **4.5 Secretos y CORS:** completado. Producción exige HTTPS, rechaza `*`/localhost, CORS con headers acotados y documento de rotación de secretos.
 
 ---
 

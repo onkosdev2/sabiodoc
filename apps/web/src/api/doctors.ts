@@ -153,6 +153,8 @@ export interface DoctorProfileUpsertPayload {
   government_id: string
   years_experience: number
   specialty_ids: number[]
+  accepted_terms?: boolean
+  consent_text_version?: string
 }
 
 export interface DoctorApplicationListResponse {

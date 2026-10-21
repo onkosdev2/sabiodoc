@@ -1,10 +1,11 @@
 import LegalPage, { LegalSection } from '../components/LegalPage'
+import { LEGAL_STATUS, LEGAL_UPDATED, LEGAL_VERSION } from '../utils/legal'
 
 const SECTIONS: LegalSection[] = [
   {
     heading: 'Quién trata tus datos',
     paragraphs: [
-      'SabioDoc (en adelante, "la plataforma") es el responsable del tratamiento de los datos personales que se recogen a través del sitio y la aplicación. Los datos de contacto oficiales del responsable y del Delegado de Protección de Datos se publicarán al aprobar esta política.',
+      'SabioDoc (en adelante, "la plataforma") es el responsable del tratamiento de los datos personales que se recogen a través del sitio y la aplicación. Puedes contactar al responsable y ejercer tus derechos a través del canal de Ayuda y soporte de la plataforma.',
     ],
   },
   {
@@ -31,7 +32,7 @@ const SECTIONS: LegalSection[] = [
     heading: 'Con quién compartimos (encargados)',
     bullets: [
       'Proveedor de IA para orientación y resúmenes (por ejemplo, DeepSeek y Groq como respaldo).',
-      'Jitsi (videollamada). Actualmente salas públicas de meet.jit.si; en el futuro, un servicio propio con autenticación.',
+      'Jitsi self-hosted para la videollamada (previsto; mientras tanto puede usarse un servicio Jitsi público).',
       'Cloudinary para alojar archivos e imágenes que adjuntas.',
       'Proveedor de correo (SMTP) para mensajes transaccionales.',
       'Proveedor de hosting e infraestructura (Render) y base de datos.',
@@ -84,7 +85,9 @@ export default function Privacy() {
     <LegalPage
       title="Política de privacidad"
       description="Cómo tratamos tus datos personales y de salud en SabioDoc."
-      updated="13 de octubre de 2026"
+      updated={LEGAL_UPDATED}
+      version={LEGAL_VERSION}
+      status={LEGAL_STATUS}
       intro={
         <p>
           SabioDoc trata datos personales y de salud. Esta política explica qué datos recogemos, para

@@ -127,6 +127,7 @@ export interface AppointmentCreatePayload {
   specialty_id?: number
   patient_note?: string
   accepted_terms: boolean
+  accepted_data_terms: boolean
   accepted_overtime_terms: boolean
   consent_text_version?: string
 }

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403
@@ -23,6 +23,7 @@ from app.schemas.appointment import (
 )
 from app.schemas.video_session import AppointmentVideoSessionResponse, VideoSessionFileResponse
 from app.services.appointment_service import appointment_service
+from app.services.consent_service import consent_service
 from app.services.audit_service import audit_service
 from app.services import session_file_service
 from app.services.notification_service import notification_service
@@ -93,6 +94,7 @@ def _notify_file_shared(
 @router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 def create_appointment(
     payload: AppointmentCreateRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -115,7 +117,9 @@ def create_appointment(
     if specialty_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debe indicar la especialidad o una consulta previa")
     if not payload.accepted_terms:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar el consentimiento y terminos de la videoconsulta")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar los terminos y la politica de privacidad")
+    if not payload.accepted_data_terms:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar el consentimiento de videoconsulta y datos clinicos")
     if not payload.accepted_overtime_terms:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -157,6 +161,14 @@ def create_appointment(
     )
     db.add(appointment)
     db.flush()
+
+    consent_service.record_appointment_consents(
+        db,
+        appointment=appointment,
+        version=payload.consent_text_version,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
 
     # Cobro de la cita con créditos: el monto queda retenido hasta que se
     # complete (se libera al médico) o se cancele (se reembolsa al paciente).

@@ -4,6 +4,7 @@ import {
   Bug,
   CheckCircle2,
   Copy,
+  Eye,
   Filter,
   Globe,
   MonitorSmartphone,
@@ -365,7 +366,7 @@ export default function AdminErrors() {
                   <th className="px-4 py-3">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300"
+                      className="h-6 w-6 rounded border-slate-300"
                       checked={allSelected}
                       onChange={toggleAll}
                       aria-label="Seleccionar todos los errores de esta página"
@@ -384,23 +385,11 @@ export default function AdminErrors() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((item) => (
-                  <tr
-                    key={item.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openDetail(item)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        openDetail(item)
-                      }
-                    }}
-                    className="cursor-pointer align-top hover:bg-slate-50"
-                  >
-                    <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                  <tr key={item.id} className="align-top hover:bg-slate-50">
+                    <td className="px-4 py-3">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300"
+                        className="h-6 w-6 rounded border-slate-300"
                         checked={selectedIds.has(item.id)}
                         onChange={() => toggleOne(item.id)}
                         aria-label={`Seleccionar error #${item.id}`}
@@ -427,23 +416,23 @@ export default function AdminErrors() {
                     <td className="max-w-[240px] px-4 py-3">
                       <p className="truncate font-mono text-xs text-slate-700">{shortPath(item)}</p>
                       {item.status_code != null && (
-                        <span className="text-xs text-slate-400">HTTP {item.status_code}</span>
+                        <span className="text-xs text-slate-600">HTTP {item.status_code}</span>
                       )}
                     </td>
                     <td className="max-w-[320px] px-4 py-3">
                       <p className="line-clamp-2 text-slate-800">{item.message}</p>
                       {item.error_type && (
-                        <p className="mt-0.5 font-mono text-xs text-slate-400">{item.error_type}</p>
+                        <p className="mt-0.5 font-mono text-xs text-slate-600">{item.error_type}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-600">
                       {item.user_email ? (
                         <>
                           <p className="max-w-[180px] truncate">{item.user_email}</p>
-                          {item.user_role && <p className="text-slate-400">{item.user_role}</p>}
+                          {item.user_role && <p className="text-slate-600">{item.user_role}</p>}
                         </>
                       ) : (
-                        <span className="text-slate-400">Anónimo</span>
+                        <span className="text-slate-600">Anónimo</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-600">
@@ -456,20 +445,27 @@ export default function AdminErrors() {
                     <td className="px-4 py-3 text-xs text-slate-600">
                       {item.occurrences > 1 ? `×${item.occurrences}` : '1'}
                     </td>
-                    <td
-                      className="px-4 py-3 text-right"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPendingDelete({ ids: [item.id], label: `el error #${item.id}` })
-                        }
-                        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                        aria-label={`Eliminar error #${item.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openDetail(item)}
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                          aria-label={`Ver detalle del error #${item.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingDelete({ ids: [item.id], label: `el error #${item.id}` })
+                          }
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Eliminar error #${item.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -503,7 +499,7 @@ export default function AdminErrors() {
         </Card>
       )}
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-slate-600">
         <Filter className="mr-1 inline h-3 w-3" aria-hidden="true" />
         Consejo: para investigar una videollamada, filtra «Solo videollamadas» y comparte el{' '}
         <strong>request ID</strong> o el <strong>ID de sesión</strong> con el equipo técnico. Haz clic

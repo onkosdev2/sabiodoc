@@ -1,0 +1,97 @@
+{
+  "siteUrl": "https://sabiodoc-1.onrender.com",
+  "viewportWidth": 1440,
+  "viewportHeight": 900,
+  "results": [
+    {
+      "route": "/",
+      "url": "https://sabiodoc-1.onrender.com/",
+      "violations": [],
+      "passes": 18
+    },
+    {
+      "route": "/como-funciona/",
+      "url": "https://sabiodoc-1.onrender.com/como-funciona/",
+      "violations": [],
+      "passes": 27
+    },
+    {
+      "route": "/specialties/",
+      "url": "https://sabiodoc-1.onrender.com/specialties/",
+      "violations": [],
+      "passes": 17
+    },
+    {
+      "route": "/specialties/cardiologia/",
+      "url": "https://sabiodoc-1.onrender.com/specialties/cardiologia/",
+      "violations": [],
+      "passes": 15
+    },
+    {
+      "route": "/doctors/2/",
+      "url": "https://sabiodoc-1.onrender.com/doctors/2/",
+      "violations": [],
+      "passes": 15
+    },
+    {
+      "route": "/triage/",
+      "url": "https://sabiodoc-1.onrender.com/triage/",
+      "violations": [],
+      "passes": 21
+    },
+    {
+      "route": "/guide/",
+      "url": "https://sabiodoc-1.onrender.com/guide/",
+      "violations": [],
+      "passes": 15
+    },
+    {
+      "route": "/emergency/",
+      "url": "https://sabiodoc-1.onrender.com/emergency/",
+      "violations": [],
+      "passes": 25
+    },
+    {
+      "route": "/privacidad/",
+      "url": "https://sabiodoc-1.onrender.com/privacidad/",
+      "violations": [],
+      "passes": 20
+    },
+    {
+      "route": "/terminos/",
+      "url": "https://sabiodoc-1.onrender.com/terminos/",
+      "violations": [],
+      "passes": 20
+    },
+    {
+      "route": "/telemedicina/",
+      "url": "https://sabiodoc-1.onrender.com/telemedicina/",
+      "violations": [],
+      "passes": 20
+    },
+    {
+      "route": "/login/",
+      "url": "https://sabiodoc-1.onrender.com/login/",
+      "violations": [],
+      "passes": 22
+    },
+    {
+      "route": "/register/",
+      "url": "https://sabiodoc-1.onrender.com/register/",
+      "violations": [],
+      "passes": 22
+    },
+    {
+      "route": "/forgot-password/",
+      "url": "https://sabiodoc-1.onrender.com/forgot-password/",
+      "violations": [],
+      "passes": 22
+    },
+    {
+      "route": "/doctor/apply/",
+      "url": "https://sabiodoc-1.onrender.com/doctor/apply/",
+      "violations": [],
+      "passes": 15
+    }
+  ]
+}

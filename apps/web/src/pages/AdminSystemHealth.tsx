@@ -75,7 +75,7 @@ export default function AdminSystemHealth() {
             {overall.label}
           </Badge>
           {lastUpdated && (
-            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <span className="text-xs uppercase tracking-[0.18em] text-slate-600">
               Última consulta: {lastUpdated.toLocaleTimeString('es-ES')}
             </span>
           )}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Send, Stethoscope } from 'lucide-react'
 
 import { submitTriage, TriageResult } from '../api/triage'
@@ -20,6 +21,7 @@ export default function Triage() {
   const [sex, setSex] = useState('')
   const [profileDefaults, setProfileDefaults] = useState<{ age: string; sex: string }>({ age: '', sex: '' })
   const [loading, setLoading] = useState(false)
+  const [acceptedClinical, setAcceptedClinical] = useState(false)
   const [result, setResult] = useState<TriageResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [symptomsError, setSymptomsError] = useState<string | undefined>()
@@ -57,6 +59,11 @@ export default function Triage() {
       focusFirstInvalid(formRef.current)
       return
     }
+    if (!acceptedClinical) {
+      setError('Debes aceptar el tratamiento de tus datos clínicos para continuar.')
+      return
+    }
+
     setSymptomsError(undefined)
     setLoading(true)
     setError(null)
@@ -67,6 +74,8 @@ export default function Triage() {
         symptoms_text: symptomsText.trim(),
         age: age ? parseInt(age, 10) : undefined,
         sex: sex || undefined,
+        accepted_clinical_data: acceptedClinical,
+        consent_text_version: 'v1',
       })
       setResult(response.result)
     } catch (err) {
@@ -127,6 +136,30 @@ export default function Triage() {
           </div>
 
           {error && <Alert tone="danger">{error}</Alert>}
+
+          <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-xs text-sky-900">
+            <p>
+              Al analizar, tus síntomas se tratan para orientarte hacia una especialidad. No sustituye una
+              consulta médica. Revisa la{' '}
+              <Link to="/privacidad" className="font-medium underline">
+                política de privacidad
+              </Link>{' '}
+              y la{' '}
+              <Link to="/telemedicina" className="font-medium underline">
+                política de telemedicina
+              </Link>
+              .
+            </p>
+            <label className="mt-2 flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={acceptedClinical}
+                onChange={(event) => setAcceptedClinical(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>Acepto el tratamiento de mis datos clínicos para esta orientación.</span>
+            </label>
+          </div>
 
           <Button
             type="submit"

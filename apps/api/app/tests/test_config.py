@@ -38,6 +38,26 @@ def test_produccion_rechaza_un_secreto_corto():
         )
 
 
+def test_produccion_rechaza_origen_sin_https():
+    with pytest.raises(ValidationError):
+        _settings(
+            ENVIRONMENT="production",
+            JWT_SECRET="x" * 40,
+            FRONTEND_ORIGIN="http://app.example",
+        )
+
+
+def test_produccion_rechaza_wildcard_y_localhost():
+    with pytest.raises(ValidationError):
+        _settings(ENVIRONMENT="production", JWT_SECRET="x" * 40, FRONTEND_ORIGIN="*")
+    with pytest.raises(ValidationError):
+        _settings(
+            ENVIRONMENT="production",
+            JWT_SECRET="x" * 40,
+            FRONTEND_ORIGIN="https://localhost:5173",
+        )
+
+
 def test_produccion_usa_solo_los_origenes_configurados():
     settings = _settings(
         ENVIRONMENT="production",

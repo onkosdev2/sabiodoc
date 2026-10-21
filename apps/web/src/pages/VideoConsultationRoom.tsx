@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
   AlertTriangle,
@@ -885,6 +885,17 @@ export default function VideoConsultationRoom() {
       <blockquote className="mt-2 rounded-lg bg-white p-3 text-sm text-slate-800">
         {statusData?.intro_script || (introLoading ? 'Generando introducción…' : 'Introducción no disponible.')}
       </blockquote>
+      <p className="mt-2 text-xs text-primary-700">
+        Al iniciar la consulta aplican la{' '}
+        <Link to="/telemedicina" className="font-medium underline">
+          política de telemedicina
+        </Link>{' '}
+        y la{' '}
+        <Link to="/privacidad" className="font-medium underline">
+          política de privacidad
+        </Link>
+        .
+      </p>
     </div>
   )
 

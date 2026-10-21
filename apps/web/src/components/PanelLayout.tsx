@@ -68,7 +68,7 @@ export default function PanelLayout({
               <BrandIcon className={`h-6 w-6 ${accentClasses.icon}`} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">SabioDoc</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">SabioDoc</p>
               <p className="truncate text-base font-semibold leading-tight">{panelName}</p>
             </div>
           </Link>

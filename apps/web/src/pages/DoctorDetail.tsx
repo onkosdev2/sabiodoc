@@ -63,6 +63,7 @@ export default function DoctorDetailPage() {
   const [selectedSlot, setSelectedSlot] = useState('')
   const [patientNote, setPatientNote] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [acceptedData, setAcceptedData] = useState(false)
   const [acceptedOvertime, setAcceptedOvertime] = useState(false)
   const [durationMinutes, setDurationMinutes] = useState('30')
   const [booking, setBooking] = useState(false)
@@ -258,6 +259,7 @@ export default function DoctorDetailPage() {
         duration_minutes: duration,
         patient_note: patientNote.trim() || undefined,
         accepted_terms: acceptedTerms,
+        accepted_data_terms: acceptedData,
         accepted_overtime_terms: acceptedOvertime,
         consent_text_version: 'v1',
       })
@@ -618,7 +620,32 @@ export default function DoctorDetailPage() {
                     className="mt-0.5"
                   />
                   <span>
-                    Acepto el consentimiento de videoconsulta y el tratamiento de mis datos clínicos.
+                    Acepto los{' '}
+                    <Link to="/terminos" className="font-medium underline">
+                      términos
+                    </Link>{' '}
+                    y la{' '}
+                    <Link to="/privacidad" className="font-medium underline">
+                      política de privacidad
+                    </Link>
+                    .
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50 p-3 text-xs text-sky-900">
+                  <input
+                    type="checkbox"
+                    checked={acceptedData}
+                    onChange={(event) => setAcceptedData(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Acepto el consentimiento de videoconsulta y el tratamiento de mis datos clínicos,
+                    descrito en la{' '}
+                    <Link to="/telemedicina" className="font-medium underline">
+                      política de telemedicina
+                    </Link>
+                    .
                   </span>
                 </label>
 
@@ -650,6 +677,7 @@ export default function DoctorDetailPage() {
                     !selectedSlot ||
                     booking ||
                     !acceptedTerms ||
+                    !acceptedData ||
                     !acceptedOvertime ||
                     !hasEnoughCredits
                   }

@@ -195,6 +195,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "JWT_SECRET debe ser un valor único de al menos 32 caracteres en producción"
             )
+
+        origins = self.cors_origins
+        if not origins:
+            raise ValueError("FRONTEND_ORIGIN debe contener al menos un origen en producción")
+        for origin in origins:
+            if origin == "*":
+                raise ValueError("FRONTEND_ORIGIN no puede ser '*' en producción")
+            if not origin.startswith("https://"):
+                raise ValueError(f"FRONTEND_ORIGIN debe usar HTTPS en producción: {origin}")
+            if "localhost" in origin or "127.0.0.1" in origin:
+                raise ValueError(f"FRONTEND_ORIGIN no puede apuntar a localhost en producción: {origin}")
         if not [origin for origin in self.FRONTEND_ORIGIN.split(",") if origin.strip()]:
             raise ValueError("FRONTEND_ORIGIN debe estar configurado en producción")
         return self

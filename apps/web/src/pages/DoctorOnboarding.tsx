@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ClipboardList, Loader2, ChevronRight, ChevronLeft, Check, Camera, Trash2 } from 'lucide-react'
-import { Country, getCitiesOfCountry, localizedCountryName, sortCountries } from '../utils/locations'
+import { Country, getCitiesOfCountry, sortCountries } from '../utils/locations'
 
 import BackButton from '../components/BackButton'
+import CountrySelect from '../components/CountrySelect'
 import CheckEmailNotice from '../components/CheckEmailNotice'
 import Alert from '../components/ui/Alert'
 import Button from '../components/ui/Button'
@@ -131,6 +132,7 @@ export default function DoctorOnboarding() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   
   const [step, setStep] = useState(1)
   const totalSteps = 3
@@ -260,8 +262,7 @@ export default function DoctorOnboarding() {
   }, [authLoading, isDoctorEditing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handlers para cuando cambia el país
-  const handleCountryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const iso = e.target.value
+  const handleCountryChange = async (iso: string) => {
     setCountryIso(iso)
     const cities = await getCitiesOfCountry(iso)
     setAvailableCities(cities)
@@ -276,8 +277,7 @@ export default function DoctorOnboarding() {
     setCustomSpecialistRegistryType('')
   }
 
-  const handleLicenseCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const iso = e.target.value
+  const handleLicenseCountryChange = (iso: string) => {
     setLicenseCountryIso(iso)
     const docs = getCountryDocs(iso)
     setLicenseType(docs.licenseTypes[0])
@@ -315,6 +315,7 @@ export default function DoctorOnboarding() {
       if (!isDoctorEditing) {
         if (password.length < 8) next.password = 'Mínimo 8 caracteres.'
         else if (password !== confirmPassword) next.confirmPassword = 'Las contraseñas no coinciden.'
+        if (!acceptedTerms) next.terms = 'Debes aceptar los términos y la política de privacidad.'
         // La existencia del email se valida al enviar: el backend responde con un
         // error claro si ya está registrado como médico. No exponemos un endpoint
         // público que revele si un correo existe (enumeración de usuarios).
@@ -427,6 +428,8 @@ export default function DoctorOnboarding() {
         government_id: finalGovernmentId,
         years_experience: parsedYearsExperience as number,
         specialty_ids: selectedSpecialties,
+        accepted_terms: isDoctorEditing ? true : acceptedTerms,
+        consent_text_version: 'v1',
       }
 
       if (isDoctorEditing) {
@@ -641,11 +644,13 @@ export default function DoctorOnboarding() {
                       </>
                     )}
 
-                    <Select label="País de residencia" value={countryIso} onChange={handleCountryChange} required>
-                      {allCountries.map((c) => (
-                        <option key={c.isoCode} value={c.isoCode}>{localizedCountryName(c.isoCode, c.name)}</option>
-                      ))}
-                    </Select>
+                    <CountrySelect
+                      label="País de residencia"
+                      value={countryIso}
+                      onChange={handleCountryChange}
+                      countries={allCountries}
+                      required
+                    />
 
                     <Input
                       label="Ciudad"
@@ -685,6 +690,29 @@ export default function DoctorOnboarding() {
                       </Select>
                     </div>
                   </div>
+
+                  {!isDoctorEditing && (
+                    <label className="mt-6 flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50 p-3 text-xs text-sky-900">
+                      <input
+                        type="checkbox"
+                        checked={acceptedTerms}
+                        onChange={(event) => setAcceptedTerms(event.target.checked)}
+                        className="mt-0.5"
+                        aria-invalid={fieldErrors.terms ? true : undefined}
+                      />
+                      <span>
+                        Acepto los{' '}
+                        <Link to="/terminos" className="font-medium underline">
+                          términos
+                        </Link>{' '}
+                        y la{' '}
+                        <Link to="/privacidad" className="font-medium underline">
+                          política de privacidad
+                        </Link>
+                        , incluido el tratamiento de mis datos profesionales.
+                      </span>
+                    </label>
+                  )}
                 </div>
               )}
 
@@ -863,15 +891,12 @@ export default function DoctorOnboarding() {
                       </div>
                     </Field>
 
-                    <Select
+                    <CountrySelect
                       label="País de expedición (licencia)"
                       value={licenseCountryIso}
                       onChange={handleLicenseCountryChange}
-                    >
-                      {allCountries.map((c) => (
-                        <option key={c.isoCode} value={c.isoCode}>{localizedCountryName(c.isoCode, c.name)}</option>
-                      ))}
-                    </Select>
+                      countries={allCountries}
+                    />
 
                     <Field label="Registro médico" required htmlFor="doctor-license-number">
                       <div className="flex flex-col gap-2 xl:flex-row">

@@ -100,7 +100,7 @@ export default function UserMenu({ theme, groups, showPortalGeneral = false, nam
         aria-expanded={isOpen}
         aria-haspopup="true"
         aria-controls={menuId}
-        aria-label="Menú de usuario"
+        aria-label="Perfil, menú de usuario"
       >
         Perfil
         <UserRound className="h-4 w-4" />

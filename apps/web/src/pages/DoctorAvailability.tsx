@@ -304,7 +304,7 @@ export default function DoctorAvailability() {
             <p className="mt-1 text-xs text-slate-500">Se configura en tu perfil médico.</p>
           </div>
           <div className="rounded-2xl bg-slate-950 px-5 py-3 text-right text-slate-50">
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Hora local</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Hora local</p>
             <p className="mt-1 text-xl font-bold tabular-nums">{timezoneClock ?? 'Zona horaria inválida'}</p>
           </div>
         </div>

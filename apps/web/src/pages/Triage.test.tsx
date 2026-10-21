@@ -72,6 +72,7 @@ describe('Triage', () => {
     await waitFor(() => expect(screen.getByLabelText(/Edad/)).toHaveValue(34))
 
     await userEvent.type(screen.getByLabelText(/síntomas/i), 'Me duele el pecho al respirar')
+    await userEvent.click(screen.getByLabelText(/datos clínicos/i))
     await userEvent.click(screen.getByRole('button', { name: 'Analizar síntomas' }))
 
     await waitFor(() =>
@@ -79,6 +80,8 @@ describe('Triage', () => {
         symptoms_text: 'Me duele el pecho al respirar',
         age: 34,
         sex: 'female',
+        accepted_clinical_data: true,
+        consent_text_version: 'v1',
       }),
     )
     expect(await screen.findByRole('button', { name: 'Hacer otra consulta' })).toBeInTheDocument()

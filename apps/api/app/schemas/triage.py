@@ -7,6 +7,8 @@ class TriageRequest(BaseModel):
     symptoms_text: str = Field(..., min_length=10, description="Descripción de los síntomas")
     age: Optional[int] = Field(None, ge=0, le=150)
     sex: Optional[str] = Field(None, pattern="^(male|female|other)$")
+    accepted_clinical_data: bool = True
+    consent_text_version: str = Field(default="v1", min_length=1, max_length=50)
 
 
 class AlternativeSpecialty(BaseModel):

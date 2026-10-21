@@ -13,6 +13,8 @@ from app.models.doctor_specialty import DoctorSpecialty
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User, UserRole, sorted_roles
+from app.models.consent import ConsentType
+from app.services.consent_service import consent_service
 from app.schemas.user import (
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -136,6 +138,9 @@ def build_user_response(user: User) -> UserResponse:
     dependencies=[Depends(register_rate_limit)],
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    if not user_data.accepted_terms:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar los términos y la política de privacidad")
+
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -151,6 +156,17 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     )
     user.set_roles({UserRole.patient})
     db.add(user)
+    db.flush()
+
+    for consent_type in (ConsentType.terms, ConsentType.privacy):
+        consent_service.record(
+            db,
+            user_id=user.id,
+            consent_type=consent_type,
+            version=user_data.consent_text_version,
+            metadata={"source": "registration"},
+        )
+
     db.commit()
     db.refresh(user)
     

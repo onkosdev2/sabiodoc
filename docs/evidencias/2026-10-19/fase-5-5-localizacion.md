@@ -21,10 +21,17 @@
   - `getTimeZoneOptions` prioriza Perú y no duplica;
   - `sortCountries` prioriza Perú y la operación.
 
+## Buscador de país
+
+- Nuevo `CountrySelect` con input + datalist.
+- Permite buscar por nombre localizado o código ISO (`Perú`, `PE`, `Colombia`, `CO`).
+- Mantiene el valor interno como ISO.
+- Usado en el perfil del paciente y en la postulación médica.
+- Tests para búsqueda por nombre y por código.
+
 ## Pendiente
 
-- El selector de país sigue siendo un `<select>` nativo: Perú aparece primero, pero no tiene buscador propio.
-- Los nombres de ciudades vienen del dataset de `country-state-city`; no se traducen de forma masiva. Para Perú se usan los nombres del dataset y el campo permite escribir o elegir con datalist.
+- Los nombres de ciudades vienen del dataset de `country-state-city`; no se traducen de forma masiva. El campo permite escribir o elegir con datalist.
 
 ## Verificación
 

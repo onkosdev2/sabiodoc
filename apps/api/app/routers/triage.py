@@ -5,6 +5,8 @@ from app.core.deps import get_db, get_current_user_optional
 from app.models.user import User
 from app.schemas.triage import TriageRequest, TriageResponse, TriageResult, ConsultationHistoryItem
 from app.services.triage_service import triage_service
+from app.services.consent_service import consent_service
+from app.models.consent import ConsentType
 from app.core.logging import get_logger
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -18,7 +20,20 @@ def process_triage(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     logger.info(f"Triage request received, symptoms length: {len(request.symptoms_text)}")
-    
+
+    if not request.accepted_clinical_data:
+        raise HTTPException(status_code=400, detail="Debes aceptar el tratamiento de tus datos clínicos para continuar")
+
+    if current_user:
+        for consent_type in (ConsentType.privacy, ConsentType.clinical_data):
+            consent_service.record(
+                db,
+                user_id=current_user.id,
+                consent_type=consent_type,
+                version=request.consent_text_version,
+                metadata={"source": "triage"},
+            )
+
     result = triage_service.process_triage(
         db=db,
         symptoms_text=request.symptoms_text,

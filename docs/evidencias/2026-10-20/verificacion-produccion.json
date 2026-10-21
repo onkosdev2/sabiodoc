@@ -307,7 +307,7 @@
       "id": "header:content-security-policy",
       "label": "Cabecera content-security-policy presente",
       "status": "PASS",
-      "detail": "default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "detail": "default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si https://*.jitsi.net; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
       "critical": false
     },
     {
@@ -327,8 +327,15 @@
     {
       "id": "header:csp-enforcing",
       "label": "CSP está en modo bloqueo (no solo Report-Only)",
-      "status": "FAIL",
-      "detail": "Solo Report-Only o ausente",
+      "status": "PASS",
+      "detail": "Content-Security-Policy presente",
+      "critical": false
+    },
+    {
+      "id": "header:csp-directives",
+      "label": "CSP incluye las directivas requeridas",
+      "status": "PASS",
+      "detail": "ok",
       "critical": false
     },
     {

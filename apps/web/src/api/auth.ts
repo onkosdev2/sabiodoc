@@ -32,8 +32,18 @@ export interface RegisterResponse {
   user?: User | null
 }
 
-export const register = async (email: string, password: string): Promise<RegisterResponse> => {
-  const response = await client.post<RegisterResponse>('/auth/register', { email, password })
+export const register = async (
+  email: string,
+  password: string,
+  acceptedTerms = true,
+  consentTextVersion = 'v1',
+): Promise<RegisterResponse> => {
+  const response = await client.post<RegisterResponse>('/auth/register', {
+    email,
+    password,
+    accepted_terms: acceptedTerms,
+    consent_text_version: consentTextVersion,
+  })
   return response.data
 }
 

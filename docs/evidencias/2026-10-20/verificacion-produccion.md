@@ -2,8 +2,8 @@
 
 - **Sitio:** https://sabiodoc-1.onrender.com
 - **API:** https://sabiodoc.onrender.com
-- **Fecha:** 2026-10-20T15:10:30.497Z
-- **Resultado:** 66/67 comprobaciones OK
+- **Fecha:** 2026-10-20T16:57:51.615Z
+- **Resultado:** 68/68 comprobaciones OK
 - **Fallos críticos:** 0
 - **Advertencias:** 1
 
@@ -52,10 +52,11 @@
 | `404:/ruta-inexistente-auditoria` | /ruta-inexistente-auditoria devuelve 404 o noindex real | ✅ PASS | HTTP 404; robots=noindex, nofollow |
 | `404:/specialties/slug-que-no-existe` | /specialties/slug-que-no-existe devuelve 404 o noindex real | ✅ PASS | HTTP 404; robots=noindex, nofollow |
 | `404:/doctors/999999` | /doctors/999999 devuelve 404 o noindex real | ✅ PASS | HTTP 404; robots=noindex, nofollow |
-| `header:content-security-policy` | Cabecera content-security-policy presente | ✅ PASS | default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none' |
+| `header:content-security-policy` | Cabecera content-security-policy presente | ✅ PASS | default-src 'self'; script-src 'self' 'unsafe-inline' https://meet.jit.si https://*.jitsi.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://*.cloudinary.com; media-src 'self' blob: https://res.cloudinary.com https://*.cloudinary.com; connect-src 'self' https: wss:; frame-src https://meet.jit.si https://*.jitsi.net; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests |
 | `header:referrer-policy` | Cabecera referrer-policy presente | ✅ PASS | strict-origin-when-cross-origin |
 | `header:permissions-policy` | Cabecera permissions-policy presente | ✅ PASS | camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(self), display-capture=(self "https://meet.jit.si") |
-| `header:csp-enforcing` | CSP está en modo bloqueo (no solo Report-Only) | ❌ FAIL | Solo Report-Only o ausente |
+| `header:csp-enforcing` | CSP está en modo bloqueo (no solo Report-Only) | ✅ PASS | Content-Security-Policy presente |
+| `header:csp-directives` | CSP incluye las directivas requeridas | ✅ PASS | ok |
 | `header:framing` | Protección de framing presente | ✅ PASS | DENY |
 | `cache:html` | HTML no se cachea como inmutable | ✅ PASS | public, max-age=0, s-maxage=300 |
 | `cache:asset` | Assets con hash usan caché inmutable | ✅ PASS | public, max-age=31536000, immutable |

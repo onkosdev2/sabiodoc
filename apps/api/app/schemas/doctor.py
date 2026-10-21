@@ -31,6 +31,8 @@ class DoctorProfileUpsertRequest(BaseModel):
     government_id: str = Field(..., min_length=4, max_length=120)
     years_experience: int = Field(..., ge=0, le=80)
     specialty_ids: list[int] = Field(..., min_length=1)
+    accepted_terms: bool = True
+    consent_text_version: str = Field(default="v1", min_length=1, max_length=50)
 
 
 class DoctorPresenceResponse(BaseModel):

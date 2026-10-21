@@ -1,0 +1,31 @@
+{
+  "siteUrl": "http://127.0.0.1:5173",
+  "viewportWidth": 1440,
+  "viewportHeight": 900,
+  "results": [
+    {
+      "route": "/me/profile/",
+      "url": "http://127.0.0.1:5173/me/profile/",
+      "violations": [],
+      "passes": 24
+    },
+    {
+      "route": "/me/appointments/",
+      "url": "http://127.0.0.1:5173/me/appointments/",
+      "violations": [],
+      "passes": 22
+    },
+    {
+      "route": "/me/wallet/",
+      "url": "http://127.0.0.1:5173/me/wallet/",
+      "violations": [],
+      "passes": 26
+    },
+    {
+      "route": "/notifications/",
+      "url": "http://127.0.0.1:5173/notifications/",
+      "violations": [],
+      "passes": 23
+    }
+  ]
+}

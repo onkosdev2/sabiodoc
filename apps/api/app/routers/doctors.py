@@ -61,6 +61,8 @@ from app.services.doctor_onboarding_service import doctor_onboarding_service
 from app.services import doctor_photo_service
 from app.services.notification_service import notification_service
 from app.services.prerender_service import prerender_service
+from app.services.consent_service import consent_service
+from app.models.consent import ConsentType
 from app.services.patient_profile_service import get_patient_display_name, serialize_patient_profile
 from app.services.patient_profile_change_service import (
     create_change_request,
@@ -273,6 +275,9 @@ def upsert_my_doctor_profile(
     if not doctor_profile and not current_user.is_doctor:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes un perfil médico")
 
+    if not payload.accepted_terms:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar los términos y la política de privacidad")
+
     doctor_onboarding_service.validate_price_or_raise(payload.price_per_min_cents)
 
     if not doctor_profile:
@@ -319,6 +324,15 @@ def upsert_my_doctor_profile(
     doctor_onboarding_service.sync_specialties(db, doctor_profile, payload.specialty_ids)
     presence = doctor_onboarding_service.ensure_presence(db, doctor_profile)
     presence.last_seen_at = datetime.now(timezone.utc)
+
+    for consent_type in (ConsentType.terms, ConsentType.privacy):
+        consent_service.record(
+            db,
+            user_id=current_user.id,
+            consent_type=consent_type,
+            version=payload.consent_text_version,
+            metadata={"source": "doctor_onboarding"},
+        )
 
     db.commit()
     db.refresh(doctor_profile)

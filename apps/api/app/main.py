@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.services.error_log_service import error_log_service
 from app.services.llm_client import llm_client
-from app.routers import admin, appointments, auth, client_errors, consultations, doctors, favorites, files, finance, guide, notifications, patients, specialties, support, triage, video_sessions, webhooks, emergency, wallet, reviews
+from app.routers import admin, appointments, auth, client_errors, consents, consultations, doctors, favorites, files, finance, guide, notifications, patients, specialties, support, triage, video_sessions, webhooks, emergency, wallet, reviews
 
 setup_logging()
 logger = get_logger(__name__)
@@ -31,8 +31,9 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
+    max_age=600,
 )
 
 # Rutas cuyo 4xx sí nos interesa registrar (fallos de videoconsulta).
@@ -126,6 +127,7 @@ app.include_router(finance.router)
 app.include_router(finance.admin_router)
 app.include_router(webhooks.router)
 app.include_router(support.router)
+app.include_router(consents.router)
 
 
 @app.exception_handler(HTTPException)

@@ -79,7 +79,7 @@ export default function SupportTicketThread({ ticket, onReplied, replyHint }: Su
                   <span className="text-xs font-semibold text-slate-700">
                     {isSupport ? message.author_name || 'Soporte SabioDoc' : 'Tú'}
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-slate-600">
                     {formatDateTime(message.created_at)}
                   </span>
                 </div>

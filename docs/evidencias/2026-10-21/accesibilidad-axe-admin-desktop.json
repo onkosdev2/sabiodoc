@@ -1,0 +1,37 @@
+{
+  "siteUrl": "http://127.0.0.1:5173",
+  "viewportWidth": 1440,
+  "viewportHeight": 900,
+  "results": [
+    {
+      "route": "/admin/overview/",
+      "url": "http://127.0.0.1:5173/admin/overview/",
+      "violations": [],
+      "passes": 18
+    },
+    {
+      "route": "/admin/users/",
+      "url": "http://127.0.0.1:5173/admin/users/",
+      "violations": [],
+      "passes": 23
+    },
+    {
+      "route": "/admin/finance/",
+      "url": "http://127.0.0.1:5173/admin/finance/",
+      "violations": [],
+      "passes": 23
+    },
+    {
+      "route": "/admin/system/",
+      "url": "http://127.0.0.1:5173/admin/system/",
+      "violations": [],
+      "passes": 22
+    },
+    {
+      "route": "/admin/errors/",
+      "url": "http://127.0.0.1:5173/admin/errors/",
+      "violations": [],
+      "passes": 25
+    }
+  ]
+}

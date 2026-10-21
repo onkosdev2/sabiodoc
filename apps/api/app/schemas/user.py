@@ -13,6 +13,8 @@ def _check_password(value: str) -> str:
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    accepted_terms: bool = True
+    consent_text_version: str = Field(default="v1", min_length=1, max_length=50)
 
     @field_validator("password")
     @classmethod

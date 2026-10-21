@@ -13,6 +13,7 @@ import {
   type PatientSex,
 } from '../api/patients'
 import BackButton from '../components/BackButton'
+import CountrySelect from '../components/CountrySelect'
 import PatientProfileChangeReview from '../components/PatientProfileChangeReview'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -306,14 +307,12 @@ export default function PatientProfilePage() {
               ))}
             </Select>
 
-            <Select label="País" value={countryIso} onChange={(e) => handleCountryChange(e.target.value)}>
-              <option value="">Selecciona un país</option>
-              {allCountries.map((country) => (
-                <option key={country.isoCode} value={country.isoCode}>
-                  {localizedCountryName(country.isoCode, country.name)}
-                </option>
-              ))}
-            </Select>
+            <CountrySelect
+              label="País"
+              value={countryIso}
+              onChange={handleCountryChange}
+              countries={allCountries}
+            />
 
             <Input
               label="Ciudad"

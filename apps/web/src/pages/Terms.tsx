@@ -1,4 +1,5 @@
 import LegalPage, { LegalSection } from '../components/LegalPage'
+import { LEGAL_STATUS, LEGAL_UPDATED, LEGAL_VERSION } from '../utils/legal'
 
 const SECTIONS: LegalSection[] = [
   {
@@ -61,7 +62,9 @@ export default function Terms() {
     <LegalPage
       title="Términos y condiciones"
       description="Reglas de uso de SabioDoc."
-      updated="13 de octubre de 2026"
+      updated={LEGAL_UPDATED}
+      version={LEGAL_VERSION}
+      status={LEGAL_STATUS}
       intro={
         <p>
           Al crear una cuenta o usar SabioDoc aceptas estos términos. Léelos con atención.

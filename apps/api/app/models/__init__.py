@@ -1,6 +1,7 @@
 from app.models.appointment import Appointment
 from app.models.audit_log import AuditLog
 from app.models.chat_message import ChatMessage
+from app.models.consent import Consent, ConsentType
 from app.models.consultation import Consultation
 from app.models.consultation_review import ConsultationReview
 from app.models.doctor_availability_slot import DoctorAvailabilitySlot
