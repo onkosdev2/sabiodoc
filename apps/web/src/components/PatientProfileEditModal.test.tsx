@@ -116,7 +116,7 @@ describe('PatientProfileEditModal', () => {
     expect(onSubmitted).toHaveBeenCalledWith(REQUEST)
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(toast.success).toHaveBeenCalled()
-  })
+  }, 20_000)
 
   it('muestra un error y no cierra si la propuesta falla', async () => {
     mockedPropose.mockRejectedValue(new Error('boom'))

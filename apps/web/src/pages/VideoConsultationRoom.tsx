@@ -45,6 +45,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { DoctorPatientTimeline, getDoctorPatientTimeline } from '../api/doctors'
 import { formatMoney } from '../utils/format'
+import { classifyMediaError, getUserMediaWithTimeout, type MediaStatus } from '../utils/media'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Button from '../components/ui/Button'
 import { Textarea } from '../components/ui/Field'
@@ -121,7 +122,11 @@ export default function VideoConsultationRoom() {
   const navigate = useNavigate()
   const { isAuthenticated, user } = useAuth()
   const toast = useToast()
-  const [mediaStatus, setMediaStatus] = useState<'unknown' | 'checking' | 'ok' | 'denied' | 'unsupported'>('unknown')
+  const [mediaStatus, setMediaStatus] = useState<MediaStatus>('unknown')
+  const [mediaError, setMediaError] = useState<string | null>(null)
+  const [mediaDevices, setMediaDevices] = useState<MediaDeviceInfo[]>([])
+  const [selectedVideoId, setSelectedVideoId] = useState('')
+  const [selectedAudioId, setSelectedAudioId] = useState('')
   const [session, setSession] = useState<PreparedVideoSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
@@ -470,25 +475,54 @@ export default function VideoConsultationRoom() {
   const handleCheckDevices = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setMediaStatus('unsupported')
+      setMediaError('Tu navegador no permite comprobar los dispositivos desde aquí.')
       toast.error('Tu navegador no permite comprobar los dispositivos desde aquí.')
       return
     }
     setMediaStatus('checking')
+    setMediaError(null)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      const videoConstraint = selectedVideoId
+        ? { deviceId: { exact: selectedVideoId } }
+        : true
+      const audioConstraint = selectedAudioId
+        ? { deviceId: { exact: selectedAudioId } }
+        : true
+      const stream = await getUserMediaWithTimeout({
+        video: videoConstraint,
+        audio: audioConstraint,
+      })
       stream.getTracks().forEach((track) => track.stop())
       setMediaStatus('ok')
+      setMediaError(null)
       toast.success('Cámara y micrófono listos.')
-    } catch (mediaError) {
-      setMediaStatus('denied')
-      toast.error('No pudimos acceder a tu cámara o micrófono. Revisa los permisos del navegador.')
+
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        setMediaDevices(devices)
+        setSelectedVideoId((current) => current || devices.find((device) => device.kind === 'videoinput')?.deviceId || '')
+        setSelectedAudioId((current) => current || devices.find((device) => device.kind === 'audioinput')?.deviceId || '')
+      } catch {
+        /* la lista de dispositivos es opcional */
+      }
+    } catch (error) {
+      const classified = classifyMediaError(error)
+      setMediaStatus(classified.status)
+      setMediaError(classified.message)
+      toast.error(classified.message)
       reportClientError({
-        message: 'Permiso de cámara o micrófono denegado o no disponible',
-        error: mediaError,
+        message: classified.message,
+        error,
         errorType: 'MediaDevicesError',
         videoSessionId: session?.video_session_id ?? null,
         appointmentId: session?.appointment_id ?? null,
-        context: { room_url: session?.room_url, provider: session?.provider },
+        context: {
+          room_url: session?.room_url,
+          provider: session?.provider,
+          media_status: classified.status,
+          selected_video_id: selectedVideoId || null,
+          selected_audio_id: selectedAudioId || null,
+        },
       })
     }
   }
@@ -836,15 +870,52 @@ export default function VideoConsultationRoom() {
       <p className="flex items-center gap-2 font-medium text-slate-800">
         <Camera className="h-4 w-4 text-primary-600" aria-hidden="true" /> Cámara y micrófono
       </p>
-      <p className="mt-2 text-slate-600">
+      <p className="mt-2 text-slate-600" role="status" aria-live="polite">
         {mediaStatus === 'ok'
           ? 'Todo listo: tu cámara y micrófono funcionan.'
-          : mediaStatus === 'denied'
-            ? 'No pudimos acceder. Revisa los permisos del navegador y vuelve a comprobar.'
-            : mediaStatus === 'unsupported'
-              ? 'Tu navegador no permite comprobar los dispositivos; la sala los pedirá al entrar.'
-              : 'Comprueba tus dispositivos antes de entrar a la consulta.'}
+          : mediaStatus === 'checking'
+            ? 'Comprobando permisos y dispositivos…'
+            : mediaError ||
+              'Comprueba tus dispositivos antes de entrar a la consulta.'}
       </p>
+
+      {mediaDevices.some((device) => device.kind === 'videoinput') && (
+        <div className="mt-3 grid gap-2">
+          <label className="text-xs font-medium text-slate-600">
+            Cámara
+            <select
+              className="input-field mt-1"
+              value={selectedVideoId}
+              onChange={(event) => setSelectedVideoId(event.target.value)}
+            >
+              {mediaDevices
+                .filter((device) => device.kind === 'videoinput')
+                .map((device, index) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Cámara ${index + 1}`}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            Micrófono
+            <select
+              className="input-field mt-1"
+              value={selectedAudioId}
+              onChange={(event) => setSelectedAudioId(event.target.value)}
+            >
+              {mediaDevices
+                .filter((device) => device.kind === 'audioinput')
+                .map((device, index) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Micrófono ${index + 1}`}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      )}
+
       <Button
         variant={mediaStatus === 'ok' ? 'secondary' : 'primary'}
         size="sm"
@@ -853,8 +924,12 @@ export default function VideoConsultationRoom() {
         loading={mediaStatus === 'checking'}
         leftIcon={<Camera className="h-4 w-4" />}
       >
-        {mediaStatus === 'ok' ? 'Volver a comprobar' : 'Comprobar cámara y micrófono'}
+        {mediaStatus === 'unknown' ? 'Comprobar cámara y micrófono' : 'Volver a comprobar'}
       </Button>
+      <p className="mt-2 text-xs text-slate-500">
+        No se cobra por comprobar los dispositivos. Si falla, puedes reintentar o salir de la sala sin
+        cobro.
+      </p>
     </div>
   )
 

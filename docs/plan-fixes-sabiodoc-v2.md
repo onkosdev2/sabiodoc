@@ -17,6 +17,7 @@
 - **2.1 Proveedor:** decidido Jitsi self-hosted para poder ofrecer transcripción. Queda pendiente de provisión y credenciales; no bloquea el resto del código.
 - **2.4 Eventos Jitsi:** completado. `JitsiMeeting` escucha `participantJoined`, `participantLeft`, `videoConferenceLeft`, `conferenceFailed`, `connectionFailed` y `errorOccurred`; la sala refresca el estado al entrar/salir el participante remoto.
 - **2.5 Estados y mensajes:** completado. La presencia, el estado, el botón y el mensaje del cronómetro usan la misma fuente de verdad (Jitsi cuando la sala es real). Se eliminó la contradicción “Ambos conectados” + “Nadie ha entrado”.
+- **2.5b Cámara y micrófono:** completado. `getUserMedia` con timeout de 12 s, clasificación de errores, selección de dispositivos, reintento y mensajes accesibles. Pendiente prueba manual en navegadores y decisión de producto sobre `conferenceFailed`.
 - **2.6 Cobro y pago:** completado. `pause`, `leave` y cierre por falta de créditos reconcilian presencia antes de acumular. Se validan claves Stripe test/live. Webhooks con firma e idempotencia ya cubiertos por tests.
 - **3.3 Vigencia del prerender:** completado. `FRONTEND_DEPLOY_HOOK_URL` dispara rebuild al aprobar/editar médicos o cambiar su foto. OG de perfiles correcto.
 - **3.4 Sitemap y noindex:** completado. Sitemap solo con rutas públicas, `/login` y `/register` fuera; rutas privadas con `noindex` en cliente y guía de `X-Robots-Tag` en Render. Pendiente configurar Search Console/Bing.
