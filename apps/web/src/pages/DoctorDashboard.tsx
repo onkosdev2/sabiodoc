@@ -28,7 +28,7 @@ import SummaryToggleButton from '../components/SummaryToggleButton'
 const METRIC_DESTINATIONS: Record<string, string> = {
   scheduled: '/doctor/appointments?status=scheduled',
   completed: '/doctor/appointments?status=completed',
-  net_income: '/doctor/wallet',
+  net_income: '/doctor/earnings',
   rating: '/doctor/reviews',
   notifications: '/doctor/notifications',
 }
@@ -77,7 +77,7 @@ export default function DoctorDashboard() {
           room_url: session.room_url,
           participant_token: session.participant_token,
           participant_role: session.participant_role,
-          prepaid_amount_cents: 0,
+          payment_amount_cents: 0,
           estimated_minutes: appointment.duration_minutes,
           expires_at: session.expires_at,
         }),

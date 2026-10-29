@@ -39,10 +39,9 @@ def is_private_or_local_host(host: str) -> bool:
 class JitsiService:
     """Salas de video basadas en Jitsi Meet.
 
-    Genera la URL de la sala y, si ``JITSI_JWT_SECRET`` está configurado **y el
-    proveedor lo admite** (Jitsi propio/JaaS), un JWT por participante
-    (paciente/médico) para salas protegidas. En ``meet.jit.si`` las salas son
-    públicas y el JWT se ignora (el primer participante es moderador).
+    Genera la URL de la sala y, si ``JITSI_JWT_SECRET`` está configurado, un JWT
+    por participante (paciente/médico) para salas protegidas. La instancia actual
+    es un Jitsi self-hosted.
     """
 
     def __init__(self):
@@ -51,6 +50,7 @@ class JitsiService:
         self.jwt_secret = settings.JITSI_JWT_SECRET
         self.jwt_app_id = settings.JITSI_JWT_APP_ID
         self.jwt_audience = settings.JITSI_JWT_AUDIENCE
+        self.jwt_subject = settings.JITSI_JWT_SUBJECT
         self.is_mock = not self.base_url
         host = _host_from_url(self.base_url)
         self.is_public_provider = host in _PUBLIC_JITSI_HOSTS
@@ -67,6 +67,14 @@ class JitsiService:
 
         if self.is_mock:
             logger.warning("Jitsi service running in MOCK mode - JITSI_BASE_URL not configured")
+        elif settings.JITSI_MODERATOR_REQUIRED and not self.jwt_secret:
+            message = (
+                "JITSI_MODERATOR_REQUIRED=true pero JITSI_JWT_SECRET está vacío: "
+                "no se generarán JWT y el médico no será moderador."
+            )
+            if settings.is_production:
+                raise RuntimeError(message)
+            logger.warning(message)
         elif settings.is_production and is_private_or_local_host(host):
             logger.error(
                 "JITSI_BASE_URL apunta a un host privado/local (%s) en producción",
@@ -94,6 +102,10 @@ class JitsiService:
         patient_id: int,
         expires_at: datetime,
         appointment_id: int | None = None,
+        patient_name: str | None = None,
+        patient_email: str | None = None,
+        doctor_name: str | None = None,
+        doctor_email: str | None = None,
     ) -> dict:
         self._ensure_safe_host()
         unique_room = f"{self.room_prefix}-{room_name}-{secrets.token_hex(3)}"
@@ -104,12 +116,16 @@ class JitsiService:
             owner_id=patient_id,
             role="patient",
             expires_at=expires_at,
+            name=patient_name,
+            email=patient_email,
         )
         doctor_token = self.create_meeting_token(
             room_name=unique_room,
             owner_id=doctor_profile_id,
             role="doctor",
             expires_at=expires_at,
+            name=doctor_name,
+            email=doctor_email,
         )
 
         logger.info(f"Sala de Jitsi generada: {room_url or '(mock)'}")
@@ -143,6 +159,8 @@ class JitsiService:
         owner_id: int,
         role: str,
         expires_at: Optional[datetime] = None,
+        name: str | None = None,
+        email: str | None = None,
     ) -> str:
         """Genera el JWT de Jitsi para un participante (o "" si no hay secreto)."""
         if not self.jwt_secret:
@@ -150,21 +168,31 @@ class JitsiService:
 
         now = datetime.now(timezone.utc)
         expiry = expires_at or (now + timedelta(hours=2))
+        is_moderator = settings.JITSI_MODERATOR_REQUIRED and role == "doctor"
         payload = {
             "aud": self.jwt_audience,
             "iss": self.jwt_app_id,
-            "sub": settings.JITSI_DOMAIN,
+            "sub": self.jwt_subject,
             "room": room_name,
             "exp": int(expiry.timestamp()),
             "nbf": int(now.timestamp()) - 10,
             "context": {
                 "user": {
                     "id": str(owner_id),
-                    "name": f"{role}-{owner_id}",
-                    "moderator": role == "doctor",
+                    "name": name or f"{role}-{owner_id}",
+                    "email": email or "",
+                    "moderator": is_moderator,
+                    "affiliation": "owner" if is_moderator else "member",
                 }
             },
         }
+        logger.info(
+            "Jitsi JWT issued: room=%s role=%s moderator=%s affiliation=%s",
+            room_name,
+            role,
+            payload["context"]["user"]["moderator"],
+            payload["context"]["user"]["affiliation"],
+        )
         return jwt.encode(payload, self.jwt_secret, algorithm="HS256")
 
 

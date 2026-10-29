@@ -55,7 +55,7 @@ def test_presence_is_derived_from_activity_and_sessions():
             provider_room_name=f"sabiodoc-presence-{uuid.uuid4().hex[:10]}",
             doctor_price_per_min_cents=2200,
             estimated_minutes=30,
-            prepaid_amount_cents=0,
+            payment_amount_cents=0,
             expires_at=now + timedelta(minutes=30),
             started_at=now,
             doctor_present=True,

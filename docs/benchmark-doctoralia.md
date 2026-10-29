@@ -42,7 +42,7 @@ Ecosistema:
 | Perfil del médico | Bio, especialidades, enfermedades, edades, consultorios, servicios/precios, media, formación, idiomas, nº colegiado | Foto, bio, especialidades, reseñas, precio/min, **verificado + nº colegiatura + dirección**, JSON-LD |
 | Reserva | Desde listado y perfil, con pago online | Slots, reprogramar, cancelar (sin pago real) |
 | Videoconsulta | En planes Pro | Jitsi + facturación por minuto (modelo central) |
-| Pagos | Pago online, tarjeta recurrente, reembolsos, política 12 h | Wallet de créditos demo + Stripe placeholder |
+| Pagos | Pago online, tarjeta recurrente, reembolsos, política 12 h | Pasarela de pagos con tarjeta y payouts |
 | Reseñas / confianza | "Cita verificada", moderación, filtros pos/neg, búsqueda, reportar | Reseñas de citas completadas; sin badges ni moderación |
 | Seguros | "Ver si acepta mi aseguradora", filtro, disclaimers | No aplica (pago por minuto) |
 | Clínicas / sedes | Perfiles de clínica con varios médicos | No aplica (100 % videoconsulta) |
@@ -72,7 +72,7 @@ Ecosistema:
    push (PWA) y lista de espera.
    > Los recordatorios por **email están en pausa** por el límite del plan
    > gratuito de Brevo. Alternativa: notificaciones **push** de la PWA.
-8. **Monetización**: compra de créditos, pagos reales y comprobantes.
+8. **Monetización**: cobros con tarjeta, payouts y comprobantes.
 
 ### Lo que NO aplica a SabioDoc
 
@@ -118,7 +118,7 @@ Ecosistema:
 
 10. Q&A público y fichas de enfermedades/síntomas.
 11. Chat persistente paciente–médico.
-12. Pagos reales de créditos + comprobantes electrónicos.
+12. Pagos con tarjeta y comprobantes electrónicos.
 13. Informes de uso en el panel del médico.
 
 **6–12 meses**

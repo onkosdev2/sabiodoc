@@ -1,29 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
-from app.models.video_session import PaymentStatus, VideoProvider, VideoSessionStatus
-
-
-class VideoSessionPrepareRequest(BaseModel):
-    doctor_id: int
-    estimated_minutes: int = Field(..., ge=1, le=180)
-    payment_method_id: Optional[str] = Field(default=None, max_length=255)
-
-
-class VideoSessionPrepareResponse(BaseModel):
-    video_session_id: int
-    status: VideoSessionStatus
-    provider: VideoProvider
-    payment_status: PaymentStatus
-    room_name: str
-    room_url: Optional[str] = None
-    patient_token: str
-    doctor_token: str
-    doctor_price_per_min_cents: int
-    estimated_minutes: int
-    prepaid_amount_cents: int
-    expires_at: datetime
-    payment_reference: Optional[str] = None
+from app.models.video_session import VideoProvider, VideoSessionStatus
 
 
 class DoctorVideoSessionResponse(BaseModel):
@@ -38,7 +16,7 @@ class DoctorVideoSessionResponse(BaseModel):
     doctor_token: str
     doctor_price_per_min_cents: int
     estimated_minutes: int
-    prepaid_amount_cents: int
+    payment_amount_cents: int
     expires_at: datetime
     created_at: datetime
     patient_email: str
@@ -104,19 +82,11 @@ class VideoSessionStatusResponse(BaseModel):
     billable_seconds: int = 0
     elapsed_seconds: int
     remaining_seconds: int
-    is_overtime: bool
-    # Facturacion por tiempo real.
     price_per_min_cents: int = 0
-    held_amount_cents: int = 0
-    current_cost_cents: int = 0
-    # Desglose para el médico: comisión de la plataforma sobre el costo actual.
+    # Desglose del cobro confirmado para el médico.
     platform_fee_cents: int = 0
     doctor_amount_cents: int = 0
     platform_fee_bps: int = 0
-    overtime_amount_cents: int = 0
-    patient_balance_cents: int = 0
-    can_afford_overtime: bool = False
-    billing_mode: str = "scheduled"
     # Presencia en la sala (el cronómetro solo corre con ambos).
     patient_present: bool = False
     doctor_present: bool = False
@@ -128,6 +98,18 @@ class VideoSessionStatusResponse(BaseModel):
     both_in_jitsi: bool = False
     jitsi_patient_joined_at: Optional[datetime] = None
     jitsi_doctor_joined_at: Optional[datetime] = None
+    payment_state: str = "pending"
+    # Importe cobrado (o cotizado si aún no se cobró) y minutos que cubre.
+    payment_amount_cents: int = 0
+    payment_minutes: int = 0
+    payment_failure_code: str | None = None
+    payment_failure_message: str | None = None
+    payment_next_action: str | None = None
+    # Ampliación solicitada por el médico y pendiente de confirmación del paciente.
+    extension_request_pending: bool = False
+    extension_requested_minutes: int = 0
+    extension_requested_amount_cents: int = 0
+    extension_request_expires_at: Optional[datetime] = None
     doctor_note: str | None = None
     followup_instructions: str | None = None
     intro_script: str | None = None
@@ -144,10 +126,13 @@ class VideoSessionDoctorNoteRequest(BaseModel):
 class JitsiEventRequest(BaseModel):
     """Evento de la conferencia de Jitsi enviado por el cliente."""
 
-    event: Literal["joined", "left"]
+    event: Literal["joined", "left", "heartbeat"]
 
 
 class VideoSessionCompleteRequest(BaseModel):
     doctor_note: str | None = Field(default=None, max_length=4000)
     followup_instructions: str | None = Field(default=None, max_length=4000)
     closed_reason: str | None = Field(default=None, max_length=120)
+
+class VideoSessionExtendRequest(BaseModel):
+    minutes: int = Field(..., ge=5, le=15)

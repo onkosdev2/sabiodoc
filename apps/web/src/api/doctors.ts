@@ -91,7 +91,7 @@ export interface DoctorVideoSession {
   doctor_token: string
   doctor_price_per_min_cents: number
   estimated_minutes: number
-  prepaid_amount_cents: number
+  payment_amount_cents: number
   expires_at: string
   created_at: string
   patient_email: string

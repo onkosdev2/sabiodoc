@@ -16,8 +16,8 @@
       "passes": 22
     },
     {
-      "route": "/me/wallet/",
-      "url": "http://127.0.0.1:5173/me/wallet/",
+      "route": "/me/payment-methods/",
+      "url": "http://127.0.0.1:5173/me/payment-methods/",
       "violations": [],
       "passes": 26
     },

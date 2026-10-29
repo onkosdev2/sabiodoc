@@ -74,7 +74,7 @@ from app.services.consultation_service import close_stale_consultations
 from app.services.specialist_assistant import sanitize_summary_text
 from app.services.reminder_service import reminder_service
 from app.services.video_session_service import video_session_service
-from app.services.wallet_service import wallet_service
+from app.services.earnings_service import earnings_service
 from app.services import session_file_service
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
@@ -606,14 +606,17 @@ def get_doctor_dashboard(
     )
     average_rating = _rating_for(db, doctor_profile.id)[0]
     active_video_sessions = _get_live_video_sessions(db, doctor_profile)[:5]
-    income = wallet_service.doctor_income_summary(db, doctor_profile.id)
+    income = earnings_service.summary(db, doctor_profile.id)
+    net_income_cents = (
+        income["pending_cents"] + income["available_cents"] + income["paid_cents"]
+    )
     metrics = [
         DoctorDashboardMetricCard(key="scheduled", label="Citas programadas", value=str(total_scheduled)),
         DoctorDashboardMetricCard(key="completed", label="Citas completadas", value=str(total_completed)),
         DoctorDashboardMetricCard(
             key="net_income",
             label="Ingresos netos",
-            value=f"US$ {income['net_income_cents'] / 100:,.2f}",
+            value=f"US$ {net_income_cents / 100:,.2f}",
         ),
         DoctorDashboardMetricCard(key="rating", label="Valoración promedio", value=f"{average_rating:.1f}"),
         DoctorDashboardMetricCard(key="notifications", label="Notificaciones sin leer", value=str(unread_notifications)),
@@ -865,7 +868,7 @@ def list_my_patients(
 def get_doctor_bookable_slots(
     doctor_id: int,
     days: int = Query(default=14, ge=1, le=30),
-    duration_minutes: int = Query(default=30, ge=15, le=120),
+    duration_minutes: int = Query(default=30, ge=5, le=120),
     db: Session = Depends(get_db),
 ):
     doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
@@ -877,7 +880,7 @@ def get_doctor_bookable_slots(
         or not doctor_profile.is_accepting_consultations
     ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El médico no está disponible para nuevas citas")
-    slots = appointment_service.compute_bookable_slots(
+    slots = appointment_service.compute_slot_grid(
         db,
         doctor_profile=doctor_profile,
         days=days,
@@ -885,10 +888,7 @@ def get_doctor_bookable_slots(
     )
     return DoctorBookableSlotListResponse(
         timezone=doctor_profile.timezone or "UTC",
-        slots=[
-            DoctorBookableSlotResponse(starts_at=starts_at, ends_at=ends_at, duration_minutes=duration_minutes)
-            for starts_at, ends_at in slots
-        ],
+        slots=[DoctorBookableSlotResponse(**slot) for slot in slots],
         total=len(slots),
     )
 
@@ -1029,7 +1029,7 @@ def get_my_video_sessions(
                 doctor_token=doctor_token,
                 doctor_price_per_min_cents=session.doctor_price_per_min_cents,
                 estimated_minutes=session.estimated_minutes,
-                prepaid_amount_cents=session.prepaid_amount_cents,
+                payment_amount_cents=session.payment_amount_cents,
                 expires_at=session.expires_at,
                 created_at=session.created_at,
                 patient_email=session.patient.email,

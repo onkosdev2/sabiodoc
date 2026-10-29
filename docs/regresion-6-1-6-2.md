@@ -53,9 +53,9 @@ Guardar en `docs/evidencias/AAAA-MM-DD/`:
 
 ### Citas y pagos
 
-- [ ] Reserva con créditos ficticios.
+- [ ] Reserva con método de pago de prueba.
 - [ ] Reprogramación y cancelación con reembolso.
-- [ ] Detalle de cita muestra retenido, costo final, reembolso, comisión e ingreso médico.
+- [ ] Detalle de cita muestra importe cobrado, comisión e ingreso médico.
 - [ ] No se cobra sin ambos participantes en Jitsi.
 - [ ] Cierre de consulta liquida correctamente.
 

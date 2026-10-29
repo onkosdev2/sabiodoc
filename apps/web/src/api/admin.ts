@@ -207,7 +207,7 @@ export interface SupportVideoSessionItem {
   ended_at: string | null
   billable_seconds: number
   price_per_min_cents: number
-  prepaid_amount_cents: number
+  payment_amount_cents: number
   closed_reason: string | null
 }
 
@@ -219,29 +219,6 @@ export interface SupportConsultationItem {
   closed_at: string | null
   auto_closed: boolean
   has_summary: boolean
-}
-
-export interface SupportWalletTransaction {
-  id: number
-  type: string
-  status: string
-  amount_cents: number
-  balance_after_cents: number
-  description: string
-  reference_type: string | null
-  reference_id: number | null
-  created_at: string | null
-}
-
-export interface SupportWithdrawal {
-  id: number
-  amount_cents: number
-  status: string
-  destination: string
-  provider: string | null
-  provider_reference: string | null
-  failure_reason: string | null
-  created_at: string | null
 }
 
 export interface SupportErrorItem {
@@ -276,14 +253,11 @@ export interface AdminUserSupport {
   appointments: SupportAppointmentItem[]
   video_sessions: SupportVideoSessionItem[]
   consultations: SupportConsultationItem[]
-  wallet_balance_cents: number
-  transactions: SupportWalletTransaction[]
-  withdrawals: SupportWithdrawal[]
   errors: SupportErrorItem[]
   notifications: SupportNotificationItem[]
 }
 
-/** Vista de soporte 360° de un usuario (citas, videoconsultas, monedero, errores...). */
+/** Vista de soporte 360° de un usuario (citas, videoconsultas, cobros, errores...). */
 export const getAdminUserSupport = async (userId: number): Promise<AdminUserSupport> => {
   const response = await client.get<AdminUserSupport>(`/admin/users/${userId}/support`)
   return response.data

@@ -17,7 +17,7 @@ export type NotificationCategory =
   | 'reminders'
   | 'cancellations'
   | 'video'
-  | 'credits'
+  | 'payments'
   | 'reviews'
   | 'profile'
   | 'files'
@@ -81,8 +81,8 @@ export const NOTIFICATION_CATEGORIES: NotificationCategoryConfig[] = [
     toastClass: 'border-emerald-200 bg-emerald-50 text-emerald-900',
   },
   {
-    id: 'credits',
-    label: 'Créditos',
+    id: 'payments',
+    label: 'Pagos',
     icon: CircleDollarSign,
     chipClass: 'bg-amber-100 text-amber-700',
     badgeClass: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -156,8 +156,8 @@ const CATEGORY_BY_TYPE: Record<string, NotificationCategory> = {
   appointment_file_received: 'files',
   file_shared: 'files',
   doctor_note_updated: 'files',
-  video_session_no_credits: 'credits',
-  withdrawal: 'credits',
+  payment_processed: 'payments',
+  payout: 'payments',
   video_consultation_completed: 'video',
   doctor_application_reviewed: 'profile',
   patient_profile_change_request: 'profile',
@@ -189,7 +189,7 @@ export function resolveNotificationCategory(type: string): NotificationCategory 
     return 'profile'
   }
   if (type.includes('review')) return 'reviews'
-  if (type.includes('credit') || type.includes('wallet') || type.includes('withdraw')) return 'credits'
+  if (type.includes('payment') || type.includes('payout')) return 'payments'
   if (type.startsWith('video')) return 'video'
   if (type.startsWith('support_ticket')) return 'support'
   if (type.includes('file') || type.includes('note')) return 'files'

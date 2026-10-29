@@ -1,7 +1,7 @@
 """Roles múltiples por usuario (many-to-many)
 
 Revision ID: 035
-Revises: 034
+Revises: 033
 Create Date: 2026-10-12 00:00:00.000000
 
 Reemplaza el modelo de un solo ``users.role`` + flag ``is_reviewer`` por una
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "035"
-down_revision = "034"
+down_revision = "033"
 branch_labels = None
 depends_on = None
 

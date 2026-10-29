@@ -1,22 +1,24 @@
 import json
-import math
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
+from app.core.security import decode_access_token
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.appointment import AppointmentStatus
 from app.models.consultation import ConsultationStatus
 from app.models.user import User
-from app.models.video_session import VideoSession, VideoSessionStatus
+from app.models.video_session import PaymentStatus, VideoSession, VideoSessionStatus
+from app.models.payment import ConsultationCharge, PaymentTransaction, PaymentTransactionStatus, PaymentTransactionType
 from app.models.video_session_event import VideoSessionEvent
 from app.schemas.video_session import (
     JitsiEventRequest,
     VideoSessionCompleteRequest,
     VideoSessionDoctorNoteRequest,
+    VideoSessionExtendRequest,
     VideoSessionFileResponse,
     VideoSessionStatusResponse,
 )
@@ -25,7 +27,7 @@ from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
 from app.services.patient_profile_service import get_patient_display_name
 from app.services.video_session_service import video_session_service
-from app.services.wallet_service import wallet_service
+from app.services.payments.charge_service import ChargeError, charge_service
 
 router = APIRouter(prefix="/video-sessions", tags=["video-sessions"])
 logger = get_logger(__name__)
@@ -37,6 +39,21 @@ def _resolve_participant_role(video_session: VideoSession, current_user: User) -
     if video_session.doctor and video_session.doctor.user_id == current_user.id:
         return "doctor"
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes acceder a esta videoconsulta")
+
+
+def _resolve_user_from_token(db: Session, token: str) -> User:
+    payload = decode_access_token(token)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido o expirado")
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
+    if int(payload.get("ver", 1)) != int(user.session_version or 1):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión inválida")
+    return user
 
 
 def _sync_doctor_presence_from_video_sessions(db: Session, doctor_id: int) -> None:
@@ -51,17 +68,18 @@ def _expire_if_needed(db: Session, video_session: VideoSession) -> None:
 def _heartbeat_and_reconcile(db: Session, video_session: VideoSession, participant_role: str) -> None:
     """Registra la presencia del que consulta y pausa el cronómetro si falta alguien.
 
-    Durante el tiempo extra consume créditos del paciente; si se queda sin saldo,
-    termina la videollamada de inmediato.
+    El tiempo adicional se solicita y se cobra con una ampliación; no se
+    cobra automáticamente por minuto.
     """
-    if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
+    if video_session.status not in {
+        VideoSessionStatus.prepared,
+        VideoSessionStatus.active,
+        VideoSessionStatus.extension_pending,
+    }:
         return
     now = datetime.now(timezone.utc)
     video_session_service.touch_participant(video_session, participant_role, now)
     video_session_service.reconcile_timer(video_session, now)
-    if video_session.status == VideoSessionStatus.active:
-        if not video_session_service.process_overtime_billing(db, video_session, now):
-            video_session_service.terminate_for_no_credits(db, video_session, now)
     db.commit()
     db.refresh(video_session)
 
@@ -70,9 +88,19 @@ def _serialize_status(
     video_session: VideoSession,
     participant_role: str,
     *,
-    patient_balance_cents: int = 0,
-    overtime_amount_cents: int = 0,
     files: list | None = None,
+    payment_state: str = "pending",
+    payment_amount_cents: int = 0,
+    payment_minutes: int = 0,
+    payment_failure_code: str | None = None,
+    payment_failure_message: str | None = None,
+    payment_next_action: str | None = None,
+    payment_fee_cents: int | None = None,
+    payment_doctor_amount_cents: int | None = None,
+    extension_request_pending: bool = False,
+    extension_requested_minutes: int = 0,
+    extension_requested_amount_cents: int = 0,
+    extension_request_expires_at: datetime | None = None,
 ) -> VideoSessionStatusResponse:
     reference_end = video_session.ended_at or datetime.now(timezone.utc)
     billable_seconds = video_session.billable_seconds or 0
@@ -82,35 +110,18 @@ def _serialize_status(
 
     target_seconds = max(0, video_session.estimated_minutes * 60)
     remaining_seconds = max(0, target_seconds - elapsed_seconds)
-    is_overtime = elapsed_seconds > target_seconds if target_seconds else False
 
     price_per_min_cents = video_session.doctor_price_per_min_cents or 0
-    held_amount_cents = video_session.prepaid_amount_cents or 0
-    billable_minutes_total = (
-        max(settings.VIDEO_MIN_BILLABLE_MINUTES, math.ceil(elapsed_seconds / 60))
-        if elapsed_seconds > 0
-        else 0
+    platform_fee_cents = (
+        payment_fee_cents
+        if payment_fee_cents is not None
+        else payment_amount_cents * settings.PLATFORM_FEE_BPS // 10000
     )
-    if elapsed_seconds > 0:
-        # Costo real acumulado de la sesión (lo retenido se muestra aparte).
-        # No lo limitamos a la retención: en citas sin pago adelantado seguiría
-        # marcando 0 y no reflejaría el tiempo transcurrido.
-        current_cost_cents = billable_minutes_total * price_per_min_cents
-    else:
-        current_cost_cents = 0
-
-    platform_fee_cents = current_cost_cents * settings.PLATFORM_FEE_BPS // 10000
-    doctor_amount_cents = max(0, current_cost_cents - platform_fee_cents)
-
-    scheduled_minutes = video_session.estimated_minutes or 0
-    overtime_minutes = max(0, billable_minutes_total - scheduled_minutes)
-    can_afford_overtime = price_per_min_cents > 0 and patient_balance_cents >= price_per_min_cents
-    if overtime_minutes <= 0:
-        billing_mode = "scheduled"
-    elif can_afford_overtime:
-        billing_mode = "overtime"
-    else:
-        billing_mode = "exhausted"
+    doctor_amount_cents = (
+        payment_doctor_amount_cents
+        if payment_doctor_amount_cents is not None
+        else max(0, payment_amount_cents - platform_fee_cents)
+    )
 
     now = datetime.now(timezone.utc)
     patient_present = video_session_service.participant_present(video_session, "patient", now)
@@ -141,17 +152,10 @@ def _serialize_status(
         billable_seconds=billable_seconds,
         elapsed_seconds=elapsed_seconds,
         remaining_seconds=remaining_seconds,
-        is_overtime=is_overtime,
         price_per_min_cents=price_per_min_cents,
-        held_amount_cents=held_amount_cents,
-        current_cost_cents=current_cost_cents,
         platform_fee_cents=platform_fee_cents,
         doctor_amount_cents=doctor_amount_cents,
         platform_fee_bps=settings.PLATFORM_FEE_BPS,
-        overtime_amount_cents=overtime_amount_cents,
-        patient_balance_cents=patient_balance_cents,
-        can_afford_overtime=can_afford_overtime,
-        billing_mode=billing_mode,
         patient_present=patient_present,
         doctor_present=doctor_present,
         both_present=both_present,
@@ -163,6 +167,16 @@ def _serialize_status(
         jitsi_doctor_joined_at=getattr(video_session, "jitsi_doctor_joined_at", None),
         files_enabled=settings.cloudinary_enabled,
         files=files or [],
+        payment_state=payment_state,
+        payment_amount_cents=payment_amount_cents,
+        payment_minutes=payment_minutes,
+        payment_failure_code=payment_failure_code,
+        payment_failure_message=payment_failure_message,
+        payment_next_action=payment_next_action,
+        extension_request_pending=extension_request_pending,
+        extension_requested_minutes=extension_requested_minutes,
+        extension_requested_amount_cents=extension_requested_amount_cents,
+        extension_request_expires_at=extension_request_expires_at,
         doctor_note=video_session.doctor_note,
         followup_instructions=video_session.followup_instructions,
         intro_script=video_session.intro_script,
@@ -173,21 +187,79 @@ def _serialize_status(
 def _serialize_status_with_billing(
     db: Session, video_session: VideoSession, participant_role: str
 ) -> VideoSessionStatusResponse:
-    """Carga saldo del paciente y tiempo extra ya consumido antes de serializar."""
-    patient_balance_cents = 0
-    overtime_amount_cents = 0
+    """Serializa la sesión con los datos del cobro asociado a la cita."""
     appointment = video_session.appointment
+    payment_state = "pending"
+    payment_amount_cents = video_session.payment_amount_cents or 0
+    payment_minutes = video_session.estimated_minutes or 0
+    payment_failure_code = None
+    payment_failure_message = None
+    payment_next_action = None
+    payment_fee_cents = None
+    payment_doctor_amount_cents = None
+
     if appointment is not None:
-        payment = wallet_service.get_appointment_payment(db, appointment.id)
-        if payment is not None:
-            overtime_amount_cents = payment.overtime_amount_cents or 0
-        patient_balance_cents = wallet_service.get_balance_cents(db, appointment.patient_id)
+        charge = (
+            db.query(ConsultationCharge)
+            .filter(ConsultationCharge.appointment_id == appointment.id)
+            .first()
+        )
+        if charge:
+            # Si ya se cobró, mostramos el total cobrado (inicial + ampliaciones).
+            payment_amount_cents = charge.paid_amount_cents or charge.quoted_amount_cents
+            payment_minutes = charge.paid_minutes or charge.quoted_minutes
+            payment_fee_cents = charge.platform_fee_cents or 0
+            payment_doctor_amount_cents = charge.doctor_net_cents or 0
+
+        pending_transaction = (
+            db.query(PaymentTransaction)
+            .filter(
+                PaymentTransaction.appointment_id == appointment.id,
+                PaymentTransaction.status == PaymentTransactionStatus.requires_action,
+            )
+            .order_by(PaymentTransaction.id.desc())
+            .first()
+        )
+        latest_transaction = pending_transaction or (
+            db.query(PaymentTransaction)
+            .filter(PaymentTransaction.appointment_id == appointment.id)
+            .order_by(PaymentTransaction.id.desc())
+            .first()
+        )
+        if latest_transaction:
+            payment_failure_code = latest_transaction.failure_code
+            payment_failure_message = latest_transaction.failure_message
+
+        if pending_transaction is not None:
+            payment_state = "requires_action"
+            payment_next_action = (
+                "mock_3ds" if pending_transaction.provider == "mock" else "provider_action"
+            )
+        elif video_session.payment_status == PaymentStatus.captured:
+            payment_state = "paid"
+        elif video_session.payment_status == PaymentStatus.authorized:
+            payment_state = "requires_action"
+        elif video_session.payment_status == PaymentStatus.failed:
+            payment_state = "failed"
+        else:
+            payment_state = "pending"
+
     return _serialize_status(
         video_session,
         participant_role,
-        patient_balance_cents=patient_balance_cents,
-        overtime_amount_cents=overtime_amount_cents,
         files=session_file_service.list_session_files(db, video_session.id),
+        payment_state=payment_state,
+        payment_amount_cents=payment_amount_cents,
+        payment_minutes=payment_minutes,
+        payment_failure_code=payment_failure_code,
+        payment_failure_message=payment_failure_message,
+        payment_next_action=payment_next_action,
+        payment_fee_cents=payment_fee_cents,
+        payment_doctor_amount_cents=payment_doctor_amount_cents,
+        extension_request_pending=video_session.extension_requested_at is not None,
+        extension_requested_minutes=video_session.extension_requested_minutes or 0,
+        extension_requested_amount_cents=video_session.extension_requested_amount_cents or 0,
+        extension_request_expires_at=video_session.extension_request_expires_at,
     )
 
 
@@ -204,6 +276,8 @@ def get_video_session_status(
     _expire_if_needed(db, video_session)
     participant_role = _resolve_participant_role(video_session, current_user)
     _heartbeat_and_reconcile(db, video_session, participant_role)
+    charge_service.check_time_exhausted(db, video_session)
+    db.refresh(video_session)
     return _serialize_status_with_billing(db, video_session, participant_role)
 
 
@@ -342,11 +416,15 @@ def report_jitsi_event(
         return None
 
     now = datetime.now(timezone.utc)
-    present = payload.event == "joined"
-    video_session_service.set_jitsi_presence(video_session, participant_role, present, now)
-    if present:
-        # Estar en la conferencia implica estar presente en la sala de la app.
-        video_session_service.set_participant_presence(video_session, participant_role, True, now)
+    if payload.event == "heartbeat":
+        video_session_service.touch_jitsi_participant(video_session, participant_role, now)
+    else:
+        present = payload.event == "joined"
+        video_session_service.set_jitsi_presence(video_session, participant_role, present, now)
+        # Entrar o salir de la conferencia también actualiza la presencia en la app.
+        # Así una salida real detiene el cronómetro sin depender del botón "Salir".
+        video_session_service.set_participant_presence(video_session, participant_role, present, now)
+    charge_service.maybe_start_timer(db, video_session)
     video_session_service.reconcile_timer(video_session, now)
     db.add(
         VideoSessionEvent(
@@ -360,6 +438,226 @@ def report_jitsi_event(
     )
     db.commit()
     return None
+
+
+@router.post("/{video_session_id}/presence-beacon", status_code=status.HTTP_204_NO_CONTENT)
+def report_presence_beacon(
+    video_session_id: int,
+    token: str = Form(...),
+    event: str = Form("left"),
+    db: Session = Depends(get_db),
+):
+    """Cierre de pestaña/navegación: marca salida real sin depender de headers.
+
+    Usa ``navigator.sendBeacon`` con FormData para evitar el preflight CORS que
+    puede cancelarse cuando el navegador abandona la página.
+    """
+    current_user = _resolve_user_from_token(db, token)
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if video_session.status in {
+        VideoSessionStatus.completed,
+        VideoSessionStatus.cancelled,
+        VideoSessionStatus.expired,
+        VideoSessionStatus.failed,
+    }:
+        return None
+
+    now = datetime.now(timezone.utc)
+    if event == "left":
+        video_session_service.set_jitsi_presence(video_session, participant_role, False, now)
+        video_session_service.set_participant_presence(video_session, participant_role, False, now)
+    video_session_service.reconcile_timer(video_session, now)
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type=f"presence_beacon_{event}",
+            source="client",
+            payload_json=json.dumps(
+                {"participant_role": participant_role, "user_id": current_user.id}
+            ),
+        )
+    )
+    db.commit()
+    return None
+
+
+@router.post("/{video_session_id}/extend", response_model=VideoSessionStatusResponse)
+def request_video_session_extension(
+    video_session_id: int,
+    payload: VideoSessionExtendRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Solicita minutos adicionales. No cobra hasta que el paciente confirme."""
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if participant_role != "doctor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico puede solicitar una ampliación")
+    try:
+        charge_service.request_extension(db, video_session, payload.minutes)
+    except ChargeError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.message) from error
+    notification_service.create(
+        db,
+        user_id=video_session.patient_id,
+        notification_type="video_extension_requested",
+        title="Ampliación de videoconsulta",
+        body=f"El médico solicita {video_session.extension_requested_minutes} minutos adicionales. Confirma el cobro para continuar.",
+        action_url="/video-room",
+        metadata={"video_session_id": video_session.id, "action_label": "Revisar ampliación"},
+    )
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type="video_extension_requested",
+            source="backend",
+            payload_json=json.dumps(
+                {
+                    "minutes": video_session.extension_requested_minutes,
+                    "amount_cents": video_session.extension_requested_amount_cents,
+                }
+            ),
+        )
+    )
+    db.commit()
+    db.refresh(video_session)
+    return _serialize_status_with_billing(db, video_session, participant_role)
+
+
+@router.post("/{video_session_id}/extend/confirm", response_model=VideoSessionStatusResponse)
+def confirm_video_session_extension(
+    video_session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El paciente confirma la ampliación y se ejecuta el cobro."""
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if participant_role != "patient":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el paciente puede confirmar la ampliación")
+    try:
+        result = charge_service.confirm_extension(db, video_session)
+    except ChargeError as error:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error.message) from error
+    if result.get("state") == "paid":
+        notification_service.create(
+            db,
+            user_id=video_session.doctor.user_id,
+            notification_type="video_extension_confirmed",
+            title="Ampliación confirmada",
+            body="El paciente confirmó la ampliación y el cobro fue aprobado.",
+            action_url="/video-room",
+            metadata={"video_session_id": video_session.id, "action_label": "Volver a la consulta"},
+        )
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type="video_extension_confirmed",
+            source="backend",
+            payload_json=json.dumps({"state": result.get("state")}),
+        )
+    )
+    db.commit()
+    db.refresh(video_session)
+    return _serialize_status_with_billing(db, video_session, participant_role)
+
+
+@router.post("/{video_session_id}/extend/reject", response_model=VideoSessionStatusResponse)
+def reject_video_session_extension(
+    video_session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El paciente rechaza la ampliación. No se realiza ningún cobro."""
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if participant_role != "patient":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el paciente puede rechazar la ampliación")
+    try:
+        charge_service.reject_extension(db, video_session)
+    except ChargeError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.message) from error
+    notification_service.create(
+        db,
+        user_id=video_session.doctor.user_id,
+        notification_type="video_extension_rejected",
+        title="Ampliación rechazada",
+        body="El paciente rechazó la ampliación. No se realizó ningún cobro.",
+        action_url="/video-room",
+        metadata={"video_session_id": video_session.id, "action_label": "Volver a la consulta"},
+    )
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type="video_extension_rejected",
+            source="backend",
+            payload_json=json.dumps({"user_id": current_user.id}),
+        )
+    )
+    db.commit()
+    db.refresh(video_session)
+    return _serialize_status_with_billing(db, video_session, participant_role)
+
+
+@router.post("/{video_session_id}/extend/cancel", response_model=VideoSessionStatusResponse)
+def cancel_video_session_extension(
+    video_session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El médico retira su solicitud antes de que el paciente la confirme."""
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if participant_role != "doctor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico puede cancelar la solicitud")
+    try:
+        charge_service.reject_extension(db, video_session)
+    except ChargeError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.message) from error
+    db.add(
+        VideoSessionEvent(
+            video_session_id=video_session.id,
+            event_type="video_extension_cancelled",
+            source="backend",
+            payload_json=json.dumps({"user_id": current_user.id}),
+        )
+    )
+    db.commit()
+    db.refresh(video_session)
+    return _serialize_status_with_billing(db, video_session, participant_role)
+
+
+@router.post("/{video_session_id}/confirm-payment", response_model=VideoSessionStatusResponse)
+def confirm_video_session_payment(
+    video_session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """El paciente completa la verificación 3DS de un cobro pendiente."""
+    video_session = db.query(VideoSession).filter(VideoSession.id == video_session_id).first()
+    if not video_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Videoconsulta no encontrada")
+    participant_role = _resolve_participant_role(video_session, current_user)
+    if participant_role != "patient":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el paciente puede confirmar el cobro")
+    try:
+        charge_service.confirm_pending_payment(db, video_session)
+    except ChargeError as error:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error.message) from error
+    charge_service.maybe_start_timer(db, video_session)
+    db.refresh(video_session)
+    return _serialize_status_with_billing(db, video_session, participant_role)
 
 
 @router.post("/{video_session_id}/intro", response_model=VideoSessionStatusResponse)
@@ -415,6 +713,31 @@ def start_video_session_timer(
         VideoSessionStatus.failed,
     }:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya no está disponible")
+
+    now = datetime.now(timezone.utc)
+    if video_session.appointment is not None:
+        if video_session.status == VideoSessionStatus.extension_pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El tiempo pagado se agotó. Solicita una ampliación para continuar.",
+            )
+        if video_session.status == VideoSessionStatus.extension_requested:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La ampliación está esperando la confirmación del paciente.",
+            )
+        if not video_session_service.both_participants_present(video_session, now):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Para iniciar la consulta, el paciente y el médico deben estar en la videollamada",
+            )
+        try:
+            result = charge_service.start_initial_charge(db, video_session)
+        except ChargeError as error:
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error.message) from error
+        charge_service.resume_timer(db, video_session)
+        db.refresh(video_session)
+        return _serialize_status_with_billing(db, video_session, participant_role)
 
     now = datetime.now(timezone.utc)
     video_session_service.touch_participant(video_session, "doctor", now)
@@ -473,7 +796,6 @@ def pause_video_session_timer(
     # ya había salido, evita cobrar el tiempo en solitario.
     video_session_service.reconcile_timer(video_session, now)
     video_session_service.pause_timer(video_session, now)
-    video_session_service.process_overtime_billing(db, video_session, now)
     db.add(
         VideoSessionEvent(
             video_session_id=video_session.id,
@@ -512,7 +834,6 @@ def leave_video_session(
     video_session_service.reconcile_timer(video_session, now)
     video_session_service.set_participant_presence(video_session, participant_role, False, now)
     video_session_service.pause_timer(video_session, now)
-    video_session_service.process_overtime_billing(db, video_session, now)
 
     db.add(
         VideoSessionEvent(
@@ -581,10 +902,23 @@ def complete_video_session(
     if video_session.status in {VideoSessionStatus.completed, VideoSessionStatus.cancelled, VideoSessionStatus.expired, VideoSessionStatus.failed}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta videoconsulta ya fue cerrada")
 
+    if video_session.appointment is not None:
+        video_session.doctor_note = payload.doctor_note
+        video_session.followup_instructions = payload.followup_instructions
+        video_session.ended_by_user_id = current_user.id
+        if video_session.appointment:
+            video_session.appointment.doctor_note = payload.doctor_note
+            video_session.appointment.followup_instructions = payload.followup_instructions
+        charge_service.finalize_session(
+            db,
+            video_session,
+            reason=payload.closed_reason or "completed_by_doctor",
+        )
+        return _serialize_status_with_billing(db, video_session, participant_role)
+
     now = datetime.now(timezone.utc)
     video_session_service.reconcile_timer(video_session, now)
     video_session_service.pause_timer(video_session, now)
-    video_session_service.process_overtime_billing(db, video_session, now)
     video_session.patient_present = False
     video_session.doctor_present = False
     video_session.status = VideoSessionStatus.completed
@@ -603,12 +937,6 @@ def complete_video_session(
         if appointment.consultation:
             appointment.consultation.status = ConsultationStatus.closed
             appointment.consultation.closed_at = appointment.consultation.closed_at or now
-        # Cobro real segun el tiempo efectivo; el resto se devuelve al paciente.
-        wallet_service.release_appointment(
-            db,
-            appointment,
-            billable_seconds=video_session.billable_seconds or 0,
-        )
         notification_service.create(
             db,
             user_id=appointment.patient_id,

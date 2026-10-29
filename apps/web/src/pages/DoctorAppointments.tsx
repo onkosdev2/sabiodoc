@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CalendarDays, FileText, RefreshCcw, Video } from 'lucide-react'
+import { CalendarDays, Check, FileText, RefreshCcw, Video, X } from 'lucide-react'
 
 import {
   Appointment,
   AppointmentStatus,
+  confirmAppointment,
+  declineAppointment,
   getMyDoctorAppointments,
   prepareAppointmentVideoSession,
 } from '../api/appointments'
@@ -20,6 +22,8 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
+import { Textarea } from '../components/ui/Field'
 import Skeleton from '../components/ui/Skeleton'
 import { usePagination } from '../hooks/usePagination'
 
@@ -44,6 +48,10 @@ export default function DoctorAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [joiningId, setJoiningId] = useState<number | null>(null)
+  const [confirmingId, setConfirmingId] = useState<number | null>(null)
+  const [declining, setDeclining] = useState<Appointment | null>(null)
+  const [declineReason, setDeclineReason] = useState('')
+  const [actionBusy, setActionBusy] = useState(false)
   const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(appointments, 8, filter)
 
   const loadAppointments = useCallback(
@@ -64,6 +72,35 @@ export default function DoctorAppointments() {
   useEffect(() => {
     loadAppointments(filter)
   }, [filter, loadAppointments])
+
+  const handleConfirm = async (appointment: Appointment) => {
+    setConfirmingId(appointment.id)
+    try {
+      const updated = await confirmAppointment(appointment.id)
+      setAppointments((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      toast.success('Cita confirmada y agregada a tu agenda.')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo confirmar la cita.'))
+    } finally {
+      setConfirmingId(null)
+    }
+  }
+
+  const handleDecline = async () => {
+    if (!declining) return
+    setActionBusy(true)
+    try {
+      const updated = await declineAppointment(declining.id, declineReason.trim())
+      setAppointments((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setDeclining(null)
+      setDeclineReason('')
+      toast.success('Solicitud rechazada. El horario quedó liberado.')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo rechazar la solicitud.'))
+    } finally {
+      setActionBusy(false)
+    }
+  }
 
   const changeFilter = (nextFilter: FilterValue) => {
     setFilter(nextFilter)
@@ -86,7 +123,7 @@ export default function DoctorAppointments() {
           room_url: session.room_url,
           participant_token: session.participant_token,
           participant_role: session.participant_role,
-          prepaid_amount_cents: 0,
+          payment_amount_cents: 0,
           estimated_minutes: appointment.duration_minutes,
           expires_at: session.expires_at,
         }),
@@ -172,6 +209,9 @@ export default function DoctorAppointments() {
                       <Badge tone={APPOINTMENT_STATUS_TONES[appointment.status]}>
                         {APPOINTMENT_STATUS_LABELS[appointment.status]}
                       </Badge>
+                      {appointment.confirmation_status === 'pending' && (
+                        <Badge tone="warning">Pendiente de confirmación</Badge>
+                      )}
                     </div>
                     <div className="mt-3 space-y-1 text-sm text-slate-600">
                       <p>
@@ -192,7 +232,29 @@ export default function DoctorAppointments() {
                   </div>
 
                   <div className="flex flex-col gap-2 md:min-w-[200px]">
-                    {appointment.status === 'scheduled' && (
+                    {appointment.confirmation_status === 'pending' && (
+                      <>
+                        <Button
+                          onClick={() => void handleConfirm(appointment)}
+                          loading={confirmingId === appointment.id}
+                          leftIcon={<Check className="h-4 w-4" />}
+                        >
+                          Confirmar cita
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setDeclineReason('')
+                            setDeclining(appointment)
+                          }}
+                          leftIcon={<X className="h-4 w-4" />}
+                        >
+                          Rechazar
+                        </Button>
+                      </>
+                    )}
+                    {appointment.status === 'scheduled' &&
+                      appointment.confirmation_status === 'confirmed' && (
                       <Button
                         onClick={() => openAppointmentRoom(appointment)}
                         disabled={!room.enabled}
@@ -201,7 +263,7 @@ export default function DoctorAppointments() {
                       >
                         {joiningId === appointment.id ? 'Preparando sala...' : room.label}
                       </Button>
-                    )}
+                      )}
                     <Button
                       variant="secondary"
                       onClick={() => navigate(`/doctor/patients/${appointment.patient_id}`)}
@@ -233,6 +295,39 @@ export default function DoctorAppointments() {
           />
         </div>
       )}
+
+      <Modal
+        open={declining !== null}
+        onClose={() => setDeclining(null)}
+        title="Rechazar solicitud de cita"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setDeclining(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => void handleDecline()}
+              disabled={declineReason.trim().length < 3}
+              loading={actionBusy}
+            >
+              Rechazar cita
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          El paciente recibirá el motivo y el horario quedará libre. No se realizará ningún cobro.
+        </p>
+        <Textarea
+          className="mt-4"
+          label="Motivo del rechazo"
+          value={declineReason}
+          onChange={(event) => setDeclineReason(event.target.value)}
+          placeholder="Ej: No tengo disponibilidad en ese horario."
+          required
+        />
+      </Modal>
     </div>
   )
 }

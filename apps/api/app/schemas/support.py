@@ -74,7 +74,7 @@ class SupportVideoSessionItem(BaseModel):
     ended_at: Optional[datetime] = None
     billable_seconds: int = 0
     price_per_min_cents: int = 0
-    prepaid_amount_cents: int = 0
+    payment_amount_cents: int = 0
     closed_reason: Optional[str] = None
 
 
@@ -86,29 +86,6 @@ class SupportConsultationItem(BaseModel):
     closed_at: Optional[datetime] = None
     auto_closed: bool = False
     has_summary: bool = False
-
-
-class SupportWalletTransaction(BaseModel):
-    id: int
-    type: str
-    status: str
-    amount_cents: int
-    balance_after_cents: int
-    description: str
-    reference_type: Optional[str] = None
-    reference_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-
-
-class SupportWithdrawal(BaseModel):
-    id: int
-    amount_cents: int
-    status: str
-    destination: str
-    provider: Optional[str] = None
-    provider_reference: Optional[str] = None
-    failure_reason: Optional[str] = None
-    created_at: Optional[datetime] = None
 
 
 class SupportErrorItem(BaseModel):
@@ -143,8 +120,5 @@ class SupportUserDetailResponse(BaseModel):
     appointments: list[SupportAppointmentItem] = []
     video_sessions: list[SupportVideoSessionItem] = []
     consultations: list[SupportConsultationItem] = []
-    wallet_balance_cents: int = 0
-    transactions: list[SupportWalletTransaction] = []
-    withdrawals: list[SupportWithdrawal] = []
     errors: list[SupportErrorItem] = []
     notifications: list[SupportNotificationItem] = []

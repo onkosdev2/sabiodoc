@@ -21,11 +21,11 @@ const NOTIFICATIONS: NotificationItem[] = [
   },
   {
     id: 2,
-    type: 'video_session_no_credits',
-    title: 'Sin créditos',
-    body: 'Te quedaste sin créditos.',
-    action_url: '/me/wallet',
-    action_label: 'Recargar',
+    type: 'payment_processed',
+    title: 'Pago pendiente',
+    body: 'No se pudo completar el pago.',
+    action_url: '/me/payment-methods',
+    action_label: 'Ver métodos de pago',
     status: 'read',
     created_at: '2026-01-02T10:00:00Z',
     read_at: null,
@@ -77,9 +77,9 @@ describe('NotificationsPage', () => {
   it('muestra la categoría y la acción de cada notificación', () => {
     renderPage()
     expect(screen.getAllByText('Citas').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Créditos').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Pagos').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Cancelaciones').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: 'Recargar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver métodos de pago' })).toBeInTheDocument()
   })
 
   it('filtra las notificaciones por categoría', async () => {
@@ -88,6 +88,6 @@ describe('NotificationsPage', () => {
 
     expect(screen.getByText('Cita cancelada')).toBeInTheDocument()
     expect(screen.queryByText('Cita agendada')).not.toBeInTheDocument()
-    expect(screen.queryByText('Sin créditos')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pago pendiente')).not.toBeInTheDocument()
   })
 })

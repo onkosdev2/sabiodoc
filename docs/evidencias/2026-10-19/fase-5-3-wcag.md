@@ -57,7 +57,7 @@ Se ejecutó la misma herramienta con sesiones demo locales:
 
 | Sesión | Rutas auditadas | Resultado |
 |---|---|---|
-| Paciente | `/me/profile`, `/me/appointments`, `/me/wallet`, `/notifications` | 0 violaciones |
+| Paciente | `/me/profile`, `/me/appointments`, `/me/payment-methods`, `/notifications` | 0 violaciones |
 | Médico | `/doctor`, citas, perfil, disponibilidad, videosesiones, billetera | 0 violaciones |
 | Admin | overview, usuarios, finanzas, sistema, errores | 0 violaciones |
 | Revisor | postulaciones médicas | 0 violaciones |

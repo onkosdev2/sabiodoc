@@ -5,8 +5,6 @@ import {
   Banknote,
   Coins,
   Landmark,
-  PiggyBank,
-  Receipt,
   RefreshCcw,
   TrendingUp,
   Wallet,
@@ -20,12 +18,12 @@ import {
   getFinanceMovements,
   getPlatformCommissions,
 } from '../api/finance'
-import { getAdminWithdrawals, Withdrawal, WithdrawalStatus } from '../api/wallet'
+import { getAdminPayouts, PayoutItem, retryAdminPayout } from '../api/earnings'
 import { useToast } from '../context/ToastContext'
 import { getApiErrorMessage } from '../utils/apiError'
 import { formatMoney } from '../utils/format'
 import { ROLE_LABELS } from '../utils/roles'
-import { WALLET_TRANSACTION_STATUS_LABELS } from '../utils/statusLabels'
+import { PAYMENT_TRANSACTION_STATUS_LABELS } from '../utils/statusLabels'
 import Alert from '../components/ui/Alert'
 import Badge from '../components/ui/Badge'
 import type { BadgeTone } from '../components/ui/Badge'
@@ -38,8 +36,7 @@ import Skeleton from '../components/ui/Skeleton'
 const PAGE_SIZE = 50
 
 type RangeValue = '7d' | '30d' | '90d' | 'all'
-type TabValue = 'commissions' | 'movements' | 'withdrawals'
-type WithdrawalFilter = 'all' | WithdrawalStatus
+type TabValue = 'commissions' | 'movements' | 'payouts'
 
 const RANGE_LABELS: Record<RangeValue, string> = {
   '7d': 'Últimos 7 días',
@@ -49,45 +46,32 @@ const RANGE_LABELS: Record<RangeValue, string> = {
 }
 
 const MOVEMENT_LABELS: Record<string, string> = {
-  topup: 'Recarga',
-  withdrawal: 'Retiro',
-  consultation_payment: 'Pago de consulta',
-  consultation_income: 'Pago al médico',
+  initial: 'Cobro inicial',
+  extension: 'Ampliación',
   refund: 'Reembolso',
-  adjustment: 'Ajuste',
+  payout: 'Payout',
 }
 
 const MOVEMENT_TONES: Record<string, BadgeTone> = {
-  topup: 'success',
-  withdrawal: 'warning',
-  consultation_payment: 'info',
-  consultation_income: 'primary',
+  initial: 'success',
+  extension: 'info',
   refund: 'danger',
-  adjustment: 'neutral',
+  payout: 'warning',
 }
 
-const WITHDRAWAL_LABELS: Record<WithdrawalStatus, string> = {
+const PAYOUT_LABELS: Record<PayoutItem['status'], string> = {
   pending: 'Pendiente',
   processing: 'En proceso',
   paid: 'Pagado',
   failed: 'Fallido',
-  rejected: 'Rechazado',
 }
 
-const WITHDRAWAL_TONES: Record<WithdrawalStatus, BadgeTone> = {
+const PAYOUT_TONES: Record<PayoutItem['status'], BadgeTone> = {
   pending: 'warning',
   processing: 'warning',
   paid: 'success',
   failed: 'danger',
-  rejected: 'danger',
 }
-
-const WITHDRAWAL_FILTERS: { value: WithdrawalFilter; label: string }[] = [
-  { value: 'all', label: 'Todos' },
-  { value: 'processing', label: 'En proceso' },
-  { value: 'paid', label: 'Pagados' },
-  { value: 'failed', label: 'Fallidos' },
-]
 
 const formatDateTime = (value: string | null) =>
   value ? new Date(value).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '-'
@@ -109,11 +93,10 @@ export default function AdminFinance() {
   const [commissionTotals, setCommissionTotals] = useState({ gross: 0, fee: 0, net: 0, total: 0 })
   const [movements, setMovements] = useState<FinanceMovement[]>([])
   const [movementTotals, setMovementTotals] = useState({ total: 0, inflow: 0, outflow: 0 })
-  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
-  const [withdrawalStatus, setWithdrawalStatus] = useState<WithdrawalFilter>('all')
-  const [withdrawalTotal, setWithdrawalTotal] = useState(0)
+  const [payouts, setPayouts] = useState<PayoutItem[]>([])
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [retryingId, setRetryingId] = useState<number | null>(null)
 
   const start = useMemo(() => rangeStart(range), [range])
 
@@ -141,43 +124,50 @@ export default function AdminFinance() {
           outflow: data.outflow_cents,
         })
       } else {
-        // Los retiros se filtran por rango y estado en el backend.
-        const data = await getAdminWithdrawals({
-          status_filter: withdrawalStatus === 'all' ? undefined : withdrawalStatus,
-          start,
-        })
-        setWithdrawalTotal(data.withdrawals.length)
-        setWithdrawals(data.withdrawals.slice(offset, offset + PAGE_SIZE))
+        const data = await getAdminPayouts()
+        setPayouts(data)
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo cargar la información financiera'))
     } finally {
       setLoading(false)
     }
-  }, [start, tab, offset, withdrawalStatus, toast])
+  }, [start, tab, offset, toast])
 
   useEffect(() => {
     load()
   }, [load])
 
-  // Al cambiar de rango o pestaña, volvemos a la primera página.
   useEffect(() => {
     setOffset(0)
-  }, [range, tab, withdrawalStatus])
+  }, [range, tab])
+
+  const handleRetry = async (payout: PayoutItem) => {
+    setRetryingId(payout.id)
+    try {
+      await retryAdminPayout(payout.id)
+      toast.success('Payout reintentado.')
+      await load()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo reintentar el payout.'))
+    } finally {
+      setRetryingId(null)
+    }
+  }
 
   const total =
     tab === 'commissions'
       ? commissionTotals.total
       : tab === 'movements'
         ? movementTotals.total
-        : withdrawalTotal
+        : payouts.length
 
   return (
     <div className="space-y-6">
       <PageHeader
         icon={Landmark}
         title="Ingresos y salidas"
-        description={`Todo el dinero que se mueve en SabioDoc y las ganancias por comisión de la plataforma (${overview?.platform_fee_percent ?? 20}%).`}
+        description={`Cobros de videoconsultas, comisión de la plataforma e ingresos de médicos (${overview?.platform_fee_percent ?? 20}%).`}
         actions={
           <Button
             variant="secondary"
@@ -189,13 +179,6 @@ export default function AdminFinance() {
           </Button>
         }
       />
-
-      {overview?.is_mock_money && (
-        <Alert tone="info" title="Dinero de prueba">
-          Mientras no se integre la pasarela de pagos real, los importes corresponden a créditos de
-          prueba (1 crédito = 1 USD). Las cifras ya reflejan la comisión y el flujo real del sistema.
-        </Alert>
-      )}
 
       {/* Rango de fechas */}
       <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-white p-1">
@@ -215,19 +198,18 @@ export default function AdminFinance() {
 
       {loading && !overview ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 9 }).map((_, index) => (
+          {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
       ) : overview ? (
         <>
-          {/* KPIs principales */}
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard
               icon={TrendingUp}
-              label="Volumen facturado (GMV)"
+              label="Volumen cobrado"
               value={formatMoney(overview.gmv_cents)}
-              hint={`${overview.completed_count} consultas liquidadas`}
+              hint={`${overview.paid_consultations} consultas cobradas`}
               tone="bg-sky-50 text-sky-700"
             />
             <KpiCard
@@ -240,55 +222,40 @@ export default function AdminFinance() {
             />
             <KpiCard
               icon={Wallet}
-              label="Pagado a médicos"
-              value={formatMoney(overview.doctor_payouts_cents)}
-              hint="Monto neto tras comisión"
+              label="Neto para médicos"
+              value={formatMoney(overview.doctor_net_cents)}
+              hint="Monto después de comisión"
               tone="bg-primary-50 text-primary-700"
             />
             <KpiCard
-              icon={Receipt}
-              label="Reembolsos"
-              value={formatMoney(overview.refunds_cents)}
-              hint="Devuelto a pacientes"
-              tone="bg-rose-50 text-rose-700"
-            />
-            <KpiCard
-              icon={ArrowDownLeft}
-              label="Recargas"
-              value={formatMoney(overview.topups_cents)}
-              hint="Créditos cargados"
-              tone="bg-emerald-50 text-emerald-700"
-            />
-            <KpiCard
               icon={Banknote}
-              label="Retiros pagados"
-              value={formatMoney(overview.withdrawals_paid_cents)}
-              hint={`En proceso: ${formatMoney(overview.withdrawals_processing_cents)} · Fallidos: ${formatMoney(overview.withdrawals_failed_cents)}`}
+              label="Payouts pagados"
+              value={formatMoney(overview.payouts_paid_cents)}
+              hint={`En proceso: ${formatMoney(overview.payouts_processing_cents)} · Fallidos: ${formatMoney(overview.payouts_failed_cents)}`}
               tone="bg-amber-50 text-amber-700"
             />
             <KpiCard
-              icon={PiggyBank}
-              label="En custodia (retenido)"
-              value={formatMoney(overview.held_cents)}
-              hint="Citas no liquidadas aún"
+              icon={ArrowDownLeft}
+              label="Pendiente de cobro"
+              value={formatMoney(overview.pending_charges_cents)}
+              hint="Citas confirmadas aún no cobradas"
               tone="bg-slate-100 text-slate-700"
             />
             <KpiCard
-              icon={Landmark}
-              label="Saldos de usuarios"
-              value={formatMoney(overview.user_balances_cents)}
-              hint={`De médicos: ${formatMoney(overview.doctor_balances_cents)}`}
+              icon={ArrowUpRight}
+              label="Ingresos por retirar"
+              value={formatMoney(overview.pending_earnings_cents)}
+              hint="Saldo de médicos pendiente de payout"
               tone="bg-slate-100 text-slate-700"
             />
           </section>
 
-          {/* Pestañas */}
           <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-white p-1">
             {(
               [
                 { value: 'commissions', label: 'Ganancias por comisión' },
-                { value: 'movements', label: 'Todos los movimientos' },
-                { value: 'withdrawals', label: 'Retiros' },
+                { value: 'movements', label: 'Transacciones' },
+                { value: 'payouts', label: 'Payouts' },
               ] as { value: TabValue; label: string }[]
             ).map((option) => (
               <button
@@ -318,7 +285,7 @@ export default function AdminFinance() {
                 <Skeleton className="m-4 h-40 rounded-xl" />
               ) : commissions.length === 0 ? (
                 <div className="p-4">
-                  <EmptyState icon={Coins} title="Sin comisiones" description="No hay citas liquidadas en este periodo." />
+                  <EmptyState icon={Coins} title="Sin comisiones" description="No hay cobros en este periodo." />
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -328,15 +295,15 @@ export default function AdminFinance() {
                         <th className="px-4 py-3">Fecha</th>
                         <th className="px-4 py-3">Médico</th>
                         <th className="px-4 py-3">Paciente</th>
+                        <th className="px-4 py-3 text-right">Minutos</th>
                         <th className="px-4 py-3 text-right">Bruto</th>
-                        <th className="px-4 py-3 text-right">Comisión {overview.platform_fee_percent}%</th>
+                        <th className="px-4 py-3 text-right">Comisión</th>
                         <th className="px-4 py-3 text-right">Neto médico</th>
-                        <th className="px-4 py-3 text-right">Cita</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {commissions.map((item) => (
-                        <tr key={item.appointment_payment_id} className="hover:bg-slate-50">
+                        <tr key={item.charge_id} className="hover:bg-slate-50">
                           <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
                             {formatDateTime(item.released_at)}
                           </td>
@@ -345,6 +312,7 @@ export default function AdminFinance() {
                             <p className="text-xs text-slate-500">{item.doctor_email}</p>
                           </td>
                           <td className="px-4 py-3 text-xs text-slate-600">{item.patient_email}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-700">{item.paid_minutes}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-800">
                             {formatMoney(item.gross_cents)}
                           </td>
@@ -354,7 +322,6 @@ export default function AdminFinance() {
                           <td className="px-4 py-3 text-right tabular-nums text-slate-800">
                             {formatMoney(item.net_cents)}
                           </td>
-                          <td className="px-4 py-3 text-right text-xs text-slate-500">#{item.appointment_id}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -376,7 +343,7 @@ export default function AdminFinance() {
                 <Skeleton className="m-4 h-40 rounded-xl" />
               ) : movements.length === 0 ? (
                 <div className="p-4">
-                  <EmptyState icon={ArrowUpRight} title="Sin movimientos" description="No hay movimientos en este periodo." />
+                  <EmptyState icon={ArrowUpRight} title="Sin movimientos" description="No hay transacciones en este periodo." />
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -415,10 +382,8 @@ export default function AdminFinance() {
                             </td>
                             <td className="max-w-[260px] px-4 py-3 text-xs text-slate-500">
                               <span className="line-clamp-2">{movement.description}</span>
-                              {movement.reference_type && (
-                                <span className="text-slate-400">
-                                  {movement.reference_type} #{movement.reference_id}
-                                </span>
+                              {movement.provider && (
+                                <span className="block text-slate-400">{movement.provider}</span>
                               )}
                             </td>
                             <td
@@ -430,7 +395,7 @@ export default function AdminFinance() {
                               {formatMoney(movement.amount_cents)}
                             </td>
                             <td className="px-4 py-3 text-xs text-slate-600">
-                              {WALLET_TRANSACTION_STATUS_LABELS[movement.status] ?? movement.status}
+                              {PAYMENT_TRANSACTION_STATUS_LABELS[movement.status] ?? movement.status}
                             </td>
                           </tr>
                         )
@@ -442,30 +407,15 @@ export default function AdminFinance() {
             </Card>
           ) : (
             <Card className="overflow-hidden p-0">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-sm">
-                <div className="flex flex-wrap gap-2">
-                  {WITHDRAWAL_FILTERS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setWithdrawalStatus(option.value)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        withdrawalStatus === option.value
-                          ? 'border-primary-300 bg-primary-50 text-primary-700'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{withdrawalTotal} retiros</span>
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm">
+                <p className="text-slate-600">Payouts solicitados por médicos</p>
+                <span className="text-xs uppercase tracking-[0.18em] text-slate-500">{payouts.length} payouts</span>
               </div>
               {loading ? (
                 <Skeleton className="m-4 h-40 rounded-xl" />
-              ) : withdrawals.length === 0 ? (
+              ) : payouts.length === 0 ? (
                 <div className="p-4">
-                  <EmptyState icon={Banknote} title="Sin retiros" description="No hay retiros en este periodo." />
+                  <EmptyState icon={Banknote} title="Sin payouts" description="No hay retiros solicitados." />
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -473,38 +423,43 @@ export default function AdminFinance() {
                     <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
                       <tr>
                         <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Usuario</th>
-                        <th className="px-4 py-3">Destino</th>
                         <th className="px-4 py-3 text-right">Monto</th>
                         <th className="px-4 py-3">Estado</th>
                         <th className="px-4 py-3">Proveedor</th>
+                        <th className="px-4 py-3 text-right">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {withdrawals.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50">
+                      {payouts.map((payout) => (
+                        <tr key={payout.id} className="hover:bg-slate-50">
                           <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
-                            {formatDateTime(item.processed_at || item.requested_at || item.created_at)}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-slate-600">
-                            {item.user_email || `Usuario #${item.user_id}`}
-                          </td>
-                          <td className="max-w-[220px] px-4 py-3 text-xs text-slate-500">
-                            <span className="line-clamp-2">{item.destination}</span>
-                            {item.failure_reason && (
-                              <span className="mt-0.5 block text-rose-600">{item.failure_reason}</span>
-                            )}
+                            {formatDateTime(payout.requested_at)}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">
-                            {formatMoney(item.amount_cents)}
+                            {formatMoney(payout.amount_cents)}
                           </td>
                           <td className="px-4 py-3">
-                            <Badge tone={WITHDRAWAL_TONES[item.status]}>{WITHDRAWAL_LABELS[item.status]}</Badge>
+                            <Badge tone={PAYOUT_TONES[payout.status]}>{PAYOUT_LABELS[payout.status]}</Badge>
+                            {payout.failure_reason && (
+                              <p className="mt-1 text-xs text-rose-600">{payout.failure_reason}</p>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-xs text-slate-500">
-                            {item.provider || '—'}
-                            {item.provider_reference && (
-                              <span className="block text-slate-400">{item.provider_reference}</span>
+                            {payout.provider}
+                            {payout.provider_reference && (
+                              <span className="block text-slate-400">{payout.provider_reference}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {payout.status === 'failed' && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                loading={retryingId === payout.id}
+                                onClick={() => void handleRetry(payout)}
+                              >
+                                Reintentar
+                              </Button>
                             )}
                           </td>
                         </tr>
@@ -516,19 +471,21 @@ export default function AdminFinance() {
             </Card>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-            <span>
-              Mostrando {total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE_SIZE, total)} de {total}
-            </span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-                Anterior
-              </Button>
-              <Button size="sm" variant="ghost" disabled={offset + PAGE_SIZE >= total || loading} onClick={() => setOffset(offset + PAGE_SIZE)}>
-                Siguiente
-              </Button>
+          {tab !== 'payouts' && (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+              <span>
+                Mostrando {total === 0 ? 0 : offset + 1}–{Math.min(offset + PAGE_SIZE, total)} de {total}
+              </span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+                  Anterior
+                </Button>
+                <Button size="sm" variant="ghost" disabled={offset + PAGE_SIZE >= total || loading} onClick={() => setOffset(offset + PAGE_SIZE)}>
+                  Siguiente
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       ) : (
         <Alert tone="danger" title="No se pudo cargar la información financiera">
@@ -559,9 +516,9 @@ function KpiCard({ icon: Icon, label, value, hint, tone, highlight }: KpiCardPro
         <span className={`rounded-xl p-2 ${tone}`} aria-hidden="true">
           <Icon className="h-4 w-4" />
         </span>
-        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+        <p className="text-sm text-slate-600">{label}</p>
       </div>
-      <p className="mt-3 text-2xl font-bold tabular-nums text-slate-950">{value}</p>
+      <p className="mt-3 text-2xl font-semibold text-slate-900">{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
     </div>
   )

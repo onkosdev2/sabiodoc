@@ -14,6 +14,20 @@ from app.models.favorite import Favorite
 from app.models.notification import Notification
 from app.models.password_reset_token import PasswordResetToken
 from app.models.patient_profile import PatientProfile
+from app.models.payment import (
+    ConsultationCharge,
+    ConsultationChargeStatus,
+    DoctorEarning,
+    DoctorEarningStatus,
+    PaymentCustomer,
+    PaymentMethod,
+    PaymentMethodStatus,
+    PaymentTransaction,
+    PaymentTransactionStatus,
+    PaymentTransactionType,
+    Payout,
+    PayoutStatus,
+)
 from app.models.patient_profile_change_request import PatientProfileChangeRequest
 from app.models.review_report import ReviewReport, ReviewReportStatus
 from app.models.specialty import Specialty
@@ -27,9 +41,3 @@ from app.models.user import User, UserRoleAssignment
 from app.models.video_session import VideoSession
 from app.models.video_session_event import VideoSessionEvent
 from app.models.video_session_file import VideoSessionFile
-from app.models.wallet import (
-    AppointmentPayment,
-    Wallet,
-    WalletTransaction,
-    Withdrawal,
-)

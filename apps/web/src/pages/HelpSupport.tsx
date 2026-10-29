@@ -47,15 +47,15 @@ const FAQ: { category: string; items: { q: string; a: string }[] }[] = [
     ],
   },
   {
-    category: 'Pagos y créditos',
+    category: 'Pagos',
     items: [
       {
-        q: '¿Qué son los créditos?',
-        a: 'Es tu saldo para pagar videoconsultas. 1 crédito = 1 USD. Puedes recargar desde Perfil → Créditos.',
+        q: '¿Cómo pago una videoconsulta?',
+        a: 'Guarda una tarjeta en Métodos de pago. El cobro se realiza cuando el médico autoriza el inicio de la consulta.',
       },
       {
-        q: '¿Cómo funciona el cobro de una cita?',
-        a: 'Se retiene el monto del tiempo reservado y, al terminar, se cobra solo el tiempo real. Lo no usado se devuelve a tu saldo.',
+        q: '¿Cómo funcionan las ampliaciones?',
+        a: 'Si se agota el tiempo pagado, el médico puede ampliar 5, 10 o 15 minutos. El cobro adicional se realiza antes de conceder el tiempo.',
       },
     ],
   },

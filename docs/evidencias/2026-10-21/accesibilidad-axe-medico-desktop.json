@@ -34,8 +34,8 @@
       "passes": 18
     },
     {
-      "route": "/doctor/wallet/",
-      "url": "http://127.0.0.1:5173/doctor/wallet/",
+      "route": "/doctor/earnings/",
+      "url": "http://127.0.0.1:5173/doctor/earnings/",
       "violations": [],
       "passes": 18
     }

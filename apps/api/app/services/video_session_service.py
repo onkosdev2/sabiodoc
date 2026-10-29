@@ -1,29 +1,23 @@
 import json
-import math
 import uuid
+from urllib.parse import urlparse
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.consultation import Consultation
-from app.models.doctor_presence import DoctorPresenceStatus
 from app.models.doctor_profile import DoctorApprovalStatus, DoctorProfile
-from app.models.doctor_specialty import DoctorSpecialty
 from app.models.patient_profile import PatientProfile
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.models.video_session import PaymentStatus, VideoSession, VideoSessionStatus, VideoProvider
 from app.models.video_session_event import VideoSessionEvent
-from app.models.wallet import AppointmentPayment, AppointmentPaymentStatus
-from sqlalchemy import and_, or_
+from app.models.payment import ConsultationCharge
 from app.services.audit_service import audit_service
 from app.services.error_log_service import error_log_service
 from app.services.jitsi_service import jitsi_service
 from app.services.llm_client import llm_client
-from app.services.payment_service import payment_service
 from app.services.presence_service import resolve_presence
-from app.services.pricing_service import pricing_service
 
 logger = get_logger(__name__)
 
@@ -166,25 +160,57 @@ class VideoSessionService:
         now = now or datetime.now(timezone.utc)
         if role == "patient":
             video_session.jitsi_patient_present = present
-            if present and video_session.jitsi_patient_joined_at is None:
-                video_session.jitsi_patient_joined_at = now
+            if present:
+                video_session.jitsi_patient_last_seen_at = now
+                if video_session.jitsi_patient_joined_at is None:
+                    video_session.jitsi_patient_joined_at = now
         else:
             video_session.jitsi_doctor_present = present
-            if present and video_session.jitsi_doctor_joined_at is None:
-                video_session.jitsi_doctor_joined_at = now
+            if present:
+                video_session.jitsi_doctor_last_seen_at = now
+                if video_session.jitsi_doctor_joined_at is None:
+                    video_session.jitsi_doctor_joined_at = now
+
+    def touch_jitsi_participant(
+        self,
+        video_session: VideoSession,
+        role: str,
+        now: datetime | None = None,
+    ) -> None:
+        """Heartbeat emitido desde la conferencia de Jitsi."""
+        now = now or datetime.now(timezone.utc)
+        if role == "patient":
+            video_session.jitsi_patient_present = True
+            video_session.jitsi_patient_last_seen_at = now
+        else:
+            video_session.jitsi_doctor_present = True
+            video_session.jitsi_doctor_last_seen_at = now
 
     def requires_jitsi(self, video_session: VideoSession) -> bool:
         """El cobro por Jitsi solo aplica a salas reales (no al modo mock)."""
         return getattr(video_session, "provider", None) == VideoProvider.jitsi and not jitsi_service.is_mock
 
-    def participant_in_jitsi(self, video_session: VideoSession, role: str) -> bool:
-        if role == "patient":
-            return bool(video_session.jitsi_patient_present)
-        return bool(video_session.jitsi_doctor_present)
+    def _is_jitsi_presence_fresh(self, last_seen: datetime | None, now: datetime) -> bool:
+        if last_seen is None:
+            return True
+        return (now - last_seen).total_seconds() <= settings.JITSI_PRESENCE_TIMEOUT_SECONDS
 
-    def both_in_jitsi(self, video_session: VideoSession) -> bool:
-        return self.participant_in_jitsi(video_session, "patient") and self.participant_in_jitsi(
-            video_session, "doctor"
+    def participant_in_jitsi(
+        self, video_session: VideoSession, role: str, now: datetime | None = None
+    ) -> bool:
+        now = now or datetime.now(timezone.utc)
+        if role == "patient":
+            return bool(video_session.jitsi_patient_present) and self._is_jitsi_presence_fresh(
+                video_session.jitsi_patient_last_seen_at, now
+            )
+        return bool(video_session.jitsi_doctor_present) and self._is_jitsi_presence_fresh(
+            video_session.jitsi_doctor_last_seen_at, now
+        )
+
+    def both_in_jitsi(self, video_session: VideoSession, now: datetime | None = None) -> bool:
+        now = now or datetime.now(timezone.utc)
+        return self.participant_in_jitsi(video_session, "patient", now) and self.participant_in_jitsi(
+            video_session, "doctor", now
         )
 
     def both_participants_present(self, video_session: VideoSession, now: datetime | None = None) -> bool:
@@ -196,7 +222,7 @@ class VideoSessionService:
             return False
         # Si la sala usa Jitsi real, ambos deben estar además dentro de la
         # conferencia: no se cobra por estar solo en la ruta /video-room.
-        if self.requires_jitsi(video_session) and not self.both_in_jitsi(video_session):
+        if self.requires_jitsi(video_session) and not self.both_in_jitsi(video_session, now):
             return False
         return True
 
@@ -252,110 +278,6 @@ class VideoSessionService:
         )
         return True
 
-    def _effective_elapsed_seconds(self, video_session: VideoSession, now: datetime) -> int:
-        elapsed = video_session.billable_seconds or 0
-        if video_session.started_at is not None:
-            elapsed += max(0, int((now - video_session.started_at).total_seconds()))
-        return elapsed
-
-    def process_overtime_billing(
-        self, db: Session, video_session: VideoSession, now: datetime | None = None
-    ) -> bool:
-        """Consume créditos del paciente por el tiempo extra transcurrido.
-
-        Devuelve False cuando el paciente no tiene saldo para seguir: el llamador
-        debe terminar la videollamada de inmediato.
-        """
-        appointment = video_session.appointment
-        if appointment is None:
-            return True
-
-        now = now or datetime.now(timezone.utc)
-        price = video_session.doctor_price_per_min_cents or 0
-        scheduled_minutes = video_session.estimated_minutes or appointment.duration_minutes
-        if price <= 0 or scheduled_minutes <= 0:
-            return True
-
-        elapsed = self._effective_elapsed_seconds(video_session, now)
-        if elapsed <= 0:
-            return True
-
-        minutes = max(settings.VIDEO_MIN_BILLABLE_MINUTES, math.ceil(elapsed / 60))
-        overtime_minutes = max(0, minutes - scheduled_minutes)
-        if overtime_minutes <= 0:
-            return True
-
-        overtime_cost = overtime_minutes * price
-
-        from app.services.wallet_service import wallet_service
-
-        payment = wallet_service.get_held_appointment_payment(db, appointment.id)
-        already_charged = payment.overtime_amount_cents if payment else 0
-        delta = overtime_cost - already_charged
-        if delta <= 0:
-            return True
-
-        # Consume todo lo disponible (aunque no alcance para el minuto completo)
-        # y avisa si no se cubrio el tiempo extra: el llamador debe terminar.
-        balance = wallet_service.get_balance_cents(db, appointment.patient_id)
-        charge_amount = min(delta, balance)
-        if charge_amount > 0:
-            wallet_service.charge_overtime(db, appointment, charge_amount)
-        return charge_amount >= delta
-
-    def terminate_for_no_credits(
-        self, db: Session, video_session: VideoSession, now: datetime | None = None
-    ) -> None:
-        """Finaliza la videollamada de golpe porque el paciente se quedo sin créditos."""
-        now = now or datetime.now(timezone.utc)
-        self.reconcile_timer(video_session, now)
-        self.pause_timer(video_session, now)
-        video_session.status = VideoSessionStatus.completed
-        video_session.ended_at = now
-        video_session.ended_by_user_id = None
-        video_session.closed_reason = "completed_no_credits"
-        video_session.patient_present = False
-        video_session.doctor_present = False
-
-        appointment = video_session.appointment
-        if appointment is not None:
-            from app.services.wallet_service import wallet_service
-
-            appointment.status = AppointmentStatus.completed
-            appointment.completed_at = appointment.completed_at or now
-            if appointment.consultation:
-                appointment.consultation.status = ConsultationStatus.closed
-                appointment.consultation.closed_at = appointment.consultation.closed_at or now
-            wallet_service.release_appointment(
-                db,
-                appointment,
-                billable_seconds=video_session.billable_seconds or 0,
-            )
-
-            from app.services.notification_service import notification_service
-
-            notification_service.create(
-                db,
-                user_id=appointment.patient_id,
-                notification_type="video_session_no_credits",
-                title="Videoconsulta finalizada por falta de créditos",
-                body="La videoconsulta termino al agotarse tus créditos. Recarga para futuras consultas.",
-                action_url="/me/wallet",
-                metadata={"video_session_id": video_session.id, "action_label": "Recargar créditos"},
-            )
-
-        db.add(
-            VideoSessionEvent(
-                video_session_id=video_session.id,
-                event_type="video_session_terminated_no_credits",
-                source="backend",
-                payload_json=json.dumps({"billable_seconds": video_session.billable_seconds or 0}),
-            )
-        )
-        logger.warning(
-            f"Video session {video_session.id} terminated: patient ran out of credits"
-        )
-
     def _apply_expiration(self, video_session: VideoSession, now: datetime) -> None:
         """Marca una sesión vencida como expirada, acumulando el tiempo si estaba activa."""
         if video_session.started_at is not None:
@@ -373,38 +295,29 @@ class VideoSessionService:
             video_session.closed_reason = "expired_inactivity"
 
     def settle_appointment_if_billable(self, db: Session, video_session: VideoSession) -> None:
-        """Cierra la cita y cobra el tiempo real si la sesión expiro con uso.
-
-        Evita que el médico pierda el cobro y que la retencion quede colgada
-        cuando la sala expira en lugar de cerrarse manualmente.
-        """
+        """Finaliza la cita y registra los ingresos si la sesión expiró con uso."""
         appointment = video_session.appointment
         if appointment is None or appointment.status != AppointmentStatus.scheduled:
             return
         if (video_session.billable_seconds or 0) <= 0:
             return
 
-        from app.services.wallet_service import wallet_service
+        from app.services.payments.charge_service import charge_service
 
-        now = datetime.now(timezone.utc)
-        appointment.status = AppointmentStatus.completed
-        appointment.completed_at = appointment.completed_at or now
-        if appointment.consultation:
-            appointment.consultation.status = ConsultationStatus.closed
-            appointment.consultation.closed_at = appointment.consultation.closed_at or now
-        wallet_service.release_appointment(
-            db,
-            appointment,
-            billable_seconds=video_session.billable_seconds,
+        charge_service.finalize_session(
+            db, video_session, reason=video_session.closed_reason or "session_expired"
         )
 
     def expire_session_if_stale(self, db: Session, video_session: VideoSession) -> bool:
         now = datetime.now(timezone.utc)
-        if video_session.status not in {VideoSessionStatus.prepared, VideoSessionStatus.active}:
+        if video_session.status not in {
+            VideoSessionStatus.prepared,
+            VideoSessionStatus.active,
+            VideoSessionStatus.extension_requested,
+        }:
             return False
         if video_session.expires_at > now:
             return False
-        self.process_overtime_billing(db, video_session, now)
         self._apply_expiration(video_session, now)
         self.settle_appointment_if_billable(db, video_session)
         db.commit()
@@ -413,7 +326,10 @@ class VideoSessionService:
 
     def _is_abandoned(self, video_session: VideoSession, now: datetime) -> bool:
         """True si una sesión activa lleva un rato sin nadie en la sala."""
-        if video_session.status != VideoSessionStatus.active:
+        if video_session.status not in {
+            VideoSessionStatus.active,
+            VideoSessionStatus.extension_requested,
+        }:
             return False
         if self.participant_present(video_session, "patient", now) or self.participant_present(
             video_session, "doctor", now
@@ -444,11 +360,17 @@ class VideoSessionService:
         - Abandonadas: siguen `active` pero llevan sin nadie en la sala un rato
           (antes quedaban colgadas hasta vencer).
 
-        En ambos casos se liquida la cita para no dejar retenciones sin resolver.
+        En ambos casos se finaliza la cita y se registran los ingresos.
         """
         now = datetime.now(timezone.utc)
         query = db.query(VideoSession).filter(
-            VideoSession.status.in_([VideoSessionStatus.prepared, VideoSessionStatus.active]),
+            VideoSession.status.in_(
+                [
+                    VideoSessionStatus.prepared,
+                    VideoSessionStatus.active,
+                    VideoSessionStatus.extension_requested,
+                ]
+            ),
             VideoSession.expires_at <= now,
         )
         if doctor_id is not None:
@@ -456,7 +378,9 @@ class VideoSessionService:
         stale = list(query.all())
 
         abandoned_query = db.query(VideoSession).filter(
-            VideoSession.status == VideoSessionStatus.active,
+            VideoSession.status.in_(
+                [VideoSessionStatus.active, VideoSessionStatus.extension_requested]
+            ),
             VideoSession.expires_at > now,
         )
         if doctor_id is not None:
@@ -467,12 +391,10 @@ class VideoSessionService:
             return 0
 
         for video_session in stale:
-            self.process_overtime_billing(db, video_session, now)
             self._apply_expiration(video_session, now)
             self.settle_appointment_if_billable(db, video_session)
 
         for video_session in abandoned:
-            self.process_overtime_billing(db, video_session, now)
             self._close_abandoned(video_session, now)
             self.settle_appointment_if_billable(db, video_session)
             db.add(
@@ -500,191 +422,6 @@ class VideoSessionService:
             presence.status = resolved.status
             presence.status_message = resolved.status_message
             db.commit()
-
-    def prepare_session(
-        self,
-        db: Session,
-        consultation: Consultation,
-        patient_id: int,
-        doctor_profile_id: int,
-        estimated_minutes: int,
-        payment_method_id: str | None = None,
-    ) -> dict:
-        doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_profile_id).first()
-        if not doctor_profile:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
-
-        if not doctor_profile.user.is_doctor:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El usuario seleccionado no es médico")
-
-        if not doctor_profile.is_accepting_consultations:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El médico no está aceptando videoconsultas en este momento",
-            )
-
-        if doctor_profile.status != DoctorApprovalStatus.approved:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El médico aún no está aprobado para atender videoconsultas",
-            )
-
-        specialty_link = (
-            db.query(DoctorSpecialty)
-            .filter(
-                DoctorSpecialty.doctor_id == doctor_profile.id,
-                DoctorSpecialty.specialty_id == consultation.specialty_id,
-            )
-            .first()
-        )
-        if not specialty_link:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El médico no atiende la especialidad de esta consulta",
-            )
-
-        resolved = resolve_presence(db, doctor_profile)
-        if resolved.status != DoctorPresenceStatus.online:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El médico no está disponible ahora mismo",
-            )
-        active_session = (
-            db.query(VideoSession)
-            .filter(
-                VideoSession.doctor_id == doctor_profile.id,
-                or_(
-                    VideoSession.status == VideoSessionStatus.active,
-                    and_(
-                        VideoSession.status == VideoSessionStatus.prepared,
-                        VideoSession.appointment_id.is_(None),
-                    ),
-                ),
-            )
-            .first()
-        )
-        if active_session:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="El médico ya tiene una videoconsulta en curso o preparada",
-            )
-
-        self._ensure_no_immediate_schedule_conflict(
-            db=db,
-            doctor_profile_id=doctor_profile.id,
-            estimated_minutes=estimated_minutes,
-        )
-
-        pricing_service.validate_price_per_minute(doctor_profile.price_per_min_cents)
-        prepaid_amount_cents = pricing_service.calculate_prepay_amount(
-            doctor_profile.price_per_min_cents,
-            estimated_minutes,
-        )
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.VIDEO_PREPARE_EXPIRATION_MINUTES)
-        room_name = f"sabiodoc-{consultation.id}-{uuid.uuid4().hex[:10]}"
-
-        video_session = VideoSession(
-            consultation_id=consultation.id,
-            patient_id=patient_id,
-            doctor_id=doctor_profile.id,
-            provider=VideoProvider.jitsi_mock if jitsi_service.is_mock else VideoProvider.jitsi,
-            status=VideoSessionStatus.prepared,
-            payment_status=PaymentStatus.pending,
-            provider_room_name=room_name,
-            doctor_price_per_min_cents=doctor_profile.price_per_min_cents,
-            estimated_minutes=estimated_minutes,
-            prepaid_amount_cents=prepaid_amount_cents,
-            expires_at=expires_at,
-        )
-        db.add(video_session)
-        db.flush()
-
-        try:
-            room_data = jitsi_service.prepare_room(
-                room_name=room_name,
-                consultation_id=consultation.id,
-                doctor_profile_id=doctor_profile.id,
-                patient_id=patient_id,
-                expires_at=expires_at,
-            )
-            payment_data = payment_service.create_prepayment(
-                amount_cents=prepaid_amount_cents,
-                consultation_id=consultation.id,
-                doctor_profile_id=doctor_profile.id,
-                patient_id=patient_id,
-                payment_method_id=payment_method_id,
-            )
-        except HTTPException:
-            raise
-        except ValueError as exc:
-            video_session.status = VideoSessionStatus.failed
-            video_session.payment_status = PaymentStatus.failed
-            db.commit()
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        except Exception as exc:
-            logger.error(f"Video session prepare failed: {exc}", exc_info=True)
-            error_log_service.record_exception(
-                exc,
-                message=f"Fallo al preparar la videoconsulta inmediata: {exc}",
-                video_session_id=video_session.id,
-                consultation_id=consultation.id,
-                context={
-                    "flow": "prepare_session",
-                    "jitsi_mock": jitsi_service.is_mock,
-                    "jitsi_base_url": settings.JITSI_BASE_URL,
-                    "jitsi_jwt_enabled": bool(settings.JITSI_JWT_SECRET),
-                    "room_name": room_name,
-                },
-            )
-            video_session.status = VideoSessionStatus.failed
-            video_session.payment_status = PaymentStatus.failed
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="No se pudo preparar la videoconsulta con el proveedor externo",
-            ) from exc
-
-        video_session.provider = VideoProvider(room_data["provider"])
-        video_session.provider_room_name = room_data["room_name"]
-        video_session.provider_room_url = room_data.get("room_url")
-        video_session.payment_reference = payment_data.get("reference")
-        video_session.payment_status = PaymentStatus(payment_data["status"])
-        video_session.metadata_json = json.dumps(room_data.get("metadata", {}))
-        db.add(
-            VideoSessionEvent(
-                video_session_id=video_session.id,
-                event_type="video_session_prepared",
-                source="backend",
-                payload_json=json.dumps(
-                    {
-                        "room_name": room_data["room_name"],
-                        "payment_reference": payment_data.get("reference"),
-                    }
-                ),
-            )
-        )
-
-        doctor_profile.presence.status = DoctorPresenceStatus.busy
-        doctor_profile.presence.status_message = "En sesión"
-        doctor_profile.presence.last_seen_at = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(video_session)
-
-        return {
-            "video_session_id": video_session.id,
-            "status": video_session.status,
-            "provider": video_session.provider,
-            "payment_status": video_session.payment_status,
-            "room_name": room_data["room_name"],
-            "room_url": jitsi_service.build_participant_url(room_data["room_name"], room_data["patient_token"]),
-            "patient_token": room_data["patient_token"],
-            "doctor_token": room_data["doctor_token"],
-            "doctor_price_per_min_cents": video_session.doctor_price_per_min_cents,
-            "estimated_minutes": video_session.estimated_minutes,
-            "prepaid_amount_cents": video_session.prepaid_amount_cents,
-            "expires_at": video_session.expires_at,
-            "payment_reference": video_session.payment_reference,
-        }
 
     def prepare_session_for_appointment(
         self,
@@ -714,6 +451,15 @@ class VideoSessionService:
         )
 
         now = datetime.now(timezone.utc)
+        if existing_session:
+            current_host = (urlparse(settings.JITSI_BASE_URL).hostname or "").lower()
+            existing_host = (urlparse(existing_session.provider_room_url or "").hostname or "").lower()
+            if current_host and existing_host and current_host != existing_host:
+                # El host de Jitsi cambió (p. ej. de meet.jit.si a uno self-hosted).
+                existing_session.status = VideoSessionStatus.expired
+                existing_session.ended_at = existing_session.ended_at or now
+                db.flush()
+                existing_session = None
         if existing_session and existing_session.status == VideoSessionStatus.prepared and existing_session.expires_at <= now:
             existing_session.status = VideoSessionStatus.expired
             existing_session.ended_at = existing_session.ended_at or now
@@ -721,11 +467,19 @@ class VideoSessionService:
             existing_session = None
 
         if existing_session:
+            if participant_role == "patient":
+                participant_name = self._resolve_patient_name(db, appointment.patient)
+                participant_email = appointment.patient.email if appointment.patient else None
+            else:
+                participant_name = doctor_profile.display_name
+                participant_email = doctor_profile.user.email if doctor_profile.user else None
             participant_token = jitsi_service.create_meeting_token(
                 room_name=existing_session.provider_room_name,
                 owner_id=current_user.id,
                 role=participant_role,
                 expires_at=existing_session.expires_at,
+                name=participant_name,
+                email=participant_email,
             )
             db.commit()
             db.refresh(existing_session)
@@ -739,24 +493,13 @@ class VideoSessionService:
         expires_at = self._build_appointment_expiration(appointment)
         room_name = f"sabiodoc-appt-{appointment.id}-{uuid.uuid4().hex[:10]}"
 
-        # La cita ya se pagó con créditos al agendarse: reflejamos ese estado en la sesión.
-        appointment_payment = (
-            db.query(AppointmentPayment)
-            .filter(AppointmentPayment.appointment_id == appointment.id)
+        charge = (
+            db.query(ConsultationCharge)
+            .filter(ConsultationCharge.appointment_id == appointment.id)
             .first()
         )
-        if appointment_payment is None:
-            session_payment_status = PaymentStatus.waived
-            prepaid_amount_cents = 0
-        elif appointment_payment.status == AppointmentPaymentStatus.released:
-            session_payment_status = PaymentStatus.captured
-            prepaid_amount_cents = appointment_payment.amount_cents
-        elif appointment_payment.status == AppointmentPaymentStatus.refunded:
-            session_payment_status = PaymentStatus.failed
-            prepaid_amount_cents = 0
-        else:
-            session_payment_status = PaymentStatus.authorized
-            prepaid_amount_cents = appointment_payment.amount_cents
+        session_payment_status = PaymentStatus.pending
+        payment_amount_cents = charge.quoted_amount_cents if charge else 0
 
         video_session = VideoSession(
             consultation_id=appointment.consultation_id,
@@ -769,7 +512,7 @@ class VideoSessionService:
             provider_room_name=room_name,
             doctor_price_per_min_cents=doctor_profile.price_per_min_cents,
             estimated_minutes=appointment.duration_minutes,
-            prepaid_amount_cents=prepaid_amount_cents,
+            payment_amount_cents=payment_amount_cents,
             expires_at=expires_at,
         )
         db.add(video_session)
@@ -783,6 +526,10 @@ class VideoSessionService:
                 doctor_profile_id=doctor_profile.id,
                 patient_id=appointment.patient_id,
                 expires_at=expires_at,
+                patient_name=self._resolve_patient_name(db, appointment.patient),
+                patient_email=appointment.patient.email if appointment.patient else None,
+                doctor_name=doctor_profile.display_name,
+                doctor_email=doctor_profile.user.email if doctor_profile.user else None,
             )
         except Exception as exc:
             logger.error(f"Appointment video session prepare failed: {exc}", exc_info=True)

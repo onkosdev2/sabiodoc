@@ -1,4 +1,4 @@
-# Plan de fixes SabioDoc v2
+# Plan de fixes SabioDoc
 
 **Base:** `docs/plan-correccion-sabiodoc.docx` + auditoría del 13/10/2026 + verificación del repositorio y de `https://sabiodoc-1.onrender.com/` del 19/10/2026.
 
@@ -18,7 +18,7 @@
 - **2.4 Eventos Jitsi:** completado. `JitsiMeeting` escucha `participantJoined`, `participantLeft`, `videoConferenceLeft`, `conferenceFailed`, `connectionFailed` y `errorOccurred`; la sala refresca el estado al entrar/salir el participante remoto.
 - **2.5 Estados y mensajes:** completado. La presencia, el estado, el botón y el mensaje del cronómetro usan la misma fuente de verdad (Jitsi cuando la sala es real). Se eliminó la contradicción “Ambos conectados” + “Nadie ha entrado”.
 - **2.5b Cámara y micrófono:** completado. `getUserMedia` con timeout de 12 s, clasificación de errores, selección de dispositivos, reintento y mensajes accesibles. Pendiente prueba manual en navegadores y decisión de producto sobre `conferenceFailed`.
-- **2.6 Cobro y pago:** completado. `pause`, `leave` y cierre por falta de créditos reconcilian presencia antes de acumular. Se validan claves Stripe test/live. Webhooks con firma e idempotencia ya cubiertos por tests.
+- **2.6 Cobro y pago:** completado. `pause`, `leave` y cierre reconcilian presencia antes de acumular. El cobro usa la pasarela configurada y las pruebas cubren pago, rechazo y 3DS.
 - **3.3 Vigencia del prerender:** completado. `FRONTEND_DEPLOY_HOOK_URL` dispara rebuild al aprobar/editar médicos o cambiar su foto. OG de perfiles correcto.
 - **3.4 Sitemap y noindex:** completado. Sitemap solo con rutas públicas, `/login` y `/register` fuera; rutas privadas con `noindex` en cliente y guía de `X-Robots-Tag` en Render. Pendiente configurar Search Console/Bing.
 - **5.2 Errores de formulario:** completado. Resumen de errores en Login, Registro y postulación médica; foco al primer campo inválido; `aria-describedby` en campos personalizados.
@@ -102,7 +102,7 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 | D3 | Transcripción | Funcionalidad prevista para producción; aún no implementada | Mantener el copy preparado como funcionalidad prevista. No presentarla como activa hasta implementar consentimiento específico, retención y proveedor. |
 | D4 | Alcance legal | Perú solamente o varios países | Definir país(es) antes de aprobar políticas y consentimientos. |
 | D5 | Staging | Servicio aparte o preview por rama | Servicio aparte con BD, Jitsi, correo y Cloudinary separados. |
-| D6 | Pagos | Solo créditos ficticios o PSP real | Mantener ficticio hasta cerrar P0; separar claves test/live y webhooks. |
+| D6 | Pagos | Pasarela mock o proveedor real | Mantener el proveedor mock hasta cerrar P0; separar credenciales de prueba y producción. |
 
 ---
 
@@ -150,11 +150,11 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 
 - Duplicar frontend, API y base de datos en un entorno separado.
 - Separar secretos de Jitsi, SMTP, Cloudinary, pagos y analítica.
-- Cargar solo usuarios, síntomas, citas y créditos sintéticos.
+- Cargar solo usuarios, síntomas, citas y pagos sintéticos.
 - Mostrar una etiqueta visible de “Entorno de pruebas”.
 - Probar restauración de un backup antes de usarlo.
 
-**Aceptación:** staging funciona sin compartir credenciales, citas ni saldos con producción; el restore se ejecutó al menos una vez.
+**Aceptación:** staging funciona sin compartir credenciales, citas ni cobros con producción; el restore se ejecutó al menos una vez.
 
 ### 0.5 Observabilidad mínima (D/C, M)
 
@@ -280,7 +280,7 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 - Validar firma de webhooks e idempotencia.
 - Conciliar duración, costo, reembolso, comisión e ingreso médico.
 - Alertar por cobro sin duración o sin presencia confirmada.
-- Revisar que la etiqueta de la cita use costo final, no retención.
+- Revisar que la etiqueta de la cita use el importe cobrado.
 
 **Aceptación:** no existe cobro sin evidencia de consulta; la conciliación coincide con los movimientos de billetera.
 
@@ -463,7 +463,7 @@ Sin estas decisiones, varias tareas no se pueden cerrar.
 
 - Registro, login, recuperación y cierre de sesión.
 - Orientación sintética y alertas de emergencia.
-- Reserva y reprogramación con créditos ficticios.
+- Reserva y reprogramación con método de pago de prueba.
 - Llamada con dos participantes y medios simulados.
 - Bloqueo de cobro, inicio, interrupción, cierre y liquidación.
 - Políticas, consentimientos, 404, metadatos, responsive y accesibilidad.

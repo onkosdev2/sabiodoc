@@ -62,7 +62,7 @@ def _create_session(patient_id: int, doctor_id: int) -> int:
             provider_room_name=f"sabiodoc-test-{uuid.uuid4().hex[:10]}",
             doctor_price_per_min_cents=2200,
             estimated_minutes=30,
-            prepaid_amount_cents=0,
+            payment_amount_cents=0,
             expires_at=datetime.now(UTC) + timedelta(minutes=30),
         )
         db.add(session)

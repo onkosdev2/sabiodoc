@@ -25,6 +25,65 @@ class AppointmentService:
     def get_no_show_grace_delta(self) -> timedelta:
         return timedelta(minutes=settings.NO_SHOW_GRACE_MINUTES)
 
+    def quote(self, doctor_profile: DoctorProfile, duration_minutes: int) -> dict:
+        if duration_minutes < 5 or duration_minutes > 120:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La duración debe estar entre 5 y 120 minutos",
+            )
+        price = doctor_profile.price_per_min_cents or 0
+        amount = duration_minutes * price
+        fee = int(round(amount * settings.PLATFORM_FEE_BPS / 10_000))
+        return {
+            "doctor_id": doctor_profile.id,
+            "duration_minutes": duration_minutes,
+            "price_per_min_cents": price,
+            "amount_cents": amount,
+            "currency": settings.PAYMENT_CURRENCY,
+            "platform_fee_cents": fee,
+            "doctor_net_cents": amount - fee,
+        }
+
+    def expire_pending_confirmations(self, db: Session, now: datetime | None = None) -> int:
+        """Cancela solicitudes que el médico no confirmó a tiempo."""
+        from app.models.payment import ConsultationCharge, ConsultationChargeStatus
+        from app.services.notification_service import notification_service
+
+        now = now or datetime.now(UTC)
+        pending = (
+            db.query(Appointment)
+            .filter(
+                Appointment.confirmation_status == "pending",
+                Appointment.confirmation_expires_at.is_not(None),
+                Appointment.confirmation_expires_at <= now,
+            )
+            .all()
+        )
+        for appointment in pending:
+            appointment.confirmation_status = "expired"
+            appointment.status = AppointmentStatus.cancelled
+            appointment.cancelled_at = now
+            appointment.cancellation_reason = "El médico no confirmó la cita a tiempo."
+            charge = (
+                db.query(ConsultationCharge)
+                .filter(ConsultationCharge.appointment_id == appointment.id)
+                .first()
+            )
+            if charge and charge.status == ConsultationChargeStatus.pending:
+                charge.status = ConsultationChargeStatus.cancelled
+            notification_service.create(
+                db,
+                user_id=appointment.patient_id,
+                notification_type="appointment_confirmation_expired",
+                title="Solicitud de cita expirada",
+                body="El médico no confirmó la cita a tiempo. Puedes elegir otro horario.",
+                action_url="/me/appointments",
+                metadata={"appointment_id": appointment.id, "action_label": "Ver cita"},
+            )
+        if pending:
+            db.commit()
+        return len(pending)
+
     def get_timezone(self, timezone_name: str | None) -> ZoneInfo:
         try:
             return ZoneInfo(timezone_name or "UTC")
@@ -159,28 +218,26 @@ class AppointmentService:
 
     def serialize_appointment(self, appointment: Appointment, files: list | None = None):
         review = appointment.review[0] if appointment.review else None
-        payment = getattr(appointment, "payment", None)
-        from app.models.wallet import AppointmentPaymentStatus
+        charge = getattr(appointment, "consultation_charge", None)
         from app.schemas.appointment import AppointmentResponse
 
-        # Liquidación real: costo final y lo devuelto (independiente del monto retenido).
-        final_amount_cents = None
-        refund_cents = None
-        if payment:
-            held = payment.amount_cents or 0
-            overtime = payment.overtime_amount_cents or 0
-            if payment.status == AppointmentPaymentStatus.released:
-                final_amount_cents = (
-                    payment.billable_amount_cents
-                    if payment.billable_amount_cents is not None
-                    else held
-                )
-                refund_cents = max(0, held + overtime - final_amount_cents)
-            elif payment.status == AppointmentPaymentStatus.refunded:
-                final_amount_cents = 0
-                refund_cents = held + overtime
-            else:
-                refund_cents = 0
+        payment_amount_cents = None
+        payment_status = None
+        paid_amount_cents = None
+        paid_minutes = None
+        quoted_amount_cents = None
+        quoted_minutes = None
+        platform_fee_cents = None
+        doctor_amount_cents = None
+        if charge is not None:
+            payment_amount_cents = charge.paid_amount_cents or charge.quoted_amount_cents
+            payment_status = charge.status.value
+            paid_amount_cents = charge.paid_amount_cents
+            paid_minutes = charge.paid_minutes
+            quoted_amount_cents = charge.quoted_amount_cents
+            quoted_minutes = charge.quoted_minutes
+            platform_fee_cents = charge.platform_fee_cents
+            doctor_amount_cents = charge.doctor_net_cents
 
         # La consulta vinculada es la fuente de verdad: si su resumen o ficha
         # cambió después de agendar, mostramos el vigente en vez del snapshot.
@@ -217,12 +274,19 @@ class AppointmentService:
             created_at=appointment.created_at,
             review_rating=review.rating if review else None,
             review_comment=review.comment if review else None,
-            payment_amount_cents=payment.amount_cents if payment else None,
-            payment_status=payment.status if payment else None,
-            payment_platform_fee_cents=payment.platform_fee_cents if payment else None,
-            payment_doctor_amount_cents=payment.doctor_amount_cents if payment else None,
-            payment_final_amount_cents=final_amount_cents,
-            payment_refund_cents=refund_cents,
+            payment_amount_cents=payment_amount_cents,
+            payment_status=payment_status,
+            payment_platform_fee_cents=platform_fee_cents,
+            payment_doctor_amount_cents=doctor_amount_cents,
+            quoted_amount_cents=quoted_amount_cents,
+            quoted_minutes=quoted_minutes,
+            paid_amount_cents=paid_amount_cents,
+            paid_minutes=paid_minutes,
+            confirmation_status=getattr(appointment, "confirmation_status", None) or "pending",
+            confirmation_expires_at=getattr(appointment, "confirmation_expires_at", None),
+            confirmed_at=getattr(appointment, "confirmed_at", None),
+            declined_at=getattr(appointment, "declined_at", None),
+            decline_reason=getattr(appointment, "decline_reason", None),
             platform_fee_percent=round(settings.PLATFORM_FEE_BPS / 100, 2),
             files=files or [],
             files_enabled=settings.cloudinary_enabled,
@@ -282,6 +346,70 @@ class AppointmentService:
             current_date += timedelta(days=1)
 
         return slots[:60]
+
+    def compute_slot_grid(
+        self,
+        db: Session,
+        *,
+        doctor_profile: DoctorProfile,
+        days: int,
+        duration_minutes: int,
+    ) -> list[dict]:
+        """Devuelve todos los horarios de la agenda, marcando los ocupados."""
+        tz = self.get_timezone(doctor_profile.timezone)
+        now_utc = datetime.now(UTC)
+        now_local = now_utc.astimezone(tz)
+        end_date = now_local.date() + timedelta(days=days)
+        scheduled = (
+            db.query(Appointment)
+            .filter(
+                Appointment.doctor_id == doctor_profile.id,
+                Appointment.status == AppointmentStatus.scheduled,
+                Appointment.scheduled_at >= now_utc,
+                Appointment.scheduled_at
+                < datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=tz).astimezone(UTC),
+            )
+            .all()
+        )
+
+        slots: list[dict] = []
+        current_date = now_local.date()
+        while current_date <= end_date:
+            for availability in sorted(
+                doctor_profile.availability_slots, key=lambda item: (item.weekday, item.start_time)
+            ):
+                if not availability.is_active or availability.weekday != current_date.weekday():
+                    continue
+                local_start = datetime.combine(current_date, availability.start_time, tzinfo=tz)
+                local_end = datetime.combine(current_date, availability.end_time, tzinfo=tz)
+                cursor = local_start
+                while cursor + timedelta(minutes=duration_minutes) <= local_end:
+                    candidate_start = cursor.astimezone(UTC)
+                    candidate_end = (cursor + timedelta(minutes=duration_minutes)).astimezone(UTC)
+                    cursor += timedelta(minutes=duration_minutes)
+                    if candidate_start <= now_utc:
+                        continue
+                    overlap = False
+                    for appointment in scheduled:
+                        buffer_delta = timedelta(minutes=settings.APPOINTMENT_BUFFER_MINUTES)
+                        appointment_end = appointment.scheduled_at + timedelta(minutes=appointment.duration_minutes)
+                        if (
+                            appointment.scheduled_at - buffer_delta < candidate_end
+                            and appointment_end + buffer_delta > candidate_start
+                        ):
+                            overlap = True
+                            break
+                    slots.append(
+                        {
+                            "starts_at": candidate_start,
+                            "ends_at": candidate_end,
+                            "duration_minutes": duration_minutes,
+                            "available": not overlap,
+                            "unavailable_reason": "occupied" if overlap else None,
+                        }
+                    )
+            current_date += timedelta(days=1)
+        return slots[:120]
 
     def unread_notification_count(self, db: Session, user_id: int) -> int:
         return (

@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.services.error_log_service import error_log_service
 from app.services.llm_client import llm_client
-from app.routers import admin, appointments, auth, client_errors, consents, consultations, doctors, favorites, files, finance, guide, notifications, patients, specialties, support, triage, video_sessions, webhooks, emergency, wallet, reviews
+from app.routers import admin, appointments, auth, client_errors, consents, consultations, doctors, earnings, favorites, files, finance, guide, notifications, patients, payments, specialties, support, triage, video_sessions, emergency, reviews
 
 setup_logging()
 logger = get_logger(__name__)
@@ -119,15 +119,15 @@ app.include_router(patients.router)
 app.include_router(appointments.router)
 app.include_router(notifications.router)
 app.include_router(admin.router)
-app.include_router(wallet.router)
 app.include_router(video_sessions.router)
 app.include_router(emergency.router)
 app.include_router(client_errors.router)
 app.include_router(finance.router)
 app.include_router(finance.admin_router)
-app.include_router(webhooks.router)
 app.include_router(support.router)
 app.include_router(consents.router)
+app.include_router(payments.router)
+app.include_router(earnings.router)
 
 
 @app.exception_handler(HTTPException)

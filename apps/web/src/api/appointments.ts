@@ -24,6 +24,8 @@ export interface BookableSlot {
   starts_at: string
   ends_at: string
   duration_minutes: number
+  available: boolean
+  unavailable_reason: string | null
 }
 
 export interface BookableSlotListResponse {
@@ -62,11 +64,18 @@ export interface Appointment {
   review_rating: number | null
   review_comment: string | null
   payment_amount_cents: number | null
-  payment_status: 'held' | 'released' | 'refunded' | null
+  payment_status: string | null
   payment_platform_fee_cents: number | null
   payment_doctor_amount_cents: number | null
-  payment_final_amount_cents: number | null
-  payment_refund_cents: number | null
+  paid_amount_cents: number | null
+  paid_minutes: number | null
+  confirmation_status: 'pending' | 'confirmed' | 'declined' | 'expired' | 'cancelled'
+  confirmation_expires_at: string | null
+  confirmed_at: string | null
+  declined_at: string | null
+  decline_reason: string | null
+  quoted_amount_cents: number | null
+  quoted_minutes: number | null
   platform_fee_percent: number
   files: VideoSessionFile[]
   files_enabled: boolean
@@ -128,8 +137,42 @@ export interface AppointmentCreatePayload {
   patient_note?: string
   accepted_terms: boolean
   accepted_data_terms: boolean
-  accepted_overtime_terms: boolean
   consent_text_version?: string
+  payment_method_id?: number
+}
+
+export interface AppointmentQuote {
+  doctor_id: number
+  duration_minutes: number
+  price_per_min_cents: number
+  amount_cents: number
+  currency: string
+  platform_fee_cents: number
+  doctor_net_cents: number
+}
+
+export const quoteAppointment = async (
+  doctorId: number,
+  durationMinutes: number,
+): Promise<AppointmentQuote> => {
+  const response = await client.post<AppointmentQuote>('/appointments/quote', {
+    doctor_id: doctorId,
+    duration_minutes: durationMinutes,
+  })
+  return response.data
+}
+
+export const confirmAppointment = async (appointmentId: number): Promise<Appointment> => {
+  const response = await client.post<Appointment>(`/appointments/${appointmentId}/confirm`)
+  return response.data
+}
+
+export const declineAppointment = async (
+  appointmentId: number,
+  reason: string,
+): Promise<Appointment> => {
+  const response = await client.post<Appointment>(`/appointments/${appointmentId}/decline`, { reason })
+  return response.data
 }
 
 export interface AppointmentCompletePayload {

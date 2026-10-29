@@ -18,7 +18,7 @@ def _session(provider: VideoProvider) -> VideoSession:
         provider_room_name="room-test",
         doctor_price_per_min_cents=500,
         estimated_minutes=30,
-        prepaid_amount_cents=15000,
+        payment_amount_cents=15000,
         expires_at=now + timedelta(hours=1),
     )
     # Ambos presentes en la app (heartbeat), pero aún no en Jitsi.

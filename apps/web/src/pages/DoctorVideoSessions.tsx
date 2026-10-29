@@ -64,7 +64,7 @@ export default function DoctorVideoSessions() {
         room_url: session.room_url,
         participant_token: session.doctor_token,
         participant_role: 'doctor',
-        prepaid_amount_cents: session.prepaid_amount_cents,
+        payment_amount_cents: session.payment_amount_cents,
         estimated_minutes: session.estimated_minutes,
         expires_at: session.expires_at,
       }),
@@ -128,7 +128,7 @@ export default function DoctorVideoSessions() {
                       <Clock3 className="h-4 w-4 text-sky-600" aria-hidden="true" />
                       Expira: {new Date(session.expires_at).toLocaleString('es-ES')}
                     </p>
-                    <p>Reserva estimada: {formatMoney(session.prepaid_amount_cents)}</p>
+                    <p>Importe cotizado: {formatMoney(session.payment_amount_cents)}</p>
                   </div>
                 </div>
                 <div className="flex flex-col gap-3 md:min-w-[230px]">

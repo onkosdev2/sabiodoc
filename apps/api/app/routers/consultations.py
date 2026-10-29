@@ -23,7 +23,6 @@ from app.schemas.chat import (
     ChatRequest, ChatResponse, ChatMessageResponse, 
     ChatHistoryResponse, GenerateSummaryResponse
 )
-from app.schemas.video_session import VideoSessionPrepareRequest, VideoSessionPrepareResponse
 from app.services.specialist_assistant import (
     specialist_assistant,
     is_affirmative,
@@ -603,35 +602,3 @@ def close_consultation(
         logger.info(f"Consultation closed: id={consultation_id}")
 
     return serialize_consultation(consultation)
-
-
-@router.post("/{consultation_id}/video-session/prepare", response_model=VideoSessionPrepareResponse)
-def prepare_video_session(
-    consultation_id: int,
-    data: VideoSessionPrepareRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    consultation = (
-        db.query(Consultation)
-        .filter(Consultation.id == consultation_id, Consultation.user_id == current_user.id)
-        .first()
-    )
-
-    if not consultation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Consulta no encontrada"
-        )
-
-    result = video_session_service.prepare_session(
-        db=db,
-        consultation=consultation,
-        patient_id=current_user.id,
-        doctor_profile_id=data.doctor_id,
-        estimated_minutes=data.estimated_minutes,
-        payment_method_id=data.payment_method_id,
-    )
-
-    logger.info(f"Video session prepared: consultation_id={consultation_id}, doctor_profile_id={data.doctor_id}")
-    return VideoSessionPrepareResponse(**result)

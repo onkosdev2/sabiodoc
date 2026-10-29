@@ -34,8 +34,13 @@ class Appointment(Base):
     booked_via_ai = Column(Boolean, nullable=False, server_default="false")
     consent_accepted_at = Column(DateTime(timezone=True), nullable=True)
     consent_text_version = Column(String(50), nullable=True)
-    # El paciente acepto que la consulta puede extenderse y consumir créditos extra.
-    overtime_terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    # Confirmación manual del médico antes de abrir la sala.
+    confirmation_status = Column(String(30), nullable=False, server_default="pending")
+    confirmation_expires_at = Column(DateTime(timezone=True), nullable=True)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    confirmed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    declined_at = Column(DateTime(timezone=True), nullable=True)
+    decline_reason = Column(Text, nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     cancellation_reason = Column(Text, nullable=True)
@@ -52,3 +57,4 @@ class Appointment(Base):
     specialty = relationship("Specialty")
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("DoctorProfile", foreign_keys=[doctor_id])
+    consultation_charge = relationship("ConsultationCharge", backref="appointment", uselist=False)

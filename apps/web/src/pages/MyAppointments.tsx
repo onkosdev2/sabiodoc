@@ -23,7 +23,11 @@ import RichText from '../components/RichText'
 import SummaryToggleButton from '../components/SummaryToggleButton'
 import AppointmentFilesPanel from '../components/AppointmentFilesPanel'
 import type { VideoSessionFile } from '../api/videoSessions'
-import { APPOINTMENT_STATUS_LABELS, APPOINTMENT_STATUS_TONES } from '../utils/statusLabels'
+import {
+  APPOINTMENT_STATUS_LABELS,
+  APPOINTMENT_STATUS_TONES,
+  PAYMENT_STATUS_LABELS,
+} from '../utils/statusLabels'
 import { getApiErrorMessage } from '../utils/apiError'
 import { formatMoney } from '../utils/format'
 import { usePagination } from '../hooks/usePagination'
@@ -136,7 +140,7 @@ export default function MyAppointments() {
           room_url: session.room_url,
           participant_token: session.participant_token,
           participant_role: session.participant_role,
-          prepaid_amount_cents: 0,
+          payment_amount_cents: 0,
           estimated_minutes: appointment.duration_minutes,
           expires_at: session.expires_at,
         }),
@@ -236,12 +240,25 @@ export default function MyAppointments() {
                       {new Date(appointment.scheduled_at).toLocaleString('es-ES')} · {appointment.duration_minutes} min
                     </p>
                   </div>
-                  <Badge tone={APPOINTMENT_STATUS_TONES[appointment.status]}>
-                    {APPOINTMENT_STATUS_LABELS[appointment.status]}
-                  </Badge>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={APPOINTMENT_STATUS_TONES[appointment.status]}>
+                      {APPOINTMENT_STATUS_LABELS[appointment.status]}
+                    </Badge>
+                    {appointment.confirmation_status === 'pending' && (
+                      <Badge tone="warning">Pendiente de confirmación</Badge>
+                    )}
+                  </div>
                 </div>
 
-                {appointment.status === 'scheduled' && (
+                {appointment.confirmation_status === 'pending' && (
+                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    Solicitud enviada. El médico debe confirmar la cita antes de que puedas entrar a la sala.
+                    No se ha realizado ningún cobro.
+                  </div>
+                )}
+
+                {appointment.status === 'scheduled' &&
+                  appointment.confirmation_status === 'confirmed' && (
                   <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50 p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-sky-700">Videoconsulta programada</p>
                     <p className="mt-2 text-sm text-sky-900">{roomAvailability.note}</p>
@@ -275,30 +292,28 @@ export default function MyAppointments() {
 
                 {appointment.payment_amount_cents != null && (
                   <div className="mt-3 space-y-1 text-sm text-slate-600">
-                    {appointment.payment_status === 'released' ? (
+                    {appointment.payment_status === 'paid' ? (
                       <>
                         <p>
-                          <span className="font-medium text-slate-800">Costo final: </span>
-                          {formatMoney(
-                            appointment.payment_final_amount_cents ?? appointment.payment_amount_cents,
-                          )}
+                          <span className="font-medium text-slate-800">Importe cobrado: </span>
+                          {formatMoney(appointment.paid_amount_cents ?? appointment.payment_amount_cents)}
                         </p>
-                        {appointment.payment_refund_cents ? (
+                        {appointment.paid_minutes ? (
                           <p>
-                            <span className="font-medium text-slate-800">Reembolsado a tu saldo: </span>
-                            {formatMoney(appointment.payment_refund_cents)}
+                            <span className="font-medium text-slate-800">Tiempo pagado: </span>
+                            {appointment.paid_minutes} min
                           </p>
                         ) : null}
                       </>
-                    ) : appointment.payment_status === 'refunded' ? (
+                    ) : appointment.payment_status === 'pending' ? (
                       <p>
-                        <span className="font-medium text-slate-800">Reembolsado a tu saldo: </span>
-                        {formatMoney(appointment.payment_refund_cents ?? appointment.payment_amount_cents)}
+                        <span className="font-medium text-slate-800">Importe a cobrar al iniciar: </span>
+                        {formatMoney(appointment.quoted_amount_cents ?? appointment.payment_amount_cents)}
                       </p>
                     ) : (
                       <p>
-                        <span className="font-medium text-slate-800">Pago retenido: </span>
-                        {formatMoney(appointment.payment_amount_cents)}
+                        <span className="font-medium text-slate-800">Estado del cobro: </span>
+                        {PAYMENT_STATUS_LABELS[appointment.payment_status ?? ''] ?? 'Pendiente'}
                       </p>
                     )}
                   </div>

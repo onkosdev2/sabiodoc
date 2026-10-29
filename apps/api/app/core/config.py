@@ -59,31 +59,38 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 8.0
 
     FRONTEND_ORIGIN: str = "http://localhost:5173"
-    # Jitsi (videoconsultas). Por defecto el servicio publico (salas publicas, sin JWT).
-    JITSI_DOMAIN: str = "meet.jit.si"
-    JITSI_BASE_URL: str = "https://meet.jit.si"
+    # Jitsi self-hosted para videoconsultas.
+    JITSI_BASE_URL: str = "https://jitsi.onkosdev.us"
     JITSI_ROOM_PREFIX: str = "SabioDoc"
     JITSI_JWT_APP_ID: str = "sabiodoc"
     JITSI_JWT_AUDIENCE: str = "jitsi"
+    # Claim "sub" exigido por la instancia self-hosted.
+    JITSI_JWT_SUBJECT: str = "meet.jitsi"
+    # El médico siempre recibe moderator=true.
+    JITSI_MODERATOR_REQUIRED: bool = True
     JITSI_JWT_SECRET: Optional[str] = None
-    
-    STRIPE_SECRET_KEY: Optional[str] = None
+
+    # Pasarela de cobros de videoconsultas.
+    PAYMENT_PROVIDER: str = "mock"
+    PAYMENT_CURRENCY: str = "USD"
+    MOCK_PAYMENT_WEBHOOK_SECRET: str = "dev-mock-secret"
+    MOCK_PAYMENT_LATENCY_MS: int = 0
+    # Niubiz (Perú). Sin credenciales hasta que la cuenta esté habilitada.
+    NIUBIZ_MERCHANT_ID: Optional[str] = None
+    NIUBIZ_API_USER: Optional[str] = None
+    NIUBIZ_API_PASSWORD: Optional[str] = None
+    NIUBIZ_SECURITY_KEY: Optional[str] = None
+    NIUBIZ_PUBLIC_KEY: Optional[str] = None
+    NIUBIZ_BASE_URL: str = "https://apisandbox.vnforappstest.com"
+    NIUBIZ_WEBHOOK_SECRET: Optional[str] = None
     # Deploy hook del frontend en Render. Si está configurado, se dispara un
     # rebuild cuando cambia un perfil público (médico aprobado, foto, datos).
     FRONTEND_DEPLOY_HOOK_URL: Optional[str] = None
     # Permite ejecutar el seed de datos demo en producción. Por defecto no.
     ALLOW_SEED_IN_PRODUCTION: bool = False
-    STRIPE_CURRENCY: str = "usd"
 
-    # Pasarela de payouts (retiros). "mock" no mueve dinero real; "stripe" usa
-    # Stripe Connect (Transfers) hacia la cuenta de destino.
-    PAYOUT_PROVIDER: str = "mock"
-    # Secreto para validar la firma de los webhooks de Stripe.
-    STRIPE_WEBHOOK_SECRET: Optional[str] = None
-    
     VIDEO_PRICE_MIN_CENTS: int = 10
     VIDEO_PRICE_MAX_CENTS: int = 30000
-    VIDEO_MIN_PREPAY_MINUTES: int = 15
     VIDEO_PREPARE_EXPIRATION_MINUTES: int = 20
     APPOINTMENT_BUFFER_MINUTES: int = 10
     NO_SHOW_GRACE_MINUTES: int = 10
@@ -91,8 +98,8 @@ class Settings(BaseSettings):
     # El cronómetro solo corre cuando ambos están en la sala. Si un participante
     # deja de dar senales por mas de este tiempo, el cronómetro se pausa.
     VIDEO_PRESENCE_TIMEOUT_SECONDS: int = 30
-    # Minimo facturable cuando la sesión estuvo activa (evita cobros de 0).
-    VIDEO_MIN_BILLABLE_MINUTES: int = 1
+    # Caducidad del heartbeat real dentro de la conferencia de Jitsi.
+    JITSI_PRESENCE_TIMEOUT_SECONDS: int = 25
     # Si una sesión activa se queda sin nadie en la sala durante este tiempo,
     # se cierra y liquida automaticamente.
     VIDEO_SESSION_ABANDON_MINUTES: int = 5
@@ -127,11 +134,6 @@ class Settings(BaseSettings):
     # Tickets de soporte: máximo de adjuntos por mensaje.
     SUPPORT_TICKET_MAX_ATTACHMENTS: int = 5
 
-    # Créditos (dinero de pruebas): 1 crédito = 1 USD = 100 centavos.
-    CREDITS_CURRENCY: str = "usd"
-    WALLET_MIN_TOPUP_CENTS: int = 500
-    WALLET_MAX_TOPUP_CENTS: int = 100000
-    WALLET_MIN_WITHDRAWAL_CENTS: int = 1000
     # Comision de la plataforma sobre cada cita, en puntos basicos (100 = 1%).
     # 2000 = 20%: el médico recibe el 80% de lo que cobra.
     PLATFORM_FEE_BPS: int = 2000
@@ -176,18 +178,6 @@ class Settings(BaseSettings):
         elif url.startswith("postgresql://"):
             url = "postgresql+psycopg2://" + url[len("postgresql://"):]
         self.DATABASE_URL = url
-        return self
-
-    @model_validator(mode="after")
-    def _validate_stripe_mode(self):
-        """Evita mezclar claves de prueba con producción (y viceversa)."""
-        key = self.STRIPE_SECRET_KEY
-        if not key:
-            return self
-        if self.is_production and key.startswith("sk_test_"):
-            raise ValueError("STRIPE_SECRET_KEY de prueba no es válida en producción")
-        if not self.is_production and key.startswith("sk_live_"):
-            raise ValueError("STRIPE_SECRET_KEY live no debe usarse fuera de producción")
         return self
 
     @model_validator(mode="after")

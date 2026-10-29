@@ -14,7 +14,7 @@ const SECTIONS: LegalSection[] = [
       'Datos de cuenta e identidad: correo, contraseña (cifrada), nombre y rol.',
       'Datos de salud: síntomas, motivos de consulta, resúmenes e indicaciones que compartes voluntariamente con la IA o con el médico.',
       'Datos de la cita y la videoconsulta: fecha, duración, estado, archivos compartidos y notas clínicas.',
-      'Datos de pago: movimientos de créditos y referencias de pago (no almacenamos números de tarjeta).',
+      'Datos de pago: método tokenizado, últimos cuatro dígitos, referencias de cobro y movimientos (no almacenamos números de tarjeta).',
       'Datos técnicos: dirección IP, navegador, identificadores de sesión y registros de error para seguridad y soporte.',
       'Datos de profesionales de salud: licencia, registro, país, ciudad y documento de identidad para verificación.',
     ],
@@ -36,7 +36,7 @@ const SECTIONS: LegalSection[] = [
       'Cloudinary para alojar archivos e imágenes que adjuntas.',
       'Proveedor de correo (SMTP) para mensajes transaccionales.',
       'Proveedor de hosting e infraestructura (Render) y base de datos.',
-      'Pasarela de pagos cuando se integre; hoy los créditos son de prueba.',
+      'Pasarela de pagos para tokenización, cobros, reembolsos y payouts.',
     ],
     paragraphs: [
       'Se exige a los encargados medidas de seguridad y confidencialidad. Algunos pueden estar fuera de tu país, por lo que puede existir transferencia internacional de datos con las garantías aplicables.',

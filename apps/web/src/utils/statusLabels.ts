@@ -32,32 +32,23 @@ export const DOCTOR_STATUS_LABELS: Record<string, string> = {
 }
 
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  held: 'Retenido',
-  released: 'Liquidado',
+  pending: 'Pendiente de cobro',
+  paid: 'Cobrado',
+  failed: 'Rechazado',
   refunded: 'Reembolsado',
+  partially_refunded: 'Reembolsado parcialmente',
+  cancelled: 'Cancelado',
 }
 
-export const WALLET_TRANSACTION_TYPE_LABELS: Record<string, string> = {
-  topup: 'Recarga',
-  withdrawal: 'Retiro',
-  consultation_payment: 'Pago de consulta',
-  consultation_income: 'Ingreso por consulta',
-  refund: 'Reembolso',
-  adjustment: 'Ajuste',
-}
-
-export const WALLET_TRANSACTION_STATUS_LABELS: Record<string, string> = {
-  completed: 'Completado',
-  pending: 'Pendiente',
-  reversed: 'Revertido',
-}
-
-export const WITHDRAWAL_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente',
-  processing: 'En proceso',
-  paid: 'Pagado',
-  failed: 'Fallido',
-  rejected: 'Rechazado',
+export const PAYMENT_TRANSACTION_STATUS_LABELS: Record<string, string> = {
+  requires_action: 'Requiere verificación',
+  processing: 'Procesando',
+  succeeded: 'Aprobado',
+  failed: 'Rechazado',
+  refunded: 'Reembolsado',
+  partially_refunded: 'Reembolsado parcialmente',
+  disputed: 'En disputa',
+  cancelled: 'Cancelado',
 }
 
 export const ERROR_LEVEL_LABELS: Record<string, string> = {
@@ -67,7 +58,6 @@ export const ERROR_LEVEL_LABELS: Record<string, string> = {
 }
 
 export const VIDEO_CLOSED_REASON_LABELS: Record<string, string> = {
-  completed_no_credits: 'Finalizada por falta de créditos',
   completed_by_doctor: 'Finalizada por el médico',
   completed_from_room: 'Finalizada desde la sala',
   expired_inactivity: 'Expirada por inactividad',
@@ -92,7 +82,7 @@ export const SUPPORT_TICKET_STATUS_TONES: Record<string, StatusTone> = {
 
 export const SUPPORT_TICKET_CATEGORY_LABELS: Record<string, string> = {
   account: 'Cuenta',
-  payments: 'Pagos y créditos',
+  payments: 'Pagos',
   video: 'Videoconsulta',
   app_error: 'Error de la app',
   other: 'Otro',
@@ -127,6 +117,8 @@ export const CONSULTATION_STATUS_TONES: Record<string, StatusTone> = {
 export const VIDEO_SESSION_STATUS_LABELS: Record<string, string> = {
   prepared: 'Preparada',
   active: 'En curso',
+  extension_pending: 'Tiempo agotado',
+  extension_requested: 'Ampliación por confirmar',
   completed: 'Finalizada',
   cancelled: 'Cancelada',
   expired: 'Expirada',
@@ -136,6 +128,8 @@ export const VIDEO_SESSION_STATUS_LABELS: Record<string, string> = {
 export const VIDEO_SESSION_STATUS_TONES: Record<string, StatusTone> = {
   prepared: 'info',
   active: 'success',
+  extension_pending: 'warning',
+  extension_requested: 'warning',
   completed: 'neutral',
   cancelled: 'danger',
   expired: 'warning',

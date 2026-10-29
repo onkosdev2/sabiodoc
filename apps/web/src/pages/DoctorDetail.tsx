@@ -26,7 +26,7 @@ import {
 } from '../api/appointments'
 import { useAuth } from '../context/AuthContext'
 import { useSeo } from '../hooks/useSeo'
-import { getMyWallet, Wallet } from '../api/wallet'
+import { listPaymentMethods, type PaymentMethod } from '../api/payments'
 import { getApiErrorMessage } from '../utils/apiError'
 import { reportReview } from '../api/reviews'
 import Modal from '../components/ui/Modal'
@@ -64,11 +64,11 @@ export default function DoctorDetailPage() {
   const [patientNote, setPatientNote] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [acceptedData, setAcceptedData] = useState(false)
-  const [acceptedOvertime, setAcceptedOvertime] = useState(false)
   const [durationMinutes, setDurationMinutes] = useState('30')
   const [booking, setBooking] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [wallet, setWallet] = useState<Wallet | null>(null)
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [paymentLoading, setPaymentLoading] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
   const [favoriteBusy, setFavoriteBusy] = useState(false)
   const [reportTarget, setReportTarget] = useState<DoctorReview | null>(null)
@@ -78,7 +78,8 @@ export default function DoctorDetailPage() {
   const requestedSlug = searchParams.get('specialty')
   const consultationId = searchParams.get('consultation')
   const requestedSlot = searchParams.get('slot')
-  const duration = Math.min(120, Math.max(15, Number(durationMinutes) || 30))
+  const duration = Math.min(120, Math.max(5, Number(durationMinutes) || 30))
+  const durationOptions = Array.from({ length: 24 }, (_, index) => (index + 1) * 5)
   const selectedSpecialty = useMemo(() => {
     if (!doctor) return null
     return (
@@ -108,12 +109,16 @@ export default function DoctorDetailPage() {
   useEffect(() => {
     if (!isAuthenticated) return
     let active = true
-    getMyWallet()
-      .then((data) => {
-        if (active) setWallet(data)
+    setPaymentLoading(true)
+    listPaymentMethods()
+      .then((methods) => {
+        if (active) setPaymentMethods(methods)
       })
       .catch(() => {
-        if (active) setWallet(null)
+        if (active) setPaymentMethods([])
+      })
+      .finally(() => {
+        if (active) setPaymentLoading(false)
       })
     return () => {
       active = false
@@ -159,11 +164,14 @@ export default function DoctorDetailPage() {
       try {
         const response = await getDoctorBookableSlots(doctor.id, 14, duration)
         setSlots(response.slots)
-        const requested = requestedSlot && response.slots.find((slot) => slot.starts_at === requestedSlot)
+        const availableSlots = response.slots.filter((slot) => slot.available !== false)
+        const requested = requestedSlot && availableSlots.find((slot) => slot.starts_at === requestedSlot)
         if (requested) {
           setSelectedSlot(requested.starts_at)
-        } else if (response.slots.length > 0) {
-          setSelectedSlot(response.slots[0].starts_at)
+        } else if (availableSlots.length > 0) {
+          setSelectedSlot(availableSlots[0].starts_at)
+        } else {
+          setSelectedSlot('')
         }
       } catch {
         setSlots([])
@@ -260,19 +268,34 @@ export default function DoctorDetailPage() {
         patient_note: patientNote.trim() || undefined,
         accepted_terms: acceptedTerms,
         accepted_data_terms: acceptedData,
-        accepted_overtime_terms: acceptedOvertime,
         consent_text_version: 'v1',
+        payment_method_id: defaultPaymentMethod?.id,
       })
+      toast.success('Solicitud enviada. El médico debe confirmar la cita.')
       navigate('/me/appointments')
     } catch (err: unknown) {
-      setActionError(getApiErrorMessage(err, 'No se pudo agendar la cita'))
+      const status = (err as { response?: { status?: number } }).response?.status
+      if (status === 409 && doctor) {
+        try {
+          const response = await getDoctorBookableSlots(doctor.id, 14, duration)
+          const available = response.slots.filter((slot) => slot.available !== false)
+          setSlots(response.slots)
+          setSelectedSlot(available[0]?.starts_at ?? '')
+        } catch {
+          /* conserva la agenda actual */
+        }
+        setActionError('Ese horario acaba de ocuparse. Actualizamos la agenda; elige otro horario.')
+      } else {
+        setActionError(getApiErrorMessage(err, 'No se pudo agendar la cita'))
+      }
     } finally {
       setBooking(false)
     }
   }
 
   const totalCents = doctor ? duration * doctor.price_per_min_cents : 0
-  const hasEnoughCredits = wallet === null || wallet.balance_cents >= totalCents
+  const defaultPaymentMethod = paymentMethods.find((method) => method.is_default) ?? paymentMethods[0] ?? null
+  const hasPaymentMethod = Boolean(defaultPaymentMethod)
 
   if (loading) {
     return (
@@ -519,10 +542,11 @@ export default function DoctorDetailPage() {
                 value={durationMinutes}
                 onChange={(event) => setDurationMinutes(event.target.value)}
               >
-                <option value="15">15 minutos</option>
-                <option value="30">30 minutos</option>
-                <option value="45">45 minutos</option>
-                <option value="60">60 minutos</option>
+                {durationOptions.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes} minutos
+                  </option>
+                ))}
               </Select>
             </div>
 
@@ -533,23 +557,25 @@ export default function DoctorDetailPage() {
               </span>
             </div>
 
-            {isAuthenticated && wallet && (
-              <div
-                className={`mt-2 flex items-center justify-between rounded-2xl px-4 py-3 text-sm ${
-                  hasEnoughCredits ? 'bg-slate-50 text-slate-700' : 'bg-rose-50 text-rose-800'
-                }`}
-              >
-                <span>Saldo disponible</span>
-                <span className="font-semibold">{currency(wallet.balance_cents)}</span>
-              </div>
-            )}
-
-            {isAuthenticated && !hasEnoughCredits && (
-              <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                No tienes créditos suficientes para esta cita.{' '}
-                <Link to="/me/wallet" className="font-semibold underline">
-                  Recargar créditos
-                </Link>
+            {isAuthenticated && (
+              <div className="mt-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                {paymentLoading ? (
+                  <span>Comprobando método de pago…</span>
+                ) : defaultPaymentMethod ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Método de pago</span>
+                    <span className="font-semibold">
+                      {defaultPaymentMethod.brand || 'Tarjeta'} •••• {defaultPaymentMethod.last4 || '••••'}
+                    </span>
+                  </div>
+                ) : (
+                  <span>
+                    No tienes una tarjeta guardada.{' '}
+                    <Link to="/me/payment-methods" className="font-semibold underline">
+                      Agregar método de pago
+                    </Link>
+                  </span>
+                )}
               </div>
             )}
 
@@ -577,7 +603,9 @@ export default function DoctorDetailPage() {
                           <button
                             key={slot.starts_at}
                             type="button"
+                            disabled={slot.available === false}
                             aria-pressed={selectedSlot === slot.starts_at}
+                            title={slot.available === false ? 'Horario no disponible' : undefined}
                             aria-label={`${new Date(slot.starts_at).toLocaleDateString('es-ES', {
                               weekday: 'long',
                               day: 'numeric',
@@ -585,12 +613,14 @@ export default function DoctorDetailPage() {
                             })}, ${new Date(slot.starts_at).toLocaleTimeString('es-ES', {
                               hour: '2-digit',
                               minute: '2-digit',
-                            })}`}
-                            onClick={() => setSelectedSlot(slot.starts_at)}
+                            })}${slot.available === false ? ', no disponible' : ''}`}
+                            onClick={() => slot.available !== false && setSelectedSlot(slot.starts_at)}
                             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                              selectedSlot === slot.starts_at
-                                ? 'bg-primary-600 text-white'
-                                : 'border border-slate-300 bg-white text-slate-700 hover:border-primary-400'
+                              slot.available === false
+                                ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 line-through'
+                                : selectedSlot === slot.starts_at
+                                  ? 'bg-primary-600 text-white'
+                                  : 'border border-slate-300 bg-white text-slate-700 hover:border-primary-400'
                             }`}
                           >
                             {new Date(slot.starts_at).toLocaleTimeString('es-ES', {
@@ -649,27 +679,6 @@ export default function DoctorDetailPage() {
                   </span>
                 </label>
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">Recomendación: ten créditos excedentes</p>
-                  <p className="mt-1">
-                    Si la consulta se extiende más allá del tiempo reservado, se consumirán créditos
-                    adicionales ({currency(doctor.price_per_min_cents)}/min). Te recomendamos tener saldo
-                    extra para evitar que la videollamada se corte automáticamente.
-                  </p>
-                  <label className="mt-2 flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={acceptedOvertime}
-                      onChange={(event) => setAcceptedOvertime(event.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      Entiendo que si la consulta se prolonga se cobrarán créditos extra y que, si me
-                      quedo sin saldo, la videollamada finalizará automáticamente.
-                    </span>
-                  </label>
-                </div>
-
                 <Button
                   onClick={handleBook}
                   disabled={
@@ -678,8 +687,7 @@ export default function DoctorDetailPage() {
                     booking ||
                     !acceptedTerms ||
                     !acceptedData ||
-                    !acceptedOvertime ||
-                    !hasEnoughCredits
+                    !hasPaymentMethod
                   }
                   loading={booking}
                   leftIcon={<CalendarPlus className="h-4 w-4" />}

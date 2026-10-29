@@ -12,6 +12,8 @@ class VideoSessionStatus(str, enum.Enum):
     cancelled = "cancelled"
     expired = "expired"
     failed = "failed"
+    extension_pending = "extension_pending"
+    extension_requested = "extension_requested"
 
 
 class VideoProvider(str, enum.Enum):
@@ -24,6 +26,8 @@ class PaymentStatus(str, enum.Enum):
     authorized = "authorized"
     captured = "captured"
     failed = "failed"
+    extension_pending = "extension_pending"
+    extension_requested = "extension_requested"
     waived = "waived"
 
 
@@ -43,11 +47,17 @@ class VideoSession(Base):
     payment_reference = Column(String(255), nullable=True)
     doctor_price_per_min_cents = Column(Integer, nullable=False)
     estimated_minutes = Column(Integer, nullable=False)
-    prepaid_amount_cents = Column(Integer, nullable=False)
+    payment_amount_cents = Column(Integer, nullable=False)
     billable_seconds = Column(Integer, nullable=False, server_default="0")
     expires_at = Column(DateTime(timezone=True), nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
+    extension_deadline = Column(DateTime(timezone=True), nullable=True)
+    # Solicitud de ampliación pendiente de confirmación del paciente.
+    extension_requested_minutes = Column(Integer, nullable=True)
+    extension_requested_amount_cents = Column(Integer, nullable=True)
+    extension_requested_at = Column(DateTime(timezone=True), nullable=True)
+    extension_request_expires_at = Column(DateTime(timezone=True), nullable=True)
     joined_patient_at = Column(DateTime(timezone=True), nullable=True)
     joined_doctor_at = Column(DateTime(timezone=True), nullable=True)
     # Presencia actual en la sala (se limpia al salir) y última senal de vida
@@ -62,6 +72,10 @@ class VideoSession(Base):
     jitsi_doctor_present = Column(Boolean, nullable=False, server_default="false")
     jitsi_patient_joined_at = Column(DateTime(timezone=True), nullable=True)
     jitsi_doctor_joined_at = Column(DateTime(timezone=True), nullable=True)
+    # Último heartbeat real dentro de la conferencia. Si deja de llegar, la
+    # presencia en Jitsi caduca aunque el navegador siga en la página.
+    jitsi_patient_last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    jitsi_doctor_last_seen_at = Column(DateTime(timezone=True), nullable=True)
     doctor_note = Column(Text, nullable=True)
     followup_instructions = Column(Text, nullable=True)
     # Guion de apertura generado por IA (ayuda a identificar voces en la transcripcion).

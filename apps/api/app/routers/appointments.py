@@ -1,20 +1,25 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
 from app.core.deps import get_current_user, get_db, get_doctor_profile_or_403
 from app.core.logging import get_logger
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.consultation import Consultation, ConsultationStatus
 from app.models.consultation_review import ConsultationReview
 from app.models.doctor_profile import DoctorProfile
+from app.models.payment import ConsultationCharge, ConsultationChargeStatus, PaymentMethod, PaymentMethodStatus
 from app.models.user import User, UserRole
 from app.models.video_session import VideoSession, VideoSessionStatus
 from app.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentCompleteRequest,
     AppointmentCreateRequest,
+    AppointmentDeclineRequest,
+    AppointmentQuoteRequest,
+    AppointmentQuoteResponse,
     AppointmentListResponse,
     AppointmentNoShowRequest,
     AppointmentRescheduleRequest,
@@ -30,7 +35,6 @@ from app.services.notification_service import notification_service
 from app.services.reminder_service import reminder_service
 from app.services import review_service
 from app.services.video_session_service import video_session_service
-from app.services.wallet_service import wallet_service
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 logger = get_logger(__name__)
@@ -91,6 +95,19 @@ def _notify_file_shared(
         )
 
 
+@router.post("/quote", response_model=AppointmentQuoteResponse)
+def quote_appointment(
+    payload: AppointmentQuoteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doctor_profile = db.query(DoctorProfile).filter(DoctorProfile.id == payload.doctor_id).first()
+    if not doctor_profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Médico no encontrado")
+    quote = appointment_service.quote(doctor_profile, payload.duration_minutes)
+    return AppointmentQuoteResponse(**quote)
+
+
 @router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 def create_appointment(
     payload: AppointmentCreateRequest,
@@ -120,12 +137,6 @@ def create_appointment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar los terminos y la politica de privacidad")
     if not payload.accepted_data_terms:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes aceptar el consentimiento de videoconsulta y datos clinicos")
-    if not payload.accepted_overtime_terms:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Debes aceptar que una consulta extendida puede consumir créditos adicionales",
-        )
-
     scheduled_at = payload.scheduled_at.astimezone(UTC)
     if scheduled_at <= datetime.now(UTC):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cita debe programarse en el futuro")
@@ -143,6 +154,22 @@ def create_appointment(
         duration_minutes=payload.duration_minutes,
     )
 
+    method_query = db.query(PaymentMethod).filter(
+        PaymentMethod.user_id == current_user.id,
+        PaymentMethod.status == PaymentMethodStatus.active,
+    )
+    if payload.payment_method_id is not None:
+        method_query = method_query.filter(PaymentMethod.id == payload.payment_method_id)
+    else:
+        method_query = method_query.order_by(PaymentMethod.is_default.desc(), PaymentMethod.created_at.desc())
+    payment_method = method_query.first()
+    if not payment_method:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes agregar una tarjeta antes de reservar una cita",
+        )
+    quote = appointment_service.quote(doctor_profile, payload.duration_minutes)
+
     ai_summary_snapshot, ai_intake_snapshot = appointment_service.build_ai_snapshots(db, consultation)
     appointment = Appointment(
         consultation_id=consultation.id if consultation else None,
@@ -157,7 +184,8 @@ def create_appointment(
         booked_via_ai=consultation is not None,
         consent_accepted_at=datetime.now(UTC),
         consent_text_version=payload.consent_text_version,
-        overtime_terms_accepted_at=datetime.now(UTC),
+        confirmation_status="pending",
+        confirmation_expires_at=datetime.now(UTC) + timedelta(hours=12),
     )
     db.add(appointment)
     db.flush()
@@ -170,28 +198,37 @@ def create_appointment(
         user_agent=request.headers.get("user-agent"),
     )
 
-    # Cobro de la cita con créditos: el monto queda retenido hasta que se
-    # complete (se libera al médico) o se cancele (se reembolsa al paciente).
-    amount_cents = wallet_service.appointment_amount_cents(appointment)
-    wallet_service.charge_appointment(db, appointment, amount_cents)
-
+    charge = ConsultationCharge(
+        appointment_id=appointment.id,
+        patient_id=current_user.id,
+        doctor_id=doctor_profile.id,
+        quoted_minutes=payload.duration_minutes,
+        quoted_amount_cents=quote["amount_cents"],
+        paid_minutes=0,
+        paid_amount_cents=0,
+        platform_fee_cents=quote["platform_fee_cents"],
+        doctor_net_cents=quote["doctor_net_cents"],
+        payment_method_id=payment_method.id,
+        status=ConsultationChargeStatus.pending,
+    )
+    db.add(charge)
     notification_service.create(
         db,
         user_id=current_user.id,
-        notification_type="appointment_scheduled",
-        title="Cita agendada",
-        body=f"Tu cita con {doctor_profile.display_name} fue agendada para {scheduled_at.astimezone(appointment_service.get_timezone(doctor_profile.timezone)).strftime('%d/%m %H:%M')}.",
+        notification_type="appointment_requested",
+        title="Solicitud de cita enviada",
+        body=f"Tu solicitud con {doctor_profile.display_name} está pendiente de confirmación.",
         action_url="/me/appointments",
         metadata={"appointment_id": appointment.id, "action_label": "Ver cita"},
     )
     notification_service.create(
         db,
         user_id=doctor_profile.user_id,
-        notification_type="appointment_booked",
-        title="Nueva cita agendada",
-        body=f"{current_user.email} agendo una cita contigo.",
-        action_url="/doctor",
-        metadata={"appointment_id": appointment.id, "action_label": "Abrir panel"},
+        notification_type="appointment_confirmation_requested",
+        title="Nueva solicitud de cita",
+        body=f"{current_user.email} solicitó una cita. Confírmala o recházala.",
+        action_url="/doctor/appointments",
+        metadata={"appointment_id": appointment.id, "action_label": "Revisar solicitud"},
     )
     audit_service.log(
         db,
@@ -214,6 +251,7 @@ def get_my_appointments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    appointment_service.expire_pending_confirmations(db)
     reminder_service.process_due_reminders(db)
     query = db.query(Appointment).filter(Appointment.patient_id == current_user.id)
     if status_filter:
@@ -236,6 +274,7 @@ def get_my_doctor_appointments(
     current_user: User = Depends(get_current_user),
 ):
     doctor_profile = get_doctor_profile_or_403(db, current_user, require_approved=True)
+    appointment_service.expire_pending_confirmations(db)
     reminder_service.process_due_reminders(db)
 
     query = (
@@ -264,6 +303,7 @@ def get_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    appointment_service.expire_pending_confirmations(db)
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
@@ -273,6 +313,98 @@ def get_appointment(
         appointment,
         files=session_file_service.list_files_for_appointment(db, appointment.id),
     )
+
+
+def _get_pending_confirmation_appointment(db: Session, appointment_id: int, current_user: User) -> Appointment:
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
+    if appointment.doctor.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el médico puede responder esta solicitud")
+    if appointment.confirmation_status != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La solicitud ya fue respondida o expiró")
+    now = datetime.now(UTC)
+    if appointment.confirmation_expires_at and appointment.confirmation_expires_at <= now:
+        appointment_service.expire_pending_confirmations(db, now)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La solicitud expiró")
+    return appointment
+
+
+@router.post("/{appointment_id}/confirm", response_model=AppointmentResponse)
+def confirm_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    appointment = _get_pending_confirmation_appointment(db, appointment_id, current_user)
+    now = datetime.now(UTC)
+    appointment.confirmation_status = "confirmed"
+    appointment.confirmed_at = now
+    appointment.confirmed_by_user_id = current_user.id
+    appointment.confirmation_expires_at = None
+    notification_service.create(
+        db,
+        user_id=appointment.patient_id,
+        notification_type="appointment_confirmed",
+        title="Cita confirmada",
+        body=f"{appointment.doctor.display_name} confirmó tu cita.",
+        action_url="/me/appointments",
+        metadata={"appointment_id": appointment.id, "action_label": "Ver cita"},
+    )
+    audit_service.log(
+        db,
+        action="appointment.confirmed",
+        entity_type="appointment",
+        entity_id=appointment.id,
+        actor_user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(appointment)
+    return appointment_service.serialize_appointment(appointment)
+
+
+@router.post("/{appointment_id}/decline", response_model=AppointmentResponse)
+def decline_appointment(
+    appointment_id: int,
+    payload: AppointmentDeclineRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    appointment = _get_pending_confirmation_appointment(db, appointment_id, current_user)
+    now = datetime.now(UTC)
+    appointment.confirmation_status = "declined"
+    appointment.declined_at = now
+    appointment.decline_reason = payload.reason
+    appointment.status = AppointmentStatus.cancelled
+    appointment.cancelled_at = now
+    appointment.cancellation_reason = payload.reason
+    charge = (
+        db.query(ConsultationCharge)
+        .filter(ConsultationCharge.appointment_id == appointment.id)
+        .first()
+    )
+    if charge and charge.status == ConsultationChargeStatus.pending:
+        charge.status = ConsultationChargeStatus.cancelled
+    notification_service.create(
+        db,
+        user_id=appointment.patient_id,
+        notification_type="appointment_declined",
+        title="Solicitud de cita rechazada",
+        body=f"{appointment.doctor.display_name} no pudo aceptar la cita: {payload.reason}",
+        action_url="/me/appointments",
+        metadata={"appointment_id": appointment.id, "action_label": "Ver cita"},
+    )
+    audit_service.log(
+        db,
+        action="appointment.declined",
+        entity_type="appointment",
+        entity_id=appointment.id,
+        actor_user_id=current_user.id,
+        metadata={"reason": payload.reason},
+    )
+    db.commit()
+    db.refresh(appointment)
+    return appointment_service.serialize_appointment(appointment)
 
 
 @router.get("/{appointment_id}/files", response_model=list[VideoSessionFileResponse])
@@ -337,6 +469,12 @@ def prepare_appointment_video_session(
     appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita no encontrada")
+    _appointment_participant_role(appointment, current_user)
+    if appointment.confirmation_status != "confirmed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La cita debe estar confirmada por el médico antes de abrir la sala",
+        )
 
     return video_session_service.prepare_session_for_appointment(
         db=db,
@@ -363,8 +501,14 @@ def cancel_appointment(
     appointment.status = AppointmentStatus.cancelled
     appointment.cancelled_at = datetime.now(UTC)
     appointment.cancellation_reason = payload.reason if payload else None
-    # Devolvemos los créditos retenidos al paciente.
-    wallet_service.refund_appointment(db, appointment)
+    appointment.confirmation_status = "cancelled"
+    charge = (
+        db.query(ConsultationCharge)
+        .filter(ConsultationCharge.appointment_id == appointment.id)
+        .first()
+    )
+    if charge and charge.status == ConsultationChargeStatus.pending:
+        charge.status = ConsultationChargeStatus.cancelled
     notification_service.create(
         db,
         user_id=appointment.patient_id,
@@ -430,6 +574,21 @@ def reschedule_appointment(
     appointment.scheduled_at = scheduled_at
     appointment.duration_minutes = payload.duration_minutes
     appointment.day_reminder_sent_at = None
+    quote = appointment_service.quote(appointment.doctor, payload.duration_minutes)
+    charge = (
+        db.query(ConsultationCharge)
+        .filter(ConsultationCharge.appointment_id == appointment.id)
+        .first()
+    )
+    if charge:
+        charge.quoted_minutes = payload.duration_minutes
+        charge.quoted_amount_cents = quote["amount_cents"]
+        charge.platform_fee_cents = quote["platform_fee_cents"]
+        charge.doctor_net_cents = quote["doctor_net_cents"]
+    appointment.confirmation_status = "pending"
+    appointment.confirmation_expires_at = datetime.now(UTC) + timedelta(hours=12)
+    appointment.confirmed_at = None
+    appointment.confirmed_by_user_id = None
     appointment.hour_reminder_sent_at = None
     appointment.cancellation_reason = payload.reason
     notification_service.create(
@@ -487,8 +646,6 @@ def mark_appointment_no_show(
     appointment.status = AppointmentStatus.no_show
     appointment.no_show_marked_at = datetime.now(UTC)
     appointment.cancellation_reason = payload.reason
-    # El médico reservó el horario: se libera el pago aunque el paciente no asistiera.
-    wallet_service.release_appointment(db, appointment)
     notification_service.create(
         db,
         user_id=appointment.patient_id,
@@ -529,8 +686,6 @@ def complete_appointment(
     appointment.completed_at = datetime.now(UTC)
     appointment.doctor_note = payload.doctor_note
     appointment.followup_instructions = payload.followup_instructions
-    # Liberamos el pago retenido a favor del médico.
-    wallet_service.release_appointment(db, appointment)
     if appointment.consultation:
         appointment.consultation.status = ConsultationStatus.closed
         appointment.consultation.closed_at = datetime.now(UTC)

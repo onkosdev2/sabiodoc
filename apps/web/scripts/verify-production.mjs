@@ -185,7 +185,7 @@ async function checkHeaders() {
   ]
   const frameSrc = enforcingCsp.match(/frame-src\s+([^;]+)/)?.[1] ?? ''
   const missingCsp = requiredCsp.filter((directive) => !enforcingCsp.includes(directive))
-  if (!frameSrc.includes('https://*.jitsi.net')) missingCsp.push('frame-src https://*.jitsi.net')
+  if (!frameSrc.includes('https://jitsi.onkosdev.us')) missingCsp.push('frame-src https://jitsi.onkosdev.us')
   add(
     'header:csp-directives',
     'CSP incluye las directivas requeridas',

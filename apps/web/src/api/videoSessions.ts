@@ -24,7 +24,15 @@ export interface VideoSessionStatus {
   patient_id: number
   patient_email: string
   patient_name: string | null
-  status: 'prepared' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed'
+  status:
+    | 'prepared'
+    | 'active'
+    | 'extension_pending'
+    | 'extension_requested'
+    | 'completed'
+    | 'cancelled'
+    | 'expired'
+    | 'failed'
   provider: 'jitsi' | 'jitsi_mock'
   participant_role: 'patient' | 'doctor'
   room_name: string
@@ -37,17 +45,10 @@ export interface VideoSessionStatus {
   billable_seconds: number
   elapsed_seconds: number
   remaining_seconds: number
-  is_overtime: boolean
   price_per_min_cents: number
-  held_amount_cents: number
-  current_cost_cents: number
   platform_fee_cents: number
   doctor_amount_cents: number
   platform_fee_bps: number
-  overtime_amount_cents: number
-  patient_balance_cents: number
-  can_afford_overtime: boolean
-  billing_mode: 'scheduled' | 'overtime' | 'exhausted'
   patient_present: boolean
   doctor_present: boolean
   both_present: boolean
@@ -57,6 +58,16 @@ export interface VideoSessionStatus {
   both_in_jitsi: boolean
   jitsi_patient_joined_at: string | null
   jitsi_doctor_joined_at: string | null
+  payment_state: 'pending' | 'requires_action' | 'paid' | 'failed'
+  payment_amount_cents: number
+  payment_minutes: number
+  payment_failure_code: string | null
+  payment_failure_message: string | null
+  payment_next_action: string | null
+  extension_request_pending: boolean
+  extension_requested_minutes: number
+  extension_requested_amount_cents: number
+  extension_request_expires_at: string | null
   doctor_note: string | null
   followup_instructions: string | null
   intro_script: string | null
@@ -78,7 +89,7 @@ export const joinVideoSession = async (videoSessionId: number): Promise<VideoSes
 /** Reporta la entrada/salida real de la conferencia de Jitsi (best-effort). */
 export const reportJitsiEvent = async (
   videoSessionId: number,
-  event: 'joined' | 'left',
+  event: 'joined' | 'left' | 'heartbeat',
 ): Promise<void> => {
   try {
     await client.post(`/video-sessions/${videoSessionId}/jitsi-event`, { event })
@@ -91,15 +102,16 @@ export const reportJitsiEvent = async (
 export const reportJitsiEventBeacon = (videoSessionId: number, event: 'joined' | 'left'): void => {
   try {
     const token = getStoredToken()
-    void fetch(`${API_URL}/video-sessions/${videoSessionId}/jitsi-event`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ event }),
-      keepalive: true,
-    }).catch(() => {
+    if (!token) return
+    const url = `${API_URL}/video-sessions/${videoSessionId}/presence-beacon`
+    const form = new FormData()
+    form.append('token', token)
+    form.append('event', event)
+
+    // sendBeacon con FormData evita el preflight CORS que suele cancelarse al
+    // cerrar o abandonar la pestaña.
+    if (navigator.sendBeacon?.(url, form)) return
+    void fetch(url, { method: 'POST', body: form, keepalive: true }).catch(() => {
       /* silencioso */
     })
   } catch {
@@ -130,6 +142,11 @@ export const startVideoSession = async (videoSessionId: number): Promise<VideoSe
   return response.data
 }
 
+export const confirmVideoSessionPayment = async (videoSessionId: number): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/confirm-payment`)
+  return response.data
+}
+
 export const pauseVideoSession = async (videoSessionId: number): Promise<VideoSessionStatus> => {
   const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/pause`)
   return response.data
@@ -137,6 +154,45 @@ export const pauseVideoSession = async (videoSessionId: number): Promise<VideoSe
 
 export const generateVideoSessionIntro = async (videoSessionId: number): Promise<VideoSessionStatus> => {
   const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/intro`)
+  return response.data
+}
+
+/** El médico solicita una ampliación; queda pendiente de confirmación del paciente. */
+export const requestVideoSessionExtension = async (
+  videoSessionId: number,
+  minutes: number,
+): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(`/video-sessions/${videoSessionId}/extend`, {
+    minutes,
+  })
+  return response.data
+}
+
+/** El paciente confirma la ampliación y se ejecuta el cobro. */
+export const confirmVideoSessionExtension = async (
+  videoSessionId: number,
+): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(
+    `/video-sessions/${videoSessionId}/extend/confirm`,
+  )
+  return response.data
+}
+
+export const rejectVideoSessionExtension = async (
+  videoSessionId: number,
+): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(
+    `/video-sessions/${videoSessionId}/extend/reject`,
+  )
+  return response.data
+}
+
+export const cancelVideoSessionExtension = async (
+  videoSessionId: number,
+): Promise<VideoSessionStatus> => {
+  const response = await client.post<VideoSessionStatus>(
+    `/video-sessions/${videoSessionId}/extend/cancel`,
+  )
   return response.data
 }
 

@@ -61,7 +61,7 @@ const publicRoutes = [
 const authenticatedRoutes = [
   '/me/profile/',
   '/me/appointments/',
-  '/me/wallet/',
+  '/me/payment-methods/',
   '/notifications/',
 ]
 

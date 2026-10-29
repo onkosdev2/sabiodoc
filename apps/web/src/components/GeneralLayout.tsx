@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, History, UserRound, Wallet, LifeBuoy,
+  Stethoscope, Heart, FileText, Briefcase, ShieldCheck, Bell, CalendarDays, History, UserRound, LifeBuoy, CreditCard,
   Menu, X,
 } from 'lucide-react'
 
@@ -24,7 +24,6 @@ export default function GeneralLayout() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname])
@@ -55,10 +54,10 @@ export default function GeneralLayout() {
       { to: '/me/appointments', label: 'Citas', icon: CalendarDays },
       { to: '/me/history', label: 'Historial de orientaciones', icon: History },
     ],
-    [{ to: '/me/wallet', label: 'Créditos', icon: Wallet }],
     [
       { to: '/me/favorites', label: 'Favoritos', icon: Heart },
       { to: '/me/profile', label: 'Mi perfil de paciente', icon: UserRound },
+      { to: '/me/payment-methods', label: 'Métodos de pago', icon: CreditCard },
       { to: '/me/security', label: 'Seguridad', icon: ShieldCheck },
       { to: '/help', label: 'Ayuda y soporte', icon: LifeBuoy },
     ],

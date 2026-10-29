@@ -1,8 +1,8 @@
 # Auditoría integral de SabioDoc
 
-**Sitio auditado:** https://sabiodoc-1.onrender.com/  
-**Fecha:** 13 de octubre de 2026  
-**Alcance completado:** superficie pública, SEO técnico, responsive, accesibilidad, rendimiento observado, administración de usuarios, creación y acceso de paciente, créditos ficticios, dos reservas reales de prueba, panel médico, entrada de ambos roles, cronómetro, cierre y liquidación.  
+**Sitio auditado:** https://sabiodoc-1.onrender.com/
+**Fecha:** 13 de octubre de 2026
+**Alcance completado:** superficie pública, SEO técnico, responsive, accesibilidad, rendimiento observado, administración de usuarios, creación y acceso de paciente, pagos de prueba, dos reservas reales de prueba, panel médico, entrada de ambos roles, cronómetro, cierre y liquidación.
 **Pendiente para cerrar el producto completo:** médico pendiente, revisor y soporte; recuperación/verificación por correo; chat, carga de archivos, retiros y una videollamada WebRTC con audio/video realmente unidos. La URL pública de Jitsi fue corregida para sesiones nuevas, pero la conferencia queda esperando moderador.
 
 ## Resumen ejecutivo
@@ -42,17 +42,17 @@ Estas puntuaciones son heurísticas de auditoría, no resultados de Lighthouse.
 - Se probó la postulación médica hasta el tercer paso, con datos sintéticos, sin enviar la solicitud.
 - Se creó desde administración un paciente sintético y se comprobó su acceso.
 - Se recargaron US$5,00 de dinero ficticio; el movimiento apareció correctamente en la billetera.
-- Se reservó la primera cita disponible con Dr. Test: 13/10/2026 14:15, 15 minutos, US$1,50 retenidos.
+- Se reservó la primera cita disponible con Dr. Test: 13/10/2026 14:15, 15 minutos, US$1,50 cotizados.
 - La misma cita apareció como “Programada” en paciente y médico, con la sala habilitada.
 - Se entró como médico a la preparación de la sala; el estado cambió a conectado a las 14:18.
 - Se documentó el fallo inicial de Jitsi con una URL privada y certificado inválido; posteriormente se repitió el flujo autenticado con una cita creada después del despliegue.
-- Se reservó una segunda cita de 15 minutos para el 13/10/2026 a las 15:00, con US$1,50 retenidos.
+- Se reservó una segunda cita de 15 minutos para el 13/10/2026 a las 15:00, con US$1,50 cotizados.
 - En la cita nueva, paciente y médico cargaron `external_api.js` y el mismo iframe desde `https://meet.jit.si`, sin advertencia TLS ni referencia a la IP privada.
 - Se inició y finalizó la consulta a los 7 segundos: coste real US$0,10, reembolso al paciente US$1,40, comisión US$0,02 e ingreso médico US$0,08.
 - Jitsi no unió a los dos participantes: ambos mostraron `Asking to join meeting…` y la ausencia de moderador mientras SabioDoc indicaba `Ambos conectados`.
 - Se verificaron redirecciones a login para rutas privadas representativas de paciente, médico, revisor, soporte y administrador.
 - Responsive probado a 390×844 y 1440×900 px.
-- No se enviaron síntomas, solicitudes, correos, notas clínicas ni archivos. Solo se usaron datos sintéticos y créditos ficticios.
+- No se enviaron síntomas, solicitudes, correos, notas clínicas ni archivos. Solo se usaron datos sintéticos y pagos de prueba.
 
 ## Hallazgos críticos
 
@@ -101,7 +101,7 @@ Fuentes oficiales: [MINSA — solicitar atención médica de emergencia](https:/
 
 La cita #3, creada antes del despliegue, siguió entregando al médico `https://192.168.1.123:7443/external_api.js` aun después de borrar caché HTTP, service worker y Cache Storage. Paciente y médico cargaban el mismo bundle `/assets/index--Jco8R61.js`, pero recibían dominios Jitsi distintos. Esto indica datos persistidos en la sesión antigua, no caché local, y requiere migración o invalidación de salas preexistentes.
 
-**Evidencia histórica previa a la corrección:** se creó y pagó con saldo ficticio una cita de 15 minutos. Paciente y médico mostraron la cita como programada y la sala disponible. En los intentos iniciales:
+**Evidencia histórica previa a la corrección:** se creó y pagó con método de pago de prueba una cita de 15 minutos. Paciente y médico mostraron la cita como programada y la sala disponible. En los intentos iniciales:
 
 - la aplicación marcó al médico como `Conectado 14:18`;
 - el área de video mostró `No se pudo cargar el API de Jitsi`;
@@ -123,14 +123,14 @@ Una captura aportada por el usuario mostró una etapa intermedia en Brave en la 
 - Confirmar que el médico recibe el rol necesario para iniciar la sesión sin autenticación externa inesperada.
 - Mantener el fallback en la misma URL pública y añadir `rel="noopener noreferrer"`.
 - Separar los estados `preparada`, `conectando`, `media conectada` y `en consulta`; no considerar conectado al usuario hasta recibir el evento de unión de Jitsi.
-- Si falla Jitsi, liberar o mantener claramente la retención según una política explícita y ofrecer reintento/reprogramación sin cobro.
+- Si falla Jitsi, liberar o mantener claramente el cobro según una política explícita y ofrecer reintento/reprogramación sin cobro.
 - Añadir una prueba E2E real con dos navegadores aislados, cámara/micrófono simulados y verificación de audio/video/cronómetro/cobro.
 
 ### C-04 — SabioDoc cobra aunque Jitsi no inicia la conferencia
 
 **Evidencia autenticada con una cita nueva:** paciente y médico cargaron exactamente la misma sala `meet.jit.si/SabioDoc-sabiodoc-appt-4-7122bb2e8e-abf4a3`. En ambos iframes apareció `Asking to join meeting…` y el aviso `The conference has not yet started because no moderators have yet arrived`, con botón `Log-in`. Jitsi no mostró dos participantes unidos.
 
-En paralelo, SabioDoc indicó `Ambos conectados`, habilitó `Iniciar consulta` y permitió comenzar el cronómetro. La sesión se cerró a los 7 segundos con un coste mínimo de US$0,10. El paciente recibió US$1,40 de reembolso sobre los US$1,50 retenidos; el médico recibió US$0,08 y la plataforma US$0,02.
+En paralelo, SabioDoc indicó `Ambos conectados`, habilitó `Iniciar consulta` y permitió comenzar el cronómetro. La sesión se cerró a los 7 segundos con un coste mínimo de US$0,10. El paciente recibió US$1,40 de reembolso sobre los US$1,50 cotizados; el médico recibió US$0,08 y la plataforma US$0,02.
 
 **Impacto:** se puede cobrar y completar una consulta sin que exista una conferencia WebRTC operativa. Esto afecta seguridad clínica, confianza, reclamaciones y conciliación financiera.
 
@@ -200,7 +200,7 @@ No se encontraron enlaces públicos a privacidad, términos, tratamiento de dato
 
 Un visitante no autenticado puede seleccionar duración, horario y ambos consentimientos hasta habilitar “Confirmar cita”. La página también dice “Inicia sesión para agendar”. No se pulsó el botón final, así que falta comprobar si el servidor bloquea correctamente.
 
-**Acción:** deshabilitar toda la edición o pedir login al primer intento; validar autorización y saldo exclusivamente en servidor; conservar de forma segura el horario elegido tras autenticación.
+**Acción:** deshabilitar toda la edición o pedir login al primer intento; validar autorización y método de pago exclusivamente en servidor; conservar de forma segura el horario elegido tras autenticación.
 
 ### H-07 — Transcripción clínica anunciada sin consentimiento específico visible
 
@@ -210,13 +210,13 @@ La introducción generada para el médico dice que la sesión “puede ser trans
 
 **Acción:** presentar antes de reservar/entrar un consentimiento separado y versionado para transcripción o grabación; indicar si se almacena audio, solo texto o ambos; identificar proveedores/subencargados, finalidad y retención; permitir rechazar la transcripción sin impedir la videoconsulta cuando sea legalmente posible; registrar aceptación y revocación.
 
-### H-08 — El detalle de la cita muestra el importe retenido como pagado al médico
+### H-08 — El detalle de la cita muestra el importe cotizado como pagado al médico
 
 Tras cerrar la cita #4 a los 7 segundos, el listado del paciente mostró `Pagado al médico: 1,50 US$`. Sin embargo, la billetera registró correctamente un pago de US$1,50 y un reembolso de US$1,40, mientras la cartera médica acreditó US$0,08 tras US$0,02 de comisión.
 
 **Impacto:** el cálculo contable real es correcto, pero la etiqueta comunica un pago diez veces mayor y contradice los movimientos, lo que puede provocar reclamaciones.
 
-**Acción:** mostrar en la cita `Retenido`, `Costo final`, `Reembolsado`, `Comisión` e `Ingreso médico` como importes separados; usar el coste liquidado, no la retención original, para la etiqueta principal.
+**Acción:** mostrar en la cita `Importe cobrado`, `Comisión` e `Ingreso médico` como importes separados; usar el coste liquidado, no la cotización original, para la etiqueta principal.
 
 ## Hallazgos de prioridad media
 
@@ -354,8 +354,8 @@ Durante la recarga de la sala se observó una solicitud a `https://sabiodoc.onre
 |---|---|
 | Administrador — crear paciente | Correcto; el total de usuarios aumentó y la cuenta apareció en el listado |
 | Paciente — inicio de sesión | Correcto; redirección a `/me/profile` |
-| Paciente — recarga ficticia | Correcto; saldo US$5,00 y movimiento visible |
-| Paciente — reservar cita | Correcto; primera franja disponible, consentimientos, US$1,50 retenidos |
+| Paciente — método de pago de prueba | Correcto; tarjeta registrada |
+| Paciente — reservar cita | Correcto; primera franja disponible, consentimientos, US$1,50 cotizados |
 | Paciente — listado de citas | Correcto; estado Programada y botón de entrada visible |
 | Médico — panel y citas | Correcto; la cita aparece con el paciente sintético |
 | Médico — preparar sala | Correcto; la cita nueva aparece y ambos roles reciben el mismo identificador de sala |

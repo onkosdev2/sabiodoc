@@ -30,13 +30,13 @@ def get_finance_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Ingresos, salidas, comisión de la plataforma y saldos en custodia."""
+    """Cobros, comisión de la plataforma, ingresos y payouts."""
     return FinanceOverviewResponse(**finance_service.overview(db, start=start, end=end))
 
 
 @admin_router.get("/transactions", response_model=FinanceMovementListResponse)
 def list_finance_movements(
-    type: str | None = Query(default=None, description="topup, withdrawal, consultation_payment, consultation_income, refund, adjustment"),
+    type: str | None = Query(default=None, description="initial, extension, refund, payout"),
     start: datetime | None = Query(default=None),
     end: datetime | None = Query(default=None),
     search: str | None = Query(default=None, description="Filtrar por correo del usuario"),
@@ -45,7 +45,7 @@ def list_finance_movements(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Todos los movimientos de créditos (entradas y salidas)."""
+    """Todos los movimientos de pago (cobros, ampliaciones, reembolsos y payouts)."""
     return FinanceMovementListResponse(
         **finance_service.movements(
             db,
@@ -68,7 +68,7 @@ def list_platform_commissions(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Ganancias por comisión, detalladas por cita liquidada."""
+    """Ganancias por comisión, detalladas por cita cobrada."""
     return CommissionListResponse(
         **finance_service.commissions(db, start=start, end=end, limit=limit, offset=offset)
     )

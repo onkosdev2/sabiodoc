@@ -29,8 +29,6 @@ import {
   VIDEO_CLOSED_REASON_LABELS,
   VIDEO_SESSION_STATUS_LABELS,
   VIDEO_SESSION_STATUS_TONES,
-  WALLET_TRANSACTION_TYPE_LABELS,
-  WITHDRAWAL_STATUS_LABELS,
 } from '../utils/statusLabels'
 import { ROLE_LABELS } from '../utils/roles'
 import Alert from '../components/ui/Alert'
@@ -41,13 +39,12 @@ import Card from '../components/ui/Card'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 
-type TabValue = 'appointments' | 'sessions' | 'consultations' | 'wallet' | 'errors' | 'notifications'
+type TabValue = 'appointments' | 'sessions' | 'consultations' | 'errors' | 'notifications'
 
 const TABS: { value: TabValue; label: string }[] = [
   { value: 'appointments', label: 'Citas' },
   { value: 'sessions', label: 'Videollamadas' },
   { value: 'consultations', label: 'Consultas IA' },
-  { value: 'wallet', label: 'Monedero' },
   { value: 'errors', label: 'Errores' },
   { value: 'notifications', label: 'Notificaciones' },
 ]
@@ -129,7 +126,6 @@ export default function AdminUserSupport({ basePath = '/admin/users' }: { basePa
       `Usuario #${data.user.id} · ${data.user.email}`,
       `Roles: ${data.user.roles.map((r) => ROLE_LABELS[r]).join(', ')}`,
       `Verificado: ${data.user.is_email_verified ? 'sí' : 'no'} · Registro: ${formatDateTime(data.user.created_at)}`,
-      `Saldo: ${formatMoney(data.wallet_balance_cents)}`,
       `Citas: ${data.stats.appointments_total} (${data.stats.appointments_completed} completadas, ${data.stats.appointments_no_show} no asistió)`,
       `Videollamadas: ${data.stats.video_sessions_total} · Consultas IA: ${data.stats.consultations_total} · Errores: ${data.stats.errors_total}`,
     ]
@@ -238,7 +234,6 @@ export default function AdminUserSupport({ basePath = '/admin/users' }: { basePa
         <Badge tone={data.user.is_email_verified ? 'success' : 'warning'}>
           {data.user.is_email_verified ? 'Correo verificado' : 'Correo sin verificar'}
         </Badge>
-        <Badge tone="neutral">Saldo {formatMoney(data.wallet_balance_cents)}</Badge>
         <Badge tone="neutral">Registro {formatDateTime(data.user.created_at)}</Badge>
       </div>
 
@@ -381,71 +376,6 @@ export default function AdminUserSupport({ basePath = '/admin/users' }: { basePa
                   </p>
                 </div>
               ))
-            )}
-          </div>
-        )}
-
-        {tab === 'wallet' && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Movimientos recientes</p>
-              {data.transactions.length === 0 ? (
-                <EmptyRow>Sin movimientos en el monedero.</EmptyRow>
-              ) : (
-                data.transactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-800">{transaction.description}</p>
-                      <p className="text-xs text-slate-500">
-                        {WALLET_TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type} ·{' '}
-                        {formatDateTime(transaction.created_at)}
-                      </p>
-                    </div>
-                    <span
-                      className={`font-semibold tabular-nums ${
-                        transaction.amount_cents >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                      }`}
-                    >
-                      {transaction.amount_cents >= 0 ? '+' : '−'}
-                      {formatMoney(Math.abs(transaction.amount_cents))}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-            {data.withdrawals.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Retiros</p>
-                {data.withdrawals.map((withdrawal) => (
-                  <div key={withdrawal.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-slate-800">
-                        {formatMoney(withdrawal.amount_cents)}
-                      </span>
-                      <Badge
-                        tone={
-                          withdrawal.status === 'paid'
-                            ? 'success'
-                            : withdrawal.status === 'failed'
-                              ? 'danger'
-                              : 'warning'
-                        }
-                      >
-                        {WITHDRAWAL_STATUS_LABELS[withdrawal.status] ?? withdrawal.status}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Destino: {withdrawal.destination} · {formatDateTime(withdrawal.created_at)}
-                    </p>
-                    {withdrawal.failure_reason && (
-                      <p className="mt-1 text-xs text-rose-600">{withdrawal.failure_reason}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         )}

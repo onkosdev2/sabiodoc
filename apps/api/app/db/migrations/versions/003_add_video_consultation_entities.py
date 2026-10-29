@@ -76,7 +76,7 @@ def upgrade() -> None:
         sa.Column("payment_reference", sa.String(length=255), nullable=True),
         sa.Column("doctor_price_per_min_cents", sa.Integer(), nullable=False),
         sa.Column("estimated_minutes", sa.Integer(), nullable=False),
-        sa.Column("prepaid_amount_cents", sa.Integer(), nullable=False),
+        sa.Column("payment_amount_cents", sa.Integer(), nullable=False),
         sa.Column("billable_seconds", sa.Integer(), server_default="0", nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),

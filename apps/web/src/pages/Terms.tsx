@@ -23,18 +23,19 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: 'Pagos, créditos y comisión',
+    heading: 'Pagos y comisión',
     bullets: [
-      'Las videoconsultas se pagan con créditos (1 crédito = 1 USD). Actualmente los créditos son de prueba.',
-      'Al agendar se retiene un importe; al finalizar se cobra solo el tiempo real y se reembolsa lo no usado.',
+      'Las videoconsultas se pagan con el método de pago guardado por el paciente.',
+      'El cobro inicial se realiza cuando el médico autoriza el inicio de la consulta.',
+      'Las ampliaciones de tiempo se cobran antes de conceder los minutos adicionales.',
       'La plataforma aplica una comisión sobre lo que cobra el médico, que se muestra en su panel.',
-      'Los retiros de médicos se procesan según el método de pago disponible.',
+      'Los payout de médicos se procesan según el proveedor de pagos disponible.',
     ],
   },
   {
     heading: 'Cancelaciones y reembolsos',
     paragraphs: [
-      'Si una cita se cancela, el importe retenido se devuelve al saldo del paciente. Si una videoconsulta no llega a realizarse por un fallo técnico, no se cobra: el importe retenido se reembolsa. Los detalles y plazos concretos se publicarán al activar pagos reales.',
+      'Si una cita se cancela antes de iniciar, no se realiza ningún cobro. Si una videoconsulta no llega a realizarse por un fallo técnico, se reembolsa el importe correspondiente al método de pago original. Los detalles y plazos concretos se publicarán al activar pagos reales.',
     ],
   },
   {

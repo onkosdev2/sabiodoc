@@ -4,7 +4,6 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.appointment import AppointmentStatus
-from app.models.wallet import AppointmentPaymentStatus
 from app.schemas.consultation import ConsultationStructuredIntake
 from app.schemas.video_session import VideoSessionFileResponse
 
@@ -40,6 +39,8 @@ class DoctorBookableSlotResponse(BaseModel):
     starts_at: datetime
     ends_at: datetime
     duration_minutes: int
+    available: bool = True
+    unavailable_reason: str | None = None
 
 
 class DoctorBookableSlotListResponse(BaseModel):
@@ -51,14 +52,33 @@ class DoctorBookableSlotListResponse(BaseModel):
 class AppointmentCreateRequest(BaseModel):
     doctor_id: int
     scheduled_at: datetime
-    duration_minutes: int = Field(default=30, ge=15, le=120)
+    duration_minutes: int = Field(default=30, ge=5, le=120)
     consultation_id: Optional[int] = None
     specialty_id: Optional[int] = None
     patient_note: Optional[str] = Field(default=None, max_length=2000)
     accepted_terms: bool = True
     accepted_data_terms: bool = True
-    accepted_overtime_terms: bool = True
     consent_text_version: str = Field(default="v1", min_length=1, max_length=50)
+    payment_method_id: Optional[int] = None
+
+
+class AppointmentQuoteRequest(BaseModel):
+    doctor_id: int
+    duration_minutes: int = Field(default=30, ge=5, le=120)
+
+
+class AppointmentQuoteResponse(BaseModel):
+    doctor_id: int
+    duration_minutes: int
+    price_per_min_cents: int
+    amount_cents: int
+    currency: str
+    platform_fee_cents: int
+    doctor_net_cents: int
+
+
+class AppointmentDeclineRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=1000)
 
 
 class AppointmentCancelRequest(BaseModel):
@@ -67,7 +87,7 @@ class AppointmentCancelRequest(BaseModel):
 
 class AppointmentRescheduleRequest(BaseModel):
     scheduled_at: datetime
-    duration_minutes: int = Field(default=30, ge=15, le=120)
+    duration_minutes: int = Field(default=30, ge=5, le=120)
     reason: Optional[str] = Field(default=None, max_length=1000)
 
 
@@ -114,15 +134,21 @@ class AppointmentResponse(BaseModel):
     created_at: datetime
     review_rating: Optional[int] = None
     review_comment: Optional[str] = None
-    # Pago de la cita con créditos.
+    # Cobro de la cita. ``payment_amount_cents`` es el importe cobrado o, si
+    # aún no se cobró, el importe cotizado.
     payment_amount_cents: Optional[int] = None
-    payment_status: Optional[AppointmentPaymentStatus] = None
-    # Desglose para el médico: comisión de la plataforma y monto neto.
+    payment_status: Optional[str] = None
+    quoted_amount_cents: Optional[int] = None
+    quoted_minutes: Optional[int] = None
+    paid_amount_cents: Optional[int] = None
+    paid_minutes: Optional[int] = None
     payment_platform_fee_cents: Optional[int] = None
     payment_doctor_amount_cents: Optional[int] = None
-    # Liquidación real: costo final y lo reembolsado al paciente.
-    payment_final_amount_cents: Optional[int] = None
-    payment_refund_cents: Optional[int] = None
+    confirmation_status: str = "pending"
+    confirmation_expires_at: Optional[datetime] = None
+    confirmed_at: Optional[datetime] = None
+    declined_at: Optional[datetime] = None
+    decline_reason: Optional[str] = None
     platform_fee_percent: float = 0
     # Archivos compartidos durante la videoconsulta de esta cita.
     files: list[VideoSessionFileResponse] = []

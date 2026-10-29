@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from 'react'
  *
  * Carga `external_api.js` desde el dominio de la sala y monta la reunión en un
  * contenedor propio. El dominio y el nombre de la sala se derivan de la URL que
- * ya genera el backend, así que funciona tanto con `meet.jit.si` como con un
- * Jitsi self-hosted (con o sin JWT).
+ * ya genera el backend, por lo que funciona con cualquier Jitsi self-hosted
+ * (con o sin JWT).
  */
 
 interface JitsiApi {
@@ -48,6 +48,8 @@ interface JitsiMeetingProps {
   email?: string
   onJoined?: () => void
   onLeft?: () => void
+  /** Latido periódico mientras el usuario sigue dentro de la conferencia. */
+  onHeartbeat?: () => void
   onError?: (message: string) => void
   /** Se dispara cuando otro participante entra a la conferencia. */
   onRemoteParticipantJoined?: (participantId?: string) => void
@@ -62,6 +64,7 @@ export default function JitsiMeeting({
   email,
   onJoined,
   onLeft,
+  onHeartbeat,
   onError,
   onRemoteParticipantJoined,
   onRemoteParticipantLeft,
@@ -74,6 +77,7 @@ export default function JitsiMeeting({
   const callbacksRef = useRef({
     onJoined,
     onLeft,
+    onHeartbeat,
     onError,
     onRemoteParticipantJoined,
     onRemoteParticipantLeft,
@@ -81,6 +85,7 @@ export default function JitsiMeeting({
   callbacksRef.current = {
     onJoined,
     onLeft,
+    onHeartbeat,
     onError,
     onRemoteParticipantJoined,
     onRemoteParticipantLeft,
@@ -91,6 +96,7 @@ export default function JitsiMeeting({
     if (!container) return
 
     let disposed = false
+    let heartbeatId: number | undefined
     let parsed: URL
     try {
       parsed = new URL(roomUrl)
@@ -117,10 +123,15 @@ export default function JitsiMeeting({
             disableDeepLinking: true,
             startWithAudioMuted: false,
             startWithVideoMuted: false,
+            // Sin lobby ni sala solo para moderadores: ambos entran al mismo nivel.
+            membersOnly: false,
+            enableLobby: false,
+            startAsVisitor: false,
           },
           interfaceConfigOverwrite: {
             MOBILE_APP_PROMO: false,
             SHOW_JITSI_WATERMARK: false,
+            disableModeratorIndicator: false,
           },
         })
 
@@ -128,7 +139,21 @@ export default function JitsiMeeting({
         setStatus('ready')
 
         let leftReported = false
+        const stopHeartbeat = () => {
+          if (heartbeatId !== undefined) {
+            window.clearInterval(heartbeatId)
+            heartbeatId = undefined
+          }
+        }
+        const startHeartbeat = () => {
+          stopHeartbeat()
+          callbacksRef.current.onHeartbeat?.()
+          heartbeatId = window.setInterval(() => {
+            callbacksRef.current.onHeartbeat?.()
+          }, 10_000)
+        }
         const notifyLeft = () => {
+          stopHeartbeat()
           if (leftReported) return
           leftReported = true
           callbacksRef.current.onLeft?.()
@@ -148,7 +173,10 @@ export default function JitsiMeeting({
           callbacksRef.current.onError?.(detail ? `${fallback}: ${detail}` : fallback)
         }
 
-        api.addListener('videoConferenceJoined', () => callbacksRef.current.onJoined?.())
+        api.addListener('videoConferenceJoined', () => {
+          startHeartbeat()
+          callbacksRef.current.onJoined?.()
+        })
         api.addListener('participantJoined', (event) => {
           callbacksRef.current.onRemoteParticipantJoined?.(participantId(event))
         })
@@ -177,6 +205,10 @@ export default function JitsiMeeting({
 
     return () => {
       disposed = true
+      if (heartbeatId !== undefined) {
+        window.clearInterval(heartbeatId)
+        heartbeatId = undefined
+      }
       apiRef.current?.dispose()
       apiRef.current = null
     }

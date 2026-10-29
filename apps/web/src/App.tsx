@@ -65,8 +65,9 @@ const MyAppointments = lazyWithRetry(() => import('./pages/MyAppointments'))
 const RescheduleAppointment = lazyWithRetry(() => import('./pages/RescheduleAppointment'))
 const ConsultationHistory = lazyWithRetry(() => import('./pages/ConsultationHistory'))
 const PatientProfilePage = lazyWithRetry(() => import('./pages/PatientProfile'))
+const PaymentMethods = lazyWithRetry(() => import('./pages/PaymentMethods'))
+const DoctorEarnings = lazyWithRetry(() => import('./pages/DoctorEarnings'))
 const SecuritySettings = lazyWithRetry(() => import('./pages/SecuritySettings'))
-const WalletPage = lazyWithRetry(() => import('./pages/Wallet'))
 const AdminSpecialties = lazyWithRetry(() => import('./pages/AdminSpecialties'))
 const AdminReviews = lazyWithRetry(() => import('./pages/AdminReviews'))
 const AdminFinance = lazyWithRetry(() => import('./pages/AdminFinance'))
@@ -103,7 +104,6 @@ function App() {
                 <Route path="/me/consultations" element={<MyConsultations />} />
                 <Route path="/me/favorites" element={<MyFavorites />} />
                 <Route path="/me/appointments" element={<MyAppointments />} />
-                <Route path="/me/wallet" element={<WalletPage audience="patient" />} />
                 <Route path="/me/appointments/:appointmentId/reschedule" element={<RescheduleAppointment />} />
                 <Route path="/consultation/:id/chat" element={<ConsultationChat />} />
               </Route>
@@ -112,6 +112,7 @@ function App() {
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/me/history" element={<ConsultationHistory />} />
                 <Route path="/me/profile" element={<PatientProfilePage />} />
+                <Route path="/me/payment-methods" element={<PaymentMethods />} />
                 <Route path="/me/security" element={<SecuritySettings />} />
                 <Route path="/help" element={<HelpSupport />} />
               </Route>
@@ -131,7 +132,7 @@ function App() {
                 <Route path="/doctor" element={<DoctorDashboard />} />
                 <Route path="/doctor/appointments" element={<DoctorAppointments />} />
                 <Route path="/doctor/reviews" element={<DoctorReviews />} />
-                <Route path="/doctor/wallet" element={<WalletPage audience="professional" />} />
+                <Route path="/doctor/earnings" element={<DoctorEarnings />} />
                 <Route path="/doctor/availability" element={<DoctorAvailability />} />
                 <Route path="/doctor/video-sessions" element={<DoctorVideoSessions />} />
                 <Route path="/doctor/patients" element={<DoctorPatients />} />
@@ -152,7 +153,6 @@ function App() {
                 <Route path="/admin/reviewers" element={<AdminUsers />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
                 <Route path="/admin/users/:userId/support" element={<AdminUserSupport />} />
-                <Route path="/admin/withdrawals" element={<Navigate to="/admin/finance" replace />} />
                 <Route path="/admin/specialties" element={<AdminSpecialties />} />
                 <Route path="/admin/reviews" element={<AdminReviews />} />
                 <Route path="/admin/finance" element={<AdminFinance />} />

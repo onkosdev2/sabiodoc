@@ -31,6 +31,11 @@ import {
   generateVideoSessionIntro,
   getVideoSessionStatus,
   joinVideoSession,
+  cancelVideoSessionExtension,
+  confirmVideoSessionExtension,
+  confirmVideoSessionPayment,
+  rejectVideoSessionExtension,
+  requestVideoSessionExtension,
   leaveVideoSession,
   pauseVideoSession,
   reportJitsiEvent,
@@ -67,7 +72,7 @@ type PreparedVideoSession = {
   room_url: string | null
   participant_token: string | null
   participant_role: 'patient' | 'doctor'
-  prepaid_amount_cents?: number
+  payment_amount_cents?: number
   estimated_minutes?: number
   expires_at: string
 }
@@ -144,6 +149,8 @@ export default function VideoConsultationRoom() {
   const [savingDoctorNote, setSavingDoctorNote] = useState(false)
   const [completingSession, setCompletingSession] = useState(false)
   const [timerBusy, setTimerBusy] = useState(false)
+  const [extensionMinutes, setExtensionMinutes] = useState('5')
+  const [extensionBusy, setExtensionBusy] = useState(false)
   const [confirmComplete, setConfirmComplete] = useState(false)
   const [confirmStart, setConfirmStart] = useState(false)
   const [activeTab, setActiveTab] = useState<DoctorTab>('session')
@@ -234,7 +241,7 @@ export default function VideoConsultationRoom() {
     }
   }, [session, statusRefreshToken])
 
-  // Si la videollamada termina (por ejemplo, al agotarse los créditos), cerramos la sala.
+  // Si la videollamada termina, cerramos la sala.
   const videoStatus = statusData?.status
   useEffect(() => {
     if (!videoStatus) return
@@ -402,12 +409,102 @@ export default function VideoConsultationRoom() {
   const handleStartTimer = async () => {
     if (!statusData) return
     setTimerBusy(true)
+    setError(null)
     try {
-      setStatusData(await startVideoSession(statusData.video_session_id))
+      const updated = await startVideoSession(statusData.video_session_id)
+      setStatusData(updated)
     } catch (requestError: any) {
       setError(getApiErrorMessage(requestError, 'No se pudo iniciar el cronómetro.'))
+      try {
+        setStatusData(await getVideoSessionStatus(statusData.video_session_id))
+      } catch {
+        /* conserva el estado anterior */
+      }
     } finally {
       setTimerBusy(false)
+    }
+  }
+
+  const handleConfirmPayment = async () => {
+    if (!statusData) return
+    setTimerBusy(true)
+    setError(null)
+    try {
+      setStatusData(await confirmVideoSessionPayment(statusData.video_session_id))
+    } catch (requestError: any) {
+      setError(getApiErrorMessage(requestError, 'No se pudo confirmar el pago.'))
+      try {
+        setStatusData(await getVideoSessionStatus(statusData.video_session_id))
+      } catch {
+        /* conserva estado */
+      }
+    } finally {
+      setTimerBusy(false)
+    }
+  }
+
+  const handleExtend = async () => {
+    if (!statusData) return
+    setExtensionBusy(true)
+    setError(null)
+    try {
+      setStatusData(
+        await requestVideoSessionExtension(statusData.video_session_id, Number(extensionMinutes)),
+      )
+      setExtensionMinutes('5')
+    } catch (requestError: any) {
+      setError(getApiErrorMessage(requestError, 'No se pudo solicitar la ampliación.'))
+      try {
+        setStatusData(await getVideoSessionStatus(statusData.video_session_id))
+      } catch {
+        /* conserva estado */
+      }
+    } finally {
+      setExtensionBusy(false)
+    }
+  }
+
+  const handleConfirmExtension = async () => {
+    if (!statusData) return
+    setExtensionBusy(true)
+    setError(null)
+    try {
+      setStatusData(await confirmVideoSessionExtension(statusData.video_session_id))
+    } catch (requestError: any) {
+      setError(getApiErrorMessage(requestError, 'No se pudo confirmar la ampliación.'))
+      try {
+        setStatusData(await getVideoSessionStatus(statusData.video_session_id))
+      } catch {
+        /* conserva estado */
+      }
+    } finally {
+      setExtensionBusy(false)
+    }
+  }
+
+  const handleRejectExtension = async () => {
+    if (!statusData) return
+    setExtensionBusy(true)
+    setError(null)
+    try {
+      setStatusData(await rejectVideoSessionExtension(statusData.video_session_id))
+    } catch (requestError: any) {
+      setError(getApiErrorMessage(requestError, 'No se pudo rechazar la ampliación.'))
+    } finally {
+      setExtensionBusy(false)
+    }
+  }
+
+  const handleCancelExtension = async () => {
+    if (!statusData) return
+    setExtensionBusy(true)
+    setError(null)
+    try {
+      setStatusData(await cancelVideoSessionExtension(statusData.video_session_id))
+    } catch (requestError: any) {
+      setError(getApiErrorMessage(requestError, 'No se pudo cancelar la solicitud.'))
+    } finally {
+      setExtensionBusy(false)
     }
   }
 
@@ -536,7 +633,7 @@ export default function VideoConsultationRoom() {
       return {
         elapsedSeconds: accumulated,
         remainingSeconds: Math.max(0, targetSeconds - accumulated),
-        isOvertime: accumulated > targetSeconds && targetSeconds > 0,
+        isTimeExhausted: accumulated > targetSeconds && targetSeconds > 0,
       }
     }
 
@@ -544,9 +641,9 @@ export default function VideoConsultationRoom() {
     const endedAt = statusData.ended_at ? new Date(statusData.ended_at).getTime() : clockNow
     const elapsedSeconds = accumulated + Math.max(0, Math.floor((endedAt - startedAt) / 1000))
     const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds)
-    const isOvertime = elapsedSeconds > targetSeconds && targetSeconds > 0
+    const isTimeExhausted = elapsedSeconds > targetSeconds && targetSeconds > 0
 
-    return { elapsedSeconds, remainingSeconds, isOvertime }
+    return { elapsedSeconds, remainingSeconds, isTimeExhausted }
   }, [clockNow, session?.estimated_minutes, statusData])
 
   const hasStarted = Boolean(statusData?.started_at) || (statusData?.billable_seconds ?? 0) > 0
@@ -556,8 +653,8 @@ export default function VideoConsultationRoom() {
     if (!hasStarted || statusData?.status !== 'active') {
       return null
     }
-    if (timerView.isOvertime) {
-      return 'overtime'
+    if (timerView.isTimeExhausted) {
+      return 'time-exhausted'
     }
     if (timerView.remainingSeconds <= 60) {
       return 'one-minute'
@@ -566,7 +663,7 @@ export default function VideoConsultationRoom() {
       return 'five-minutes'
     }
     return null
-  }, [hasStarted, statusData?.status, timerView.isOvertime, timerView.remainingSeconds])
+  }, [hasStarted, statusData?.status, timerView.isTimeExhausted, timerView.remainingSeconds])
 
   const recentClinicalItems = useMemo(() => {
     const items = patientTimeline?.items ?? []
@@ -609,7 +706,6 @@ export default function VideoConsultationRoom() {
   }
 
   const estimatedMinutes = statusData?.estimated_minutes ?? session?.estimated_minutes ?? 0
-  const targetSeconds = Math.max(0, estimatedMinutes * 60)
 
   const doctorInRoom = Boolean(statusData?.doctor_present)
   const patientInRoom = Boolean(statusData?.patient_present)
@@ -624,9 +720,24 @@ export default function VideoConsultationRoom() {
   const counterpartInJitsi = isDoctor
     ? Boolean(statusData?.jitsi_patient_present)
     : Boolean(statusData?.jitsi_doctor_present)
+  const paymentState = statusData?.payment_state ?? 'pending'
+  const paymentReady = paymentState === 'paid'
+  const paymentRequiresAction = paymentState === 'requires_action'
+  const paymentFailed = paymentState === 'failed'
   const canStartSession = bothPresent && (!jitsiRequired || bothInJitsi)
-  const heldAmountCents = statusData?.held_amount_cents ?? session?.prepaid_amount_cents ?? 0
-  const currentCostCents = statusData?.current_cost_cents ?? 0
+  const paidAmountCents = statusData?.payment_amount_cents ?? 0
+  const paidMinutes = statusData?.payment_minutes ?? estimatedMinutes
+  const extensionRequestPending = Boolean(statusData?.extension_request_pending)
+  const requestedExtensionMinutes = statusData?.extension_requested_minutes ?? 0
+  const requestedExtensionAmountCents = statusData?.extension_requested_amount_cents ?? 0
+  // El importe se cobra una sola vez al iniciar. Si aún no se cobró,
+  // mostramos la cotización como importe a cobrar, no como importe pagado.
+  const paymentSecured = paymentReady || hasStarted
+  const sessionAmountCents = paidAmountCents
+  const sessionAmountLabel = paymentSecured ? 'Importe pagado' : 'Importe a cobrar'
+  const sessionMinutesLabel = paymentSecured ? 'Tiempo pagado' : 'Tiempo reservado'
+  const sessionPlatformFeeCents = statusData?.platform_fee_cents ?? 0
+  const sessionDoctorAmountCents = statusData?.doctor_amount_cents ?? 0
   const counterpartJoinedAt = isDoctor ? statusData?.joined_patient_at : statusData?.joined_doctor_at
   const counterpartLabel = isDoctor ? 'Paciente' : 'Médico'
   const selfJoinedAt = isDoctor ? statusData?.joined_doctor_at : statusData?.joined_patient_at
@@ -654,6 +765,10 @@ export default function VideoConsultationRoom() {
     switch (status) {
       case 'active':
         return { label: 'Consulta en curso', tone: 'border-emerald-200 bg-emerald-100 text-emerald-800', Icon: Video }
+      case 'extension_pending':
+        return { label: 'Tiempo pagado agotado', tone: 'border-amber-200 bg-amber-100 text-amber-800', Icon: Clock3 }
+      case 'extension_requested':
+        return { label: 'Ampliación por confirmar', tone: 'border-amber-200 bg-amber-100 text-amber-800', Icon: Clock3 }
       case 'completed':
         return { label: 'Consulta finalizada', tone: 'border-slate-200 bg-slate-100 text-slate-700', Icon: CheckCircle2 }
       case 'expired':
@@ -723,6 +838,45 @@ export default function VideoConsultationRoom() {
     { key: 'notes', label: 'Notas', Icon: ClipboardList },
   ]
 
+  const renderExtensionControls = ({ withFinalize = true }: { withFinalize?: boolean } = {}) => (
+    <>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium">
+          Minutos adicionales
+          <select
+            className="input-field mt-1"
+            value={extensionMinutes}
+            onChange={(event) => setExtensionMinutes(event.target.value)}
+          >
+            <option value="5">5 minutos</option>
+            <option value="10">10 minutos</option>
+            <option value="15">15 minutos</option>
+          </select>
+        </label>
+        <Button
+          onClick={() => void handleExtend()}
+          loading={extensionBusy}
+          leftIcon={<Timer className="h-4 w-4" />}
+        >
+          Solicitar ampliación
+        </Button>
+        {withFinalize && (
+          <Button
+            variant="secondary"
+            onClick={() => setConfirmComplete(true)}
+            disabled={extensionBusy}
+          >
+            Finalizar consulta
+          </Button>
+        )}
+      </div>
+      <p className="mt-2 text-xs">
+        Importe a cobrar tras la confirmación del paciente:{' '}
+        {formatMoney(Number(extensionMinutes) * (statusData?.price_per_min_cents || 0))}.
+      </p>
+    </>
+  )
+
   const sessionContent = (
     <div className="space-y-4">
       <div>
@@ -745,9 +899,7 @@ export default function VideoConsultationRoom() {
             <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
               <p className="text-xs uppercase tracking-wide text-sky-700">Restante</p>
               <p className="mt-1 text-2xl font-semibold text-sky-900">
-                {timerView.isOvertime
-                  ? `+${formatDuration(timerView.elapsedSeconds - targetSeconds)}`
-                  : formatDuration(timerView.remainingSeconds)}
+                {formatDuration(timerView.remainingSeconds)}
               </p>
             </div>
           </div>
@@ -802,52 +954,129 @@ export default function VideoConsultationRoom() {
             <Timer className="h-4 w-4" /> Cronómetro
           </dt>
           <dd className="font-medium text-slate-800">
-            {statusData?.started_at ? `Inició ${formatClock(statusData.started_at)}` : 'Pendiente'}
+            {statusData?.started_at
+              ? `En marcha desde ${formatClock(statusData.started_at)}`
+              : hasStarted
+                ? 'En pausa'
+                : 'Pendiente'}
           </dd>
         </div>
       </dl>
 
-      <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm">
-        <div>
-          <p className="text-slate-500">Duración estimada</p>
-          <p className="font-medium text-slate-800">{estimatedMinutes} min</p>
+      {isDoctor ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-medium text-emerald-900">
+              {paymentSecured ? 'Cobro de la sesión' : 'Cobro al iniciar'}
+            </p>
+            <p className="text-xs text-emerald-700">
+              {paidMinutes} min {paymentSecured ? 'pagados' : 'reservados'}
+            </p>
+          </div>
+          {paymentSecured ? (
+            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <p className="text-slate-500">Cobrado</p>
+                <p className="font-semibold text-slate-800">{formatMoney(sessionAmountCents)}</p>
+              </div>
+              <div>
+                <p className="text-slate-500">
+                  Comisión {((statusData?.platform_fee_bps ?? 0) / 100).toFixed(0)}%
+                </p>
+                <p className="font-semibold text-amber-700">
+                  −{formatMoney(sessionPlatformFeeCents)}
+                </p>
+              </div>
+              <div>
+                <p className="text-slate-500">Recibes</p>
+                <p className="font-semibold text-emerald-700">
+                  {formatMoney(sessionDoctorAmountCents)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-emerald-800">
+              Al iniciar se cobrarán {formatMoney(sessionAmountCents)} por {paidMinutes} minutos.
+            </p>
+          )}
         </div>
-        <div>
-          <p className="text-slate-500">Costo real de la sesión</p>
-          <p className="font-medium text-emerald-700">
-            {formatMoney(currentCostCents)}
-            {heldAmountCents > 0 && (
-              <span className="ml-1 text-xs font-normal text-slate-500">de {formatMoney(heldAmountCents)} retenidos</span>
-            )}
-          </p>
-        </div>
-      </div>
-
-      {isDoctor && (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-sm">
-          <p className="font-medium text-emerald-900">Tus ingresos de esta sesión</p>
-          <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-            <div>
-              <p className="text-slate-500">Bruto</p>
-              <p className="font-semibold text-slate-800">{formatMoney(currentCostCents)}</p>
-            </div>
-            <div>
-              <p className="text-slate-500">
-                Comisión {((statusData?.platform_fee_bps ?? 0) / 100).toFixed(0)}%
-              </p>
-              <p className="font-semibold text-amber-700">
-                −{formatMoney(statusData?.platform_fee_cents ?? 0)}
-              </p>
-            </div>
-            <div>
-              <p className="text-slate-500">Recibes</p>
-              <p className="font-semibold text-emerald-700">
-                {formatMoney(statusData?.doctor_amount_cents ?? 0)}
-              </p>
-            </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm">
+          <div>
+            <p className="text-slate-500">{sessionMinutesLabel}</p>
+            <p className="font-medium text-slate-800">{paidMinutes} min</p>
+          </div>
+          <div>
+            <p className="text-slate-500">{sessionAmountLabel}</p>
+            <p className="font-medium text-emerald-700">{formatMoney(sessionAmountCents)}</p>
           </div>
         </div>
       )}
+
+      {statusData?.status === 'extension_pending' && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">El tiempo pagado se agotó.</p>
+          {isDoctor ? (
+            paymentRequiresAction ? (
+              <p className="mt-1">
+                La ampliación quedó pendiente de verificación. Confirma el pago para habilitar los minutos
+                adicionales o finaliza la consulta.
+              </p>
+            ) : (
+              <>
+                <p className="mt-1">
+                  Para continuar, solicita minutos adicionales. El paciente deberá confirmar el cobro antes
+                  de habilitar el tiempo extra.
+                </p>
+                {renderExtensionControls()}
+              </>
+            )
+          ) : (
+            <p className="mt-1">El médico está decidiendo si solicita más tiempo o finaliza la consulta.</p>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-2">
+          {paymentState === 'pending' && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+              {isDoctor
+                ? `Al iniciar se cobrarán ${formatMoney(statusData?.payment_amount_cents ?? 0)} por ${statusData?.payment_minutes ?? estimatedMinutes} minutos.`
+                : `El cobro de ${formatMoney(statusData?.payment_amount_cents ?? 0)} se realizará cuando el médico inicie la consulta.`}
+            </div>
+          )}
+          {paymentRequiresAction && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {isDoctor
+                ? 'El paciente debe completar la verificación del pago.'
+                : 'El pago requiere una verificación adicional.'}
+              {!isDoctor && (
+                <Button
+                  size="sm"
+                  className="ml-3"
+                  onClick={() => void handleConfirmPayment()}
+                  loading={timerBusy}
+                >
+                  Completar pago
+                </Button>
+              )}
+            </div>
+          )}
+          {paymentFailed && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <p>{statusData?.payment_failure_message || 'El pago fue rechazado.'}</p>
+              <p className="mt-1">
+                {isDoctor ? (
+                  'Pide al paciente que actualice su tarjeta y vuelve a intentar el cobro.'
+                ) : (
+                  <Link to="/me/payment-methods" className="font-semibold underline">
+                    Cambiar tarjeta o método de pago
+                  </Link>
+                )}
+              </p>
+            </div>
+          )}
+      </div>
 
       <div
         className={`rounded-xl px-3 py-2 text-sm ${
@@ -1127,7 +1356,7 @@ export default function VideoConsultationRoom() {
       {alertLevel && (
         <div
           className={`mb-3 shrink-0 rounded-2xl border p-3 ${
-            alertLevel === 'overtime'
+            alertLevel === 'time-exhausted'
               ? 'border-amber-300 bg-amber-50 text-amber-800'
               : 'border-rose-200 bg-rose-50 text-rose-700'
           }`}
@@ -1137,53 +1366,68 @@ export default function VideoConsultationRoom() {
             <div className="text-sm">
               {alertLevel === 'five-minutes' && (
                 <>
-                  Quedan menos de 5 minutos del tiempo reservado. Si necesitan extender la consulta se
-                  consumirán créditos adicionales ({formatMoney(statusData?.price_per_min_cents ?? 0)}/min); si
-                  no hay saldo, la videollamada finalizará automáticamente.
+                  Quedan menos de 5 minutos del tiempo pagado. Si necesitan más tiempo, el médico puede
+                  solicitar una ampliación ({formatMoney(statusData?.price_per_min_cents ?? 0)}/min).
                 </>
               )}
               {alertLevel === 'one-minute' &&
-                'Queda menos de 1 minuto del tiempo reservado. Al terminar, la consulta pasará a tiempo extra (se consumen créditos) o finalizará si el paciente no tiene saldo.'}
-              {alertLevel === 'overtime' &&
-                'Tiempo extra en curso: se están consumiendo créditos del paciente.'}
+                'Queda menos de 1 minuto del tiempo pagado. Al agotarse, el médico podrá solicitar una ampliación o finalizar la consulta.'}
+              {alertLevel === 'time-exhausted' &&
+                'El tiempo pagado se agotó. El médico puede solicitar una ampliación o finalizar la consulta.'}
+              {isDoctor && (
+                paymentRequiresAction ? (
+                  <p className="mt-2 font-medium">
+                    La ampliación requiere confirmar el pago pendiente antes de habilitar más tiempo.
+                  </p>
+                ) : (
+                  renderExtensionControls({ withFinalize: false })
+                )
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {statusData?.billing_mode === 'overtime' && (
-        <div className="mb-3 shrink-0 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              <p className="font-semibold">Tiempo extra en curso</p>
-              <p className="mt-0.5">
-                Consumido en tiempo extra: {formatMoney(statusData.overtime_amount_cents)}.{' '}
-                {isDoctor
-                  ? `Saldo del paciente: ${formatMoney(statusData.patient_balance_cents)}.`
-                  : `Tu saldo disponible: ${formatMoney(statusData.patient_balance_cents)}.`}
-              </p>
+      {extensionRequestPending && (
+        <div className="mb-3 shrink-0 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            {isDoctor ? 'Solicitud de ampliación enviada' : 'El médico solicita más tiempo'}
+          </p>
+          <p className="mt-1">
+            {isDoctor
+              ? `Se solicitaron ${requestedExtensionMinutes} minutos adicionales por ${formatMoney(requestedExtensionAmountCents)}. Esperando la confirmación del paciente.`
+              : `Solicita ${requestedExtensionMinutes} minutos adicionales por ${formatMoney(requestedExtensionAmountCents)}. ¿Autorizas el cobro?`}
+          </p>
+          {isDoctor ? (
+            <div className="mt-3">
+              <Button
+                variant="secondary"
+                onClick={() => void handleCancelExtension()}
+                loading={extensionBusy}
+              >
+                Cancelar solicitud
+              </Button>
             </div>
-          </div>
+          ) : paymentRequiresAction ? (
+            <p className="mt-2 font-medium">
+              Completa la verificación del pago para habilitar los minutos adicionales.
+            </p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={() => void handleConfirmExtension()} loading={extensionBusy}>
+                Autorizar y pagar
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => void handleRejectExtension()}
+                disabled={extensionBusy}
+              >
+                Rechazar
+              </Button>
+            </div>
+          )}
         </div>
       )}
-
-      {statusData?.status === 'active' &&
-        statusData.billing_mode !== 'overtime' &&
-        !statusData.can_afford_overtime &&
-        (statusData.estimated_minutes ?? 0) > 0 &&
-        (statusData.remaining_seconds ?? 0) <= 300 && (
-          <div className="mb-3 shrink-0 rounded-2xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-              <div>
-                {isDoctor
-                  ? 'El paciente no tiene créditos suficientes para extender la consulta. Al terminar el tiempo reservado, la videollamada finalizará automáticamente.'
-                  : 'No tienes créditos suficientes para extender la consulta. Al terminar el tiempo reservado, la videollamada finalizará automáticamente. Recarga créditos para evitarlo.'}
-              </div>
-            </div>
-          </div>
-        )}
 
       {error && (
         <div className="mb-3 shrink-0 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -1196,9 +1440,7 @@ export default function VideoConsultationRoom() {
 
       {statusData?.status === 'completed' && (
         <div className="mb-3 shrink-0 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          {statusData.closed_reason === 'completed_no_credits'
-            ? 'La videoconsulta finalizó automáticamente porque el paciente se quedó sin créditos.'
-            : 'La videoconsulta ya fue cerrada. Puedes revisar notas e indicaciones antes de salir.'}
+          La videoconsulta ya fue cerrada. Puedes revisar notas e indicaciones antes de salir.
         </div>
       )}
 
@@ -1221,6 +1463,9 @@ export default function VideoConsultationRoom() {
                   email={user?.email}
                   onJoined={() => {
                     void reportJitsiEvent(session.video_session_id, 'joined')
+                  }}
+                  onHeartbeat={() => {
+                    void reportJitsiEvent(session.video_session_id, 'heartbeat')
                   }}
                   onLeft={() => {
                     void reportJitsiEvent(session.video_session_id, 'left')
@@ -1401,34 +1646,37 @@ export default function VideoConsultationRoom() {
               {isDoctor && (
                 <>
                   <div className="flex gap-2">
-                    {isRunning ? (
-                      <Button
-                        variant="secondary"
-                        onClick={handlePauseTimer}
-                        loading={timerBusy}
-                        leftIcon={<Pause className="h-4 w-4" />}
-                        className="flex-1"
-                      >
-                        Pausar
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => (hasStarted ? handleStartTimer() : setConfirmStart(true))}
-                        disabled={timerBusy || joinBlocked || (!hasStarted && introLoading) || !canStartSession}
-                        title={
-                          !bothPresent
-                            ? 'El paciente debe estar en la sala para iniciar'
-                            : jitsiRequired && !bothInJitsi
-                              ? 'Esperando a que ambos entren a la videollamada'
-                              : undefined
-                        }
-                        loading={timerBusy}
-                        leftIcon={<Play className="h-4 w-4" />}
-                        className="flex-1"
-                      >
-                        {hasStarted ? 'Reanudar consulta' : 'Iniciar consulta'}
-                      </Button>
-                    )}
+                    {!extensionRequestPending && statusData?.status !== 'extension_pending' &&
+                      (isRunning ? (
+                        <Button
+                          variant="secondary"
+                          onClick={handlePauseTimer}
+                          loading={timerBusy}
+                          leftIcon={<Pause className="h-4 w-4" />}
+                          className="flex-1"
+                        >
+                          Pausar
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => (hasStarted ? handleStartTimer() : setConfirmStart(true))}
+                          disabled={timerBusy || joinBlocked || (!hasStarted && introLoading) || !canStartSession}
+                          title={
+                            !bothPresent
+                              ? 'El paciente debe estar en la sala para iniciar'
+                              : jitsiRequired && !bothInJitsi
+                                ? 'Esperando a que ambos entren a la videollamada'
+                                : paymentFailed
+                                  ? 'Reintentar el cobro o cambiar la tarjeta'
+                                  : undefined
+                          }
+                          loading={timerBusy}
+                          leftIcon={<Play className="h-4 w-4" />}
+                          className="flex-1"
+                        >
+                          {hasStarted ? 'Reanudar consulta' : 'Iniciar consulta'}
+                        </Button>
+                      ))}
                     <button type="button"
                       onClick={() => setConfirmComplete(true)}
                       disabled={joinBlocked || statusData?.status === 'completed'}
@@ -1438,6 +1686,18 @@ export default function VideoConsultationRoom() {
                       Finalizar
                     </button>
                   </div>
+                  {statusData?.status === 'extension_pending' && (
+                    <p className="text-xs text-amber-700">
+                      El tiempo pagado se agotó. Para continuar, solicita una ampliación; si no, finaliza la
+                      consulta.
+                    </p>
+                  )}
+                  {extensionRequestPending && (
+                    <p className="text-xs text-amber-700">
+                      La ampliación está pendiente de confirmación del paciente. El cronómetro seguirá en
+                      pausa hasta que se autorice el cobro.
+                    </p>
+                  )}
                   {!bothPresent && !joinBlocked && (
                     <p className="text-xs text-amber-700">
                       El cronómetro solo corre cuando el paciente y tú están en la sala.
@@ -1461,7 +1721,7 @@ export default function VideoConsultationRoom() {
         open={confirmStart}
         tone="default"
         title="¿Iniciar la videoconsulta?"
-        description="Antes de iniciar, confirma que ya leíste en voz alta la introducción y que ambos se identificaron con su nombre. Una vez iniciado, el conteo no se puede reiniciar: solo se puede pausar y reanudar."
+        description={`Antes de iniciar, confirma que ya leíste en voz alta la introducción y que ambos se identificaron con su nombre. Se cobrará ${formatMoney(paidAmountCents)} por ${paidMinutes} minutos. Una vez iniciado, el tiempo pagado no se puede reiniciar: solo se puede pausar y reanudar.`}
         confirmLabel="Iniciar consulta"
         busy={timerBusy}
         onConfirm={async () => {
@@ -1475,7 +1735,7 @@ export default function VideoConsultationRoom() {
         open={confirmComplete}
         tone="danger"
         title="¿Finalizar la videoconsulta?"
-        description="Se guardarán tus notas e indicaciones y la cita se marcará como completada. Esta acción no se puede deshacer."
+        description="Se guardarán tus notas e indicaciones y la cita se marcará como completada. El importe pagado cubre el tiempo reservado y no se reembolsa el tiempo no utilizado. Esta acción no se puede deshacer."
         confirmLabel="Finalizar"
         busy={completingSession}
         onConfirm={handleCompleteSession}

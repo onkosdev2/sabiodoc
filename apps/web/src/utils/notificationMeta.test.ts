@@ -9,7 +9,7 @@ describe('resolveNotificationCategory', () => {
     expect(resolveNotificationCategory('appointment_reminder_hour')).toBe('reminders')
     expect(resolveNotificationCategory('appointment_cancelled')).toBe('cancellations')
     expect(resolveNotificationCategory('appointment_no_show')).toBe('cancellations')
-    expect(resolveNotificationCategory('video_session_no_credits')).toBe('credits')
+    expect(resolveNotificationCategory('payment_processed')).toBe('payments')
     expect(resolveNotificationCategory('video_consultation_completed')).toBe('video')
     expect(resolveNotificationCategory('doctor_application_reviewed')).toBe('profile')
     expect(resolveNotificationCategory('patient_profile_change_request')).toBe('profile')
@@ -22,7 +22,7 @@ describe('resolveNotificationCategory', () => {
     expect(resolveNotificationCategory('appointment_reminder_week')).toBe('reminders')
     expect(resolveNotificationCategory('video_session_prepared')).toBe('video')
     expect(resolveNotificationCategory('doctor_application_submitted')).toBe('profile')
-    expect(resolveNotificationCategory('new_credit_purchase')).toBe('credits')
+    expect(resolveNotificationCategory('new_payment_processed')).toBe('payments')
     expect(resolveNotificationCategory('some_file_uploaded')).toBe('files')
   })
 

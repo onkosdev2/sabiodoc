@@ -36,7 +36,12 @@ from app.models.triage_request import TriageRequest
 from app.models.user import User, UserRole, UserRoleAssignment, sorted_roles
 from app.models.video_session import VideoSession, VideoSessionStatus
 from app.models.video_session_file import VideoSessionFile
-from app.models.wallet import Wallet, WalletTransaction, Withdrawal, WithdrawalStatus
+from app.models.payment import (
+    ConsultationCharge,
+    DoctorEarning,
+    PaymentTransaction,
+    Payout,
+)
 from app.schemas.appointment import (
     AdminIncidentListResponse,
     AdminIncidentResponse,
@@ -78,12 +83,7 @@ from app.services.user_support_service import user_support_service
 from app.services.patient_profile_service import get_patient_display_name
 from app.services.llm_client import llm_client
 from app.services import review_service
-from app.services.wallet_service import wallet_service
 from app.schemas.support import SupportUserDetailResponse
-from app.schemas.wallet import (
-    WithdrawalListResponse,
-    WithdrawalResponse,
-)
 from app.schemas.specialty import (
     SpecialtyCreate,
     SpecialtyListResponse,
@@ -656,7 +656,7 @@ def get_user_support(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin_or_support),
 ):
-    """Vista de soporte 360°: citas, videoconsultas, monedero, errores, etc."""
+    """Vista de soporte 360°: citas, videoconsultas, pagos, errores, etc."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
@@ -779,18 +779,26 @@ def delete_user(
             detail="El usuario tiene historial clínico y no puede eliminarse. Suspende o desactiva su acceso en su lugar.",
         )
 
-    # Con dinero de por medio, conservamos el rastro: no se elimina un usuario con
-    # movimientos de créditos (recargas, pagos, retiros o saldo pendiente).
-    wallet_row = db.query(Wallet).filter(Wallet.user_id == user.id).first()
-    has_wallet_movement = (
-        db.query(WalletTransaction.id).filter(WalletTransaction.user_id == user.id).first()
+    # Con dinero de por medio, conservamos el rastro: no se elimina un usuario
+    # con cobros, ingresos o payouts registrados.
+    has_payment_history = (
+        db.query(PaymentTransaction.id).filter(PaymentTransaction.user_id == user.id).first()
         is not None
-        or db.query(Withdrawal.id).filter(Withdrawal.user_id == user.id).first() is not None
+        or db.query(ConsultationCharge.id).filter(ConsultationCharge.patient_id == user.id).first()
+        is not None
     )
-    if wallet_row is not None and (has_wallet_movement or (wallet_row.balance_cents or 0) != 0):
+    if not has_payment_history and profile:
+        has_payment_history = (
+            db.query(ConsultationCharge.id).filter(ConsultationCharge.doctor_id == profile.id).first()
+            is not None
+            or db.query(DoctorEarning.id).filter(DoctorEarning.doctor_id == profile.id).first()
+            is not None
+            or db.query(Payout.id).filter(Payout.doctor_id == profile.id).first() is not None
+        )
+    if has_payment_history:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="El usuario tiene movimientos de créditos y no puede eliminarse. Suspende su acceso en su lugar.",
+            detail="El usuario tiene movimientos de pago y no puede eliminarse. Suspende su acceso en su lugar.",
         )
 
     db.query(Favorite).filter(Favorite.user_id == user.id).delete(synchronize_session=False)
@@ -817,8 +825,6 @@ def delete_user(
     db.query(ConsultationReview).filter(ConsultationReview.hidden_by_id == user.id).update(
         {ConsultationReview.hidden_by_id: None}, synchronize_session=False
     )
-    if wallet_row is not None:
-        db.delete(wallet_row)
     if profile:
         # Quitamos referencias al perfil médico antes de borrarlo.
         db.query(Favorite).filter(Favorite.doctor_id == profile.id).delete(
@@ -839,9 +845,6 @@ def delete_user(
     db.query(VideoSession).filter(VideoSession.ended_by_user_id == user.id).update(
         {VideoSession.ended_by_user_id: None}, synchronize_session=False
     )
-    db.query(Withdrawal).filter(Withdrawal.processed_by_user_id == user.id).update(
-        {Withdrawal.processed_by_user_id: None}, synchronize_session=False
-    )
 
     audit_service.log(
         db,
@@ -854,46 +857,6 @@ def delete_user(
     db.delete(user)
     db.commit()
     return None
-
-
-@router.get("/withdrawals", response_model=WithdrawalListResponse)
-def list_withdrawals(
-    status_filter: WithdrawalStatus | None = Query(default=None),
-    start: datetime | None = Query(default=None),
-    end: datetime | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    """Historial de retiros (solo lectura) con filtro opcional por estado y fecha."""
-    query = db.query(Withdrawal).options(joinedload(Withdrawal.user))
-    if status_filter is not None:
-        query = query.filter(Withdrawal.status == status_filter)
-    if start is not None:
-        query = query.filter(Withdrawal.created_at >= start)
-    if end is not None:
-        query = query.filter(Withdrawal.created_at <= end)
-    withdrawals = query.order_by(Withdrawal.created_at.desc()).all()
-    return WithdrawalListResponse(
-        withdrawals=[
-            WithdrawalResponse(
-                id=item.id,
-                user_id=item.user_id,
-                user_email=item.user.email if item.user else None,
-                amount_cents=item.amount_cents,
-                status=item.status,
-                destination=item.destination,
-                provider=item.provider,
-                provider_reference=item.provider_reference,
-                failure_reason=item.failure_reason,
-                admin_notes=item.admin_notes,
-                requested_at=item.requested_at,
-                processed_at=item.processed_at,
-                created_at=item.created_at,
-            )
-            for item in withdrawals
-        ],
-        total=len(withdrawals),
-    )
 
 
 # --- Moderación de reseñas ---------------------------------------------------

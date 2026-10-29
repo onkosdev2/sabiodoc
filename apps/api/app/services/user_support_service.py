@@ -2,7 +2,7 @@
 
 Reúne en una sola respuesta todo lo necesario para diagnosticar un problema de
 un usuario: roles, citas (con el médico/paciente de cada una), videoconsultas,
-consultas de IA, monedero, retiros, errores recientes y notificaciones.
+consultas de IA, cobros, errores recientes y notificaciones.
 """
 
 from datetime import UTC, datetime
@@ -17,7 +17,7 @@ from app.models.error_log import ErrorLog
 from app.models.notification import Notification, NotificationStatus
 from app.models.user import User, sorted_roles
 from app.models.video_session import VideoSession, VideoSessionStatus
-from app.models.wallet import WalletTransaction, Withdrawal
+from app.models.payment import ConsultationCharge
 from app.schemas.support import (
     SupportAppointmentItem,
     SupportConsultationItem,
@@ -29,11 +29,8 @@ from app.schemas.support import (
     SupportUserDetailResponse,
     SupportUserSummary,
     SupportVideoSessionItem,
-    SupportWalletTransaction,
-    SupportWithdrawal,
 )
 from app.services.patient_profile_service import get_patient_display_name
-from app.services.wallet_service import wallet_service
 
 LIST_LIMIT = 20
 
@@ -64,8 +61,6 @@ class UserSupportService:
         active_session = self._active_session(db, user, profile_id)
         next_appointment = self._next_appointment(db, user, profile_id)
 
-        transactions, _ = wallet_service.list_transactions(db, user.id, limit=10, offset=0)
-
         return SupportUserDetailResponse(
             user=self._user_summary(user, profile),
             doctor_profile=self._doctor_profile(profile),
@@ -77,9 +72,6 @@ class UserSupportService:
             appointments=appointments_items,
             video_sessions=[self._video_item(s, profile_id) for s in video_sessions],
             consultations=self._consultations(db, user),
-            wallet_balance_cents=wallet_service.get_balance_cents(db, user.id),
-            transactions=[self._transaction(t) for t in transactions],
-            withdrawals=self._withdrawals(db, user),
             errors=self._errors(db, user),
             notifications=self._notifications(db, user),
         )
@@ -155,7 +147,7 @@ class UserSupportService:
         else:
             counterpart = self._doctor_counterpart(appointment.doctor)
 
-        payment = getattr(appointment, "payment", None)
+        charge = getattr(appointment, "consultation_charge", None)
         return SupportAppointmentItem(
             id=appointment.id,
             specialty_name=appointment.specialty.name if appointment.specialty else "Especialidad",
@@ -163,9 +155,11 @@ class UserSupportService:
             scheduled_at=appointment.scheduled_at,
             duration_minutes=appointment.duration_minutes,
             counterpart=counterpart,
-            payment_amount_cents=payment.amount_cents if payment else None,
-            payment_status=payment.status.value if payment else None,
-            payment_doctor_amount_cents=payment.doctor_amount_cents if payment else None,
+            payment_amount_cents=(
+                charge.paid_amount_cents or charge.quoted_amount_cents if charge else None
+            ),
+            payment_status=charge.status.value if charge else None,
+            payment_doctor_amount_cents=charge.doctor_net_cents if charge else None,
             video_session_id=(
                 video_by_appointment.get(appointment.id) if video_by_appointment else None
             ),
@@ -192,22 +186,8 @@ class UserSupportService:
             ended_at=session.ended_at,
             billable_seconds=session.billable_seconds or 0,
             price_per_min_cents=session.doctor_price_per_min_cents or 0,
-            prepaid_amount_cents=session.prepaid_amount_cents or 0,
+            payment_amount_cents=session.payment_amount_cents or 0,
             closed_reason=session.closed_reason,
-        )
-
-    @staticmethod
-    def _transaction(transaction: WalletTransaction) -> SupportWalletTransaction:
-        return SupportWalletTransaction(
-            id=transaction.id,
-            type=transaction.type.value,
-            status=transaction.status.value,
-            amount_cents=transaction.amount_cents,
-            balance_after_cents=transaction.balance_after_cents,
-            description=transaction.description,
-            reference_type=transaction.reference_type,
-            reference_id=transaction.reference_id,
-            created_at=transaction.created_at,
         )
 
     # ------------------------------------------------------------------
@@ -222,7 +202,7 @@ class UserSupportService:
                 joinedload(Appointment.specialty),
                 joinedload(Appointment.patient),
                 joinedload(Appointment.doctor).joinedload(DoctorProfile.user),
-                joinedload(Appointment.payment),
+                joinedload(Appointment.consultation_charge),
             )
             .filter(self._appointment_scope(user, profile_id))
             .order_by(Appointment.scheduled_at.desc())
@@ -277,7 +257,7 @@ class UserSupportService:
                 joinedload(Appointment.specialty),
                 joinedload(Appointment.patient),
                 joinedload(Appointment.doctor).joinedload(DoctorProfile.user),
-                joinedload(Appointment.payment),
+                joinedload(Appointment.consultation_charge),
             )
             .filter(
                 self._appointment_scope(user, profile_id),
@@ -306,28 +286,6 @@ class UserSupportService:
                 closed_at=row.closed_at,
                 auto_closed=bool(row.auto_closed),
                 has_summary=bool(row.summary),
-            )
-            for row in rows
-        ]
-
-    def _withdrawals(self, db: Session, user: User) -> list[SupportWithdrawal]:
-        rows = (
-            db.query(Withdrawal)
-            .filter(Withdrawal.user_id == user.id)
-            .order_by(Withdrawal.created_at.desc())
-            .limit(10)
-            .all()
-        )
-        return [
-            SupportWithdrawal(
-                id=row.id,
-                amount_cents=row.amount_cents,
-                status=row.status.value,
-                destination=row.destination,
-                provider=row.provider,
-                provider_reference=row.provider_reference,
-                failure_reason=row.failure_reason,
-                created_at=row.created_at,
             )
             for row in rows
         ]

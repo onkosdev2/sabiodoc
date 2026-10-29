@@ -6,7 +6,6 @@ export interface FinancePolicy {
   min_price_cents: number
   max_price_cents: number
   currency: string
-  is_mock_money: boolean
 }
 
 export interface FinanceOverview {
@@ -15,28 +14,18 @@ export interface FinanceOverview {
   currency: string
   platform_fee_bps: number
   platform_fee_percent: number
-  is_mock_money: boolean
   gmv_cents: number
   platform_revenue_cents: number
-  doctor_payouts_cents: number
-  completed_count: number
-  topups_cents: number
-  refunds_cents: number
-  withdrawals_paid_cents: number
-  withdrawals_processing_cents: number
-  withdrawals_failed_cents: number
-  held_cents: number
-  user_balances_cents: number
-  doctor_balances_cents: number
+  doctor_net_cents: number
+  paid_consultations: number
+  pending_charges_cents: number
+  pending_earnings_cents: number
+  payouts_paid_cents: number
+  payouts_processing_cents: number
+  payouts_failed_cents: number
 }
 
-export type FinanceMovementType =
-  | 'topup'
-  | 'withdrawal'
-  | 'consultation_payment'
-  | 'consultation_income'
-  | 'refund'
-  | 'adjustment'
+export type FinanceMovementType = 'initial' | 'extension' | 'refund' | 'payout'
 
 export interface FinanceMovement {
   id: number
@@ -50,6 +39,7 @@ export interface FinanceMovement {
   actor_role: string | null
   reference_type: string | null
   reference_id: number | null
+  provider: string | null
 }
 
 export interface FinanceMovementListResponse {
@@ -62,17 +52,18 @@ export interface FinanceMovementListResponse {
 }
 
 export interface CommissionItem {
-  appointment_payment_id: number
+  charge_id: number
   appointment_id: number
   released_at: string | null
   doctor_profile_id: number
   doctor_name: string
   doctor_email: string | null
   patient_email: string | null
-  billable_seconds: number
+  paid_minutes: number
   gross_cents: number
   fee_cents: number
   net_cents: number
+  status: string
 }
 
 export interface CommissionListResponse {

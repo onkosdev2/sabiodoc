@@ -25,8 +25,6 @@ _INDEXES = [
     ("ix_video_sessions_doctor_id", "video_sessions", ["doctor_id"]),
     ("ix_video_session_events_video_session_id", "video_session_events", ["video_session_id"]),
     ("ix_appointments_specialty_id", "appointments", ["specialty_id"]),
-    ("ix_appointment_payments_patient_id", "appointment_payments", ["patient_id"]),
-    ("ix_appointment_payments_doctor_id", "appointment_payments", ["doctor_id"]),
     ("ix_audit_logs_actor_user_id", "audit_logs", ["actor_user_id"]),
 ]
 

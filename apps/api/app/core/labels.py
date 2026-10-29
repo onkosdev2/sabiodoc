@@ -71,7 +71,6 @@ AUDIT_ACTION_LABELS: dict[str, str] = {
     "user.updated": "Usuario actualizado",
     "video_session.completed": "Videoconsulta finalizada",
     "video_session.doctor_note_updated": "Nota clínica actualizada",
-    "withdrawal.processed": "Retiro procesado",
 }
 
 AUDIT_ENTITY_LABELS: dict[str, str] = {
@@ -80,7 +79,6 @@ AUDIT_ENTITY_LABELS: dict[str, str] = {
     "specialty": "especialidad",
     "user": "usuario",
     "video_session": "videoconsulta",
-    "withdrawal": "retiro",
 }
 
 

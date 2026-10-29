@@ -33,7 +33,6 @@
 - La creación de cita exige:
   - `accepted_terms` (términos y privacidad);
   - `accepted_data_terms` (videoconsulta y datos clínicos);
-  - `accepted_overtime_terms`.
 
 ## Frontend
 

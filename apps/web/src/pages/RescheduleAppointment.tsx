@@ -38,12 +38,15 @@ export default function RescheduleAppointment() {
       try {
         const appointmentResponse = await getAppointment(Number(appointmentId))
         setAppointment(appointmentResponse)
-        const slotsResponse = await getDoctorBookableSlots(appointmentResponse.doctor_id)
+        const slotsResponse = await getDoctorBookableSlots(
+          appointmentResponse.doctor_id,
+          14,
+          appointmentResponse.duration_minutes,
+        )
         const filteredSlots = slotsResponse.slots.filter((slot) => slot.starts_at !== appointmentResponse.scheduled_at)
         setSlots(filteredSlots)
-        if (filteredSlots.length > 0) {
-          setSelectedSlot(filteredSlots[0].starts_at)
-        }
+        const firstAvailable = filteredSlots.find((slot) => slot.available !== false)
+        setSelectedSlot(firstAvailable?.starts_at ?? '')
       } catch (requestError) {
         setError(getApiErrorMessage(requestError, 'No se pudo cargar la cita'))
       } finally {
@@ -131,12 +134,16 @@ export default function RescheduleAppointment() {
                           key={slot.starts_at}
                           type="button"
                           role="radio"
+                          disabled={slot.available === false}
                           aria-checked={isSelected}
-                          onClick={() => setSelectedSlot(slot.starts_at)}
+                          title={slot.available === false ? 'Horario no disponible' : undefined}
+                          onClick={() => slot.available !== false && setSelectedSlot(slot.starts_at)}
                           className={`rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
-                            isSelected
-                              ? 'bg-primary-600 text-white'
-                              : 'border border-slate-300 bg-white text-slate-700 hover:border-primary-400'
+                            slot.available === false
+                              ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 line-through'
+                              : isSelected
+                                ? 'bg-primary-600 text-white'
+                                : 'border border-slate-300 bg-white text-slate-700 hover:border-primary-400'
                           }`}
                         >
                           {new Date(slot.starts_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}

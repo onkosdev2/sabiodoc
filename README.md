@@ -116,47 +116,55 @@ El frontend estará en: `http://localhost:5173`
 | VITE_API_URL | URL del backend | http://localhost:8000 |
 | VITE_SITE_URL | URL pública del sitio (canonical, Open Graph, robots.txt y sitemap.xml). Si no se define, se usa `https://sabiodoc.app` | https://sabiodoc.app |
 
-## 💳 Créditos y pagos (dinero de prueba)
+## 💳 Pagos de videoconsultas
 
-SabioDoc usa un monedero de **créditos** donde **1 crédito = 1 USD = 100 centavos**.
-Mientras no se integre una pasarela real, las recargas y retiros usan dinero ficticio.
+SabioDoc cobra cada videoconsulta con la pasarela configurada en `PAYMENT_PROVIDER`
+(`mock` en desarrollo/pruebas y Niubiz cuando esté habilitado).
 
 Flujo de una cita:
 
-1. El paciente **recarga créditos** (`POST /wallet/topup`).
-2. Al **agendar** una cita se **retiene** el monto del tiempo reservado (`duration × precio/min`, `status = held`).
-3. Antes de agendar, el paciente acepta que la consulta puede extenderse y consumir créditos extra.
-4. Durante la videoconsulta, el **cronómetro solo corre cuando el paciente y el médico están en la sala**. Si uno sale o deja de dar señal, se **pausa** y solo se acumula el tiempo con ambos presentes.
-5. **5 minutos antes** del fin del tiempo reservado se muestra un aviso sobre el tiempo extra.
-6. Si la consulta se **extiende**, se **consumen créditos del saldo** del paciente minuto a minuto (con aviso en vivo). Si el saldo se agota, la **videollamada finaliza automáticamente** (`closed_reason = completed_no_credits`).
-7. Al **completar** (o al expirar/cortar), se liquida el **tiempo real**: el tiempo reservado sale de la retención, el tiempo extra del saldo; lo no usado se **devuelve al paciente** y el médico recibe su parte.
-8. Si la cita se **cancela**, se **reembolsa** todo al paciente (`refunded`).
-9. Paciente y médico pueden **solicitar retiros**. Se procesan **automáticamente** con la pasarela de payouts (mock en pruebas, Stripe Connect en producción): el retiro pasa a `processing` y se confirma por webhook (`paid` o `failed`). Si falla, los créditos se devuelven solos; el admin solo monitorea.
+1. Al **reservar** se cotiza `duración × tarifa`. No se cobra ni se retiene dinero.
+2. El médico **confirma** la cita desde su agenda.
+3. El **cobro inicial** se realiza cuando el médico pulsa «Iniciar consulta» y ambos
+   están dentro de la videollamada. Ese importe cubre el tiempo reservado y se cobra
+   **una sola vez**; no se consume minuto a minuto.
+4. Si el pago falla o requiere 3DS, el cronómetro no inicia. Se puede reintentar con
+   otra tarjeta o completar la verificación.
+5. Durante la videoconsulta el **cronómetro solo corre cuando el paciente y el médico
+   están en la sala**. Si uno sale o deja de dar señal, se pausa.
+6. Al agotarse el **tiempo pagado**, el cronómetro se detiene y la sesión pasa a
+   `extension_pending` con 60 segundos de gracia. El médico puede **solicitar una
+   ampliación de 5, 10 o 15 minutos**. La solicitud queda en `extension_requested`
+   hasta que **el paciente la confirme**; solo entonces se realiza el cobro y se
+   habilitan los minutos adicionales. Si el paciente rechaza o no confirma, no se
+   cobra nada y la consulta se cierra.
+7. Si no se solicita ampliación, la consulta finaliza y se registran los ingresos del
+   médico. El importe ya cobrado cubre el bloque de tiempo reservado; no se reembolsa
+   el tiempo no utilizado.
+8. Si la cita se **cancela antes de iniciar**, no hay cobro.
+9. El médico puede **solicitar payouts** de sus ingresos disponibles. La pasarela de
+   retiros se configura con `PAYOUT_PROVIDER`.
 
 ### Comisión de la plataforma
 
-SabioDoc cobra una **comisión del 20%** (`PLATFORM_FEE_BPS=2000`) sobre lo que cobra el médico. Al liquidar la cita, el monto facturado se reparte así:
+SabioDoc cobra una **comisión del 20%** (`PLATFORM_FEE_BPS=2000`) sobre cada cobro
+confirmado (inicial o ampliación):
 
-- **Bruto**: lo que paga el paciente por el tiempo real (`billable_amount_cents`).
+- **Bruto**: importe cobrado al paciente (`paid_amount_cents`).
 - **Comisión 20%**: ingreso de la plataforma (`platform_fee_cents`).
-- **Neto 80%**: lo que se acredita al monedero del médico (`doctor_amount_cents`).
+- **Neto 80%**: ingreso acreditado al médico (`doctor_net_cents`).
 
-La comisión es configurable con `PLATFORM_FEE_BPS` (100 = 1%). El médico ve el desglose en su onboarding (tarifa neta), su monedero («Mis ingresos»), el panel operativo y la sala de videoconsulta. El admin lo ve en **Ingresos y salidas** (`/admin/finance`), con el detalle por cita liquidada.
+El panel de la videoconsulta muestra el **importe pagado**, el **tiempo pagado**, el
+tiempo restante y si el cronómetro está activo o en pausa.
 
-El panel de la videoconsulta muestra el **costo real de la sesión**, el máximo retenido, el tiempo extra consumido, el saldo disponible y si el cronómetro está activo o en pausa por ausencia de alguno.
-
-Variables de entorno (backend):
+Variables de entorno relevantes (backend):
 
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
-| CREDITS_CURRENCY | Moneda del monedero | usd |
-| WALLET_MIN_TOPUP_CENTS | Recarga mínima (centavos) | 500 |
-| WALLET_MAX_TOPUP_CENTS | Recarga máxima (centavos) | 100000 |
-| WALLET_MIN_WITHDRAWAL_CENTS | Retiro mínimo (centavos) | 1000 |
+| PAYMENT_PROVIDER | Pasarela de cobros (`mock`/`niubiz`) | mock |
+| PAYMENT_CURRENCY | Moneda de los cobros | USD |
 | PLATFORM_FEE_BPS | Comisión de plataforma (puntos básicos) | 2000 |
-| PAYOUT_PROVIDER | Pasarela de retiros (`mock`/`stripe`) | mock |
 | VIDEO_PRESENCE_TIMEOUT_SECONDS | Segundos sin señal antes de pausar el cronómetro | 30 |
-| VIDEO_MIN_BILLABLE_MINUTES | Mínimo facturable si hubo sesión activa | 1 |
 
 ## 📋 Endpoints API
 
@@ -190,7 +198,7 @@ Los roles son **múltiples** por usuario (tabla `user_roles`). `patient` es el r
 ### Soporte de usuario (admin)
 - `GET /admin/users/{id}/support` devuelve una **vista 360°** para dar soporte: roles y estado de la
   cuenta, **cita actual/próxima y con qué médico o paciente**, videoconsultas (estado, sala, tiempos y
-  facturación), consultas de IA, monedero, retiros, **errores recientes** y notificaciones.
+  facturación), consultas de IA, cobros, payouts, **errores recientes** y notificaciones.
 - En el panel de administrador, cada usuario tiene la acción **«Ver información»** en el menú de tres puntos
   (abre `/admin/users/{id}/support`), con un botón para **copiar el resumen** para el ticket. En el panel de
   soporte, la lista de usuarios abre el detalle con un clic.
@@ -223,18 +231,25 @@ Sistema de tickets con conversación y adjuntos, para que pacientes y médicos r
 - `POST /consultations` - Crear consulta
 - `GET /consultations/my` - Mis consultas
 
-### Créditos / pagos (dinero de prueba)
-- `GET /wallet/me` - Saldo y movimientos del monedero
-- `GET /wallet/me/transactions` - Movimientos paginados
-- `POST /wallet/topup` - Recargar créditos (dinero ficticio)
-- `POST /wallet/withdraw` - Solicitar retiro de créditos a una cuenta
-- `GET /wallet/me/withdrawals` - Mis solicitudes de retiro
-- `GET /finance/policy` - Comisión vigente y límites de tarifa (para el médico)
-- `GET /admin/withdrawals` - (Admin) Historial de retiros (solo lectura)
-- `GET /admin/finance/overview` - (Admin) Ingresos, salidas, comisión y custodia
-- `GET /admin/finance/transactions` - (Admin) Todos los movimientos (entradas/salidas)
-- `GET /admin/finance/commissions` - (Admin) Ganancias por comisión por cita
-- `POST /webhooks/payouts/{provider}` - Webhook de la pasarela de payouts
+### Pagos
+- `GET /payments/methods` - Métodos de pago guardados
+- `POST /payments/methods` - Registrar tarjeta tokenizada
+- `POST /appointments/quote` - Cotización de la cita
+- `POST /appointments/{id}/confirm` - Confirmación del médico
+- `POST /video-sessions/{id}/start` - Cobro inicial al iniciar la consulta
+- `POST /video-sessions/{id}/confirm-payment` - Confirmar pago/3DS pendiente
+- `POST /video-sessions/{id}/extend` - Cobrar y habilitar minutos adicionales
+- `GET /earnings/me` - Ingresos disponibles del médico
+- `POST /earnings/me/payouts` - Solicitar payout
+- `GET /earnings/admin/reconciliation` - (Admin) Conciliación de cargos
+
+### Finanzas (admin)
+- `GET /finance/policy` - Comisión vigente y límites de tarifa
+- `GET /admin/finance/overview` - Cobros, comisión, ingresos y payouts
+- `GET /admin/finance/transactions` - Transacciones de pago
+- `GET /admin/finance/commissions` - Comisiones por cita cobrada
+- `GET /earnings/admin/payouts` - Payouts solicitados
+- `GET /earnings/admin/reconciliation` - Conciliación de cobros e ingresos
 
 ### Favoritos
 - `POST /favorites` - Agregar/quitar favorito
@@ -349,8 +364,9 @@ Dos servicios:
 Variables clave:
 
 - API: `DATABASE_URL`, `ENVIRONMENT=production`, `JWT_SECRET` (≥32), `FRONTEND_ORIGIN` (dominio del frontend),
-  `JITSI_BASE_URL` (Jitsi self-hosted), `JITSI_JWT_SECRET`/`JITSI_JWT_APP_ID`, `SMTP_*`, `CLOUDINARY_*`,
-  `PAYOUT_PROVIDER` y `FRONTEND_DEPLOY_HOOK_URL` (opcional, para regenerar el prerender público).
+  `JITSI_BASE_URL`, `JITSI_JWT_SECRET`, `JITSI_JWT_APP_ID`, `JITSI_JWT_AUDIENCE`,
+  `JITSI_JWT_SUBJECT`, `SMTP_*`, `CLOUDINARY_*`, `PAYMENT_PROVIDER` y
+  `FRONTEND_DEPLOY_HOOK_URL` (opcional, para regenerar el prerender público).
 - Frontend (en tiempo de build): `VITE_API_URL` (URL pública de la API) y `VITE_SITE_URL` (dominio del sitio).
 
 Cabeceras, caché y redirecciones: el frontend incluye `apps/web/public/_headers`, `apps/web/public/_redirects` y

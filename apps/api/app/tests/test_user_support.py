@@ -12,8 +12,6 @@ from app.models.doctor_profile import DoctorProfile
 from app.models.error_log import ErrorLog
 from app.models.specialty import Specialty
 from app.models.user import User, UserRole
-from app.models.wallet import Wallet, WalletTransaction
-from app.services.wallet_service import wallet_service
 
 client = TestClient(app)
 
@@ -64,10 +62,6 @@ def _cleanup(db, user_ids: list[int], appointment_ids: list[int]) -> None:
         )
     if user_ids:
         db.query(ErrorLog).filter(ErrorLog.user_id.in_(user_ids)).delete(synchronize_session=False)
-        db.query(WalletTransaction).filter(WalletTransaction.user_id.in_(user_ids)).delete(
-            synchronize_session=False
-        )
-        db.query(Wallet).filter(Wallet.user_id.in_(user_ids)).delete(synchronize_session=False)
         db.query(DoctorProfile).filter(DoctorProfile.user_id.in_(user_ids)).delete(
             synchronize_session=False
         )
@@ -162,9 +156,7 @@ def test_support_muestra_cita_y_contraparte():
                 video_session_id=123,
             )
         )
-        wallet_service.topup(db, patient.id, 5000)
         db.commit()
-
         headers = _admin_headers()
 
         # Vista del paciente: la contraparte es el médico.
@@ -175,7 +167,6 @@ def test_support_muestra_cita_y_contraparte():
         assert set(body["user"]["roles"]) == {"patient"}
         assert body["stats"]["appointments_total"] == 1
         assert body["stats"]["errors_total"] == 1
-        assert body["wallet_balance_cents"] == 5000
         assert len(body["appointments"]) == 1
         assert body["appointments"][0]["counterpart"]["role"] == "doctor"
         assert body["appointments"][0]["counterpart"]["name"] == "Dr. Soporte Test"

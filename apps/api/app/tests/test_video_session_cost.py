@@ -1,4 +1,4 @@
-"""Costo real de la videoconsulta en el estado de la sesión."""
+"""Estado de cobro y cronómetro de la videoconsulta."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -7,7 +7,7 @@ from app.routers.video_sessions import _serialize_status
 from app.services.video_session_service import video_session_service
 
 
-def _make_session(*, billable_seconds: int, price: int, prepaid: int) -> VideoSession:
+def _make_session(*, billable_seconds: int, price: int, paid: int) -> VideoSession:
     now = datetime.now(UTC)
     return VideoSession(
         id=1,
@@ -19,7 +19,7 @@ def _make_session(*, billable_seconds: int, price: int, prepaid: int) -> VideoSe
         provider_room_name="sabiodoc-room",
         doctor_price_per_min_cents=price,
         estimated_minutes=30,
-        prepaid_amount_cents=prepaid,
+        payment_amount_cents=paid,
         billable_seconds=billable_seconds,
         expires_at=now + timedelta(hours=1),
         patient_present=True,
@@ -29,30 +29,48 @@ def _make_session(*, billable_seconds: int, price: int, prepaid: int) -> VideoSe
     )
 
 
-def test_costo_real_se_calcula_aunque_no_haya_retencion():
-    # El caso de las citas de prueba: sin prepago, antes mostraba siempre 0.
-    session = _make_session(billable_seconds=321, price=10, prepaid=0)
+def test_importe_cobrado_no_se_calcula_por_minuto():
+    # El importe se cobra una vez al iniciar: el cronómetro no lo modifica.
+    session = _make_session(billable_seconds=321, price=10, paid=1500)
 
-    status = _serialize_status(session, "doctor")
+    status = _serialize_status(
+        session,
+        "doctor",
+        payment_state="paid",
+        payment_amount_cents=1500,
+        payment_minutes=30,
+        payment_fee_cents=300,
+        payment_doctor_amount_cents=1200,
+    )
 
-    # 321 s -> 6 minutos facturables * 10 cent/min = 60 centavos.
-    assert status.current_cost_cents == 60
-    assert status.held_amount_cents == 0
+    assert status.payment_amount_cents == 1500
+    assert status.payment_minutes == 30
+    assert status.platform_fee_cents == 300
+    assert status.doctor_amount_cents == 1200
+    assert status.remaining_seconds == 30 * 60 - 321
 
 
-def test_costo_cero_si_no_ha_transcurrido_tiempo():
-    session = _make_session(billable_seconds=0, price=10, prepaid=1000)
+def test_presencia_jitsi_caduca_sin_heartbeat():
+    now = datetime.now(UTC)
+    session = _make_session(billable_seconds=0, price=10, paid=1000)
+    session.jitsi_patient_present = True
+    session.jitsi_doctor_present = True
+    session.jitsi_patient_last_seen_at = now - timedelta(seconds=40)
+    session.jitsi_doctor_last_seen_at = now - timedelta(seconds=40)
 
-    status = _serialize_status(session, "doctor")
+    assert video_session_service.participant_in_jitsi(session, "patient", now) is False
+    assert video_session_service.both_in_jitsi(session, now) is False
 
-    assert status.current_cost_cents == 0
-    assert status.held_amount_cents == 1000
+    video_session_service.touch_jitsi_participant(session, "patient", now)
+    video_session_service.touch_jitsi_participant(session, "doctor", now)
+
+    assert video_session_service.both_in_jitsi(session, now) is True
 
 
 def test_reconcile_pausa_en_el_ultimo_momento_con_ambos_presentes():
     """No se cobra el tiempo en solitario cuando un participante dejó de dar señales."""
     now = datetime.now(UTC)
-    session = _make_session(billable_seconds=0, price=10, prepaid=1000)
+    session = _make_session(billable_seconds=0, price=10, paid=1000)
     session.started_at = now - timedelta(minutes=10)
     session.patient_last_seen_at = now - timedelta(minutes=7)
     session.doctor_last_seen_at = now - timedelta(minutes=9)
@@ -67,7 +85,7 @@ def test_reconcile_pausa_en_el_ultimo_momento_con_ambos_presentes():
 
 
 def test_reconcile_no_hace_nada_si_el_cronometro_no_esta_activo():
-    session = _make_session(billable_seconds=123, price=10, prepaid=1000)
+    session = _make_session(billable_seconds=123, price=10, paid=1000)
     session.started_at = None
 
     assert video_session_service.reconcile_timer(session, datetime.now(UTC)) is False

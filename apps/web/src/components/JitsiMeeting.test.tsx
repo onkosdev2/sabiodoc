@@ -42,26 +42,29 @@ describe('JitsiMeeting', () => {
 
   it('carga el API externo y monta la reunión con los datos del participante', async () => {
     const onJoined = vi.fn()
+    const onHeartbeat = vi.fn()
     const { unmount } = render(
       <JitsiMeeting
-        roomUrl="https://meet.jit.si/SabioDoc-123"
+        roomUrl="https://jitsi.onkosdev.us/SabioDoc-123"
         jwt="token-jwt"
         displayName="Ana Pérez"
         email="ana@example.com"
         onJoined={onJoined}
+        onHeartbeat={onHeartbeat}
       />,
     )
 
     await waitFor(() => expect(instances).toHaveLength(1))
     const api = instances[0]
 
-    expect(api.domain).toBe('meet.jit.si')
+    expect(api.domain).toBe('jitsi.onkosdev.us')
     expect(api.options.roomName).toBe('SabioDoc-123')
     expect(api.options.jwt).toBe('token-jwt')
     expect(api.options.userInfo).toEqual({ displayName: 'Ana Pérez', email: 'ana@example.com' })
 
     api.listeners.videoConferenceJoined?.()
     expect(onJoined).toHaveBeenCalledTimes(1)
+    expect(onHeartbeat).toHaveBeenCalledTimes(1)
 
     unmount()
     expect(api.dispose).toHaveBeenCalledTimes(1)
@@ -75,7 +78,7 @@ describe('JitsiMeeting', () => {
 
     render(
       <JitsiMeeting
-        roomUrl="https://meet.jit.si/SabioDoc-123"
+        roomUrl="https://jitsi.onkosdev.us/SabioDoc-123"
         onLeft={onLeft}
         onError={onError}
         onRemoteParticipantJoined={onRemoteParticipantJoined}

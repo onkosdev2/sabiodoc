@@ -13,7 +13,7 @@
 |---|---:|---|
 | `/me/profile/` | 0 | Sin violaciones |
 | `/me/appointments/` | 0 | Sin violaciones |
-| `/me/wallet/` | 0 | Sin violaciones |
+| `/me/payment-methods/` | 0 | Sin violaciones |
 | `/notifications/` | 0 | Sin violaciones |
 
 ## Detalle

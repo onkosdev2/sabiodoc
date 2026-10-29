@@ -1,7 +1,7 @@
 """Patient profile change requests (médico propone, paciente aprueba)
 
 Revision ID: 020
-Revises: 019
+Revises: 018
 Create Date: 2026-10-01 00:00:00.000000
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "020"
-down_revision = "019"
+down_revision = "018"
 branch_labels = None
 depends_on = None
 

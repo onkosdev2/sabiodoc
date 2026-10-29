@@ -16,6 +16,6 @@
 | `/doctor/profile/` | 0 | Sin violaciones |
 | `/doctor/availability/` | 0 | Sin violaciones |
 | `/doctor/video-sessions/` | 0 | Sin violaciones |
-| `/doctor/wallet/` | 0 | Sin violaciones |
+| `/doctor/earnings/` | 0 | Sin violaciones |
 
 ## Detalle

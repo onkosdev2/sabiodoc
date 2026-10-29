@@ -71,7 +71,7 @@ export interface VideoSessionPrepareResponse {
   doctor_token: string
   doctor_price_per_min_cents: number
   estimated_minutes: number
-  prepaid_amount_cents: number
+  payment_amount_cents: number
   expires_at: string
   payment_reference: string | null
 }
@@ -117,16 +117,5 @@ export const generateSummary = async (consultationId: number): Promise<GenerateS
 
 export const closeConsultation = async (consultationId: number): Promise<Consultation> => {
   const response = await client.post<Consultation>(`/consultations/${consultationId}/close`)
-  return response.data
-}
-
-export const prepareVideoSession = async (
-  consultationId: number,
-  data: { doctor_id: number; estimated_minutes: number; payment_method_id?: string }
-): Promise<VideoSessionPrepareResponse> => {
-  const response = await client.post<VideoSessionPrepareResponse>(
-    `/consultations/${consultationId}/video-session/prepare`,
-    data
-  )
   return response.data
 }

@@ -4,17 +4,11 @@ import pytest
 from fastapi import HTTPException
 from app.core.config import settings
 from app.services.jitsi_service import JitsiService
-from app.services.payment_service import PaymentService
 from app.services.pricing_service import pricing_service
 from app.services.specialist_assistant import SpecialistAssistant
 from app.services.appointment_service import appointment_service
 from app.services.video_session_service import video_session_service
 from app.routers.video_sessions import _serialize_status
-
-
-def test_pricing_service_respects_minimum_prepay_minutes():
-    amount = pricing_service.calculate_prepay_amount(price_per_min_cents=800, estimated_minutes=5)
-    assert amount == max(5, settings.VIDEO_MIN_PREPAY_MINUTES) * 800
 
 
 def test_pricing_service_rejects_prices_outside_business_range():
@@ -38,20 +32,6 @@ def test_jitsi_service_prepare_room():
     assert isinstance(response["patient_token"], str)
     assert isinstance(response["doctor_token"], str)
     assert response["metadata"]["appointment_id"] is None
-
-
-def test_payment_service_mock_prepayment(monkeypatch):
-    monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", None)
-    service = PaymentService()
-    response = service.create_prepayment(
-        amount_cents=15000,
-        consultation_id=1,
-        doctor_profile_id=2,
-        patient_id=3,
-    )
-
-    assert response["status"] == "waived"
-    assert response["reference"].startswith("mock_pi_")
 
 
 def test_appointment_room_window_rejects_too_early():
@@ -150,7 +130,7 @@ def test_video_session_status_includes_patient_identity():
         estimated_minutes=20,
         billable_seconds=0,
         doctor_price_per_min_cents=500,
-        prepaid_amount_cents=10000,
+        payment_amount_cents=10000,
         patient_present=True,
         doctor_present=True,
         patient_last_seen_at=datetime.now(timezone.utc),
@@ -165,3 +145,58 @@ def test_video_session_status_includes_patient_identity():
 
     assert serialized.patient_id == 11
     assert serialized.patient_email == "patient@example.com"
+
+
+def test_jitsi_permite_desactivar_moderador(monkeypatch):
+    from jose import jwt
+
+    monkeypatch.setattr(settings, "JITSI_BASE_URL", "https://jitsi.example.com")
+    monkeypatch.setattr(settings, "JITSI_JWT_SUBJECT", "meet.jitsi")
+    monkeypatch.setattr(settings, "JITSI_JWT_SECRET", "test-secret")
+    monkeypatch.setattr(settings, "JITSI_MODERATOR_REQUIRED", False)
+    service = JitsiService()
+    response = service.prepare_room(
+        room_name="same-level",
+        consultation_id=None,
+        doctor_profile_id=1,
+        patient_id=2,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+
+    for token in (response["patient_token"], response["doctor_token"]):
+        payload = jwt.decode(token, "test-secret", algorithms=["HS256"], audience=settings.JITSI_JWT_AUDIENCE)
+        assert payload["sub"] == "meet.jitsi"
+        assert payload["context"]["user"]["moderator"] is False
+        assert payload["context"]["user"]["affiliation"] == "member"
+
+
+def test_jitsi_moderador_solo_si_se_configura(monkeypatch):
+    from jose import jwt
+
+    monkeypatch.setattr(settings, "JITSI_BASE_URL", "https://jitsi.example.com")
+    monkeypatch.setattr(settings, "JITSI_JWT_SUBJECT", "meet.jitsi")
+    monkeypatch.setattr(settings, "JITSI_JWT_SECRET", "test-secret")
+    monkeypatch.setattr(settings, "JITSI_MODERATOR_REQUIRED", True)
+    service = JitsiService()
+    response = service.prepare_room(
+        room_name="doctor-moderator",
+        consultation_id=None,
+        doctor_profile_id=1,
+        patient_id=2,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+
+    patient = jwt.decode(
+        response["patient_token"], "test-secret", algorithms=["HS256"], audience=settings.JITSI_JWT_AUDIENCE
+    )
+    doctor = jwt.decode(
+        response["doctor_token"], "test-secret", algorithms=["HS256"], audience=settings.JITSI_JWT_AUDIENCE
+    )
+    assert patient["context"]["user"]["moderator"] is False
+    assert patient["context"]["user"]["affiliation"] == "member"
+    assert doctor["context"]["user"]["moderator"] is True
+    assert doctor["context"]["user"]["affiliation"] == "owner"
+    assert doctor["aud"] == "jitsi"
+    assert doctor["iss"] == "sabiodoc"
+    assert doctor["sub"] == "meet.jitsi"
+    assert doctor["room"] == response["room_name"]

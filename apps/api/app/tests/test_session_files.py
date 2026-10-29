@@ -43,7 +43,7 @@ def _make_session(db, patient: User, doctor: User) -> VideoSession:
         provider_room_name=f"sabiodoc-files-{uuid.uuid4().hex[:10]}",
         doctor_price_per_min_cents=100,
         estimated_minutes=30,
-        prepaid_amount_cents=0,
+        payment_amount_cents=0,
         expires_at=now + timedelta(hours=1),
     )
     db.add(session)

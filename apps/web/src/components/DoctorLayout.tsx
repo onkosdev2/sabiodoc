@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext'
 export default function DoctorLayout() {
   const { user } = useAuth()
   const isApproved = user?.doctor_status === 'approved'
-
   // Un medico sin aprobar no puede entrar a las rutas clinicas: le mostramos
   // solo la opcion de completar su postulacion.
   const menuGroups: PanelNavItem[][] = isApproved
@@ -25,7 +24,7 @@ export default function DoctorLayout() {
           { to: '/doctor/reviews', label: 'Valoraciones', icon: Star },
         ],
         // Finanzas.
-        [{ to: '/doctor/wallet', label: 'Ingresos', icon: Wallet }],
+        [{ to: '/doctor/earnings', label: 'Ingresos y payouts', icon: Wallet }],
         // Cuenta.
         [{ to: '/doctor/profile', label: 'Mi perfil profesional', icon: FileText }],
         [{ to: '/doctor/security', label: 'Seguridad', icon: Lock }],

@@ -16,14 +16,8 @@ from app.models.video_session import (
     VideoSessionStatus,
 )
 from app.models.video_session_event import VideoSessionEvent
-from app.models.wallet import (
-    AppointmentPayment,
-    AppointmentPaymentStatus,
-    Wallet,
-    WalletTransaction,
-)
+from app.models.payment import ConsultationCharge, ConsultationChargeStatus, DoctorEarning
 from app.services.video_session_service import video_session_service
-from app.services.wallet_service import wallet_service
 
 
 def _make_user(db, role: UserRole = UserRole.patient) -> User:
@@ -70,7 +64,7 @@ def _make_session(db, appointment: Appointment, *, stale: bool, billable_seconds
         provider_room_name=f"sabiodoc-autoclose-{uuid.uuid4().hex[:10]}",
         doctor_price_per_min_cents=appointment.doctor.price_per_min_cents,
         estimated_minutes=30,
-        prepaid_amount_cents=0,
+        payment_amount_cents=0,
         billable_seconds=billable_seconds,
         expires_at=now + timedelta(hours=1),
         patient_present=False,
@@ -93,8 +87,11 @@ def _cleanup(db, *, user_ids, appointment_ids, session_ids) -> None:
             synchronize_session=False
         )
     if appointment_ids:
-        db.query(AppointmentPayment).filter(
-            AppointmentPayment.appointment_id.in_(appointment_ids)
+        db.query(DoctorEarning).filter(
+            DoctorEarning.appointment_id.in_(appointment_ids)
+        ).delete(synchronize_session=False)
+        db.query(ConsultationCharge).filter(
+            ConsultationCharge.appointment_id.in_(appointment_ids)
         ).delete(synchronize_session=False)
         db.query(Appointment).filter(Appointment.id.in_(appointment_ids)).delete(
             synchronize_session=False
@@ -103,10 +100,6 @@ def _cleanup(db, *, user_ids, appointment_ids, session_ids) -> None:
         db.query(Notification).filter(Notification.user_id.in_(user_ids)).delete(
             synchronize_session=False
         )
-        db.query(WalletTransaction).filter(WalletTransaction.user_id.in_(user_ids)).delete(
-            synchronize_session=False
-        )
-        db.query(Wallet).filter(Wallet.user_id.in_(user_ids)).delete(synchronize_session=False)
         db.query(DoctorProfile).filter(DoctorProfile.user_id.in_(user_ids)).delete(
             synchronize_session=False
         )
@@ -143,10 +136,20 @@ def test_cierra_y_liquida_una_sesion_abandonada():
     appointment = _make_appointment(db, patient, doctor_user)
     session = None
     try:
-        wallet_service.topup(db, patient.id, 20000)
-        db.commit()
-        held = wallet_service.appointment_amount_cents(appointment)  # 30 min * 500 = 15000
-        wallet_service.charge_appointment(db, appointment, held)
+        db.add(
+            ConsultationCharge(
+                appointment_id=appointment.id,
+                patient_id=patient.id,
+                doctor_id=appointment.doctor_id,
+                quoted_minutes=30,
+                quoted_amount_cents=15000,
+                paid_minutes=30,
+                paid_amount_cents=15000,
+                platform_fee_cents=3000,
+                doctor_net_cents=12000,
+                status=ConsultationChargeStatus.paid,
+            )
+        )
         db.commit()
 
         # 10 minutos facturables antes de abandonar la sala.
@@ -160,19 +163,16 @@ def test_cierra_y_liquida_una_sesion_abandonada():
         assert session.status == VideoSessionStatus.completed
         assert session.closed_reason == "auto_closed_inactivity"
         assert session.patient_present is False and session.doctor_present is False
+        assert appointment.status == AppointmentStatus.completed
 
-        payment = (
-            db.query(AppointmentPayment)
-            .filter(AppointmentPayment.appointment_id == appointment.id)
+        earning = (
+            db.query(DoctorEarning)
+            .filter(DoctorEarning.appointment_id == appointment.id)
             .first()
         )
-        assert payment is not None
-        assert payment.status == AppointmentPaymentStatus.released
-        assert appointment.status == AppointmentStatus.completed
-        # Se cobran 10 min * 500 = 5000; la diferencia de la retencion se devuelve.
-        assert payment.billable_amount_cents == 5000
-        assert wallet_service.get_balance_cents(db, patient.id) == 15000
-        assert wallet_service.get_balance_cents(db, doctor_user.id) == wallet_service.doctor_net_cents(5000)
+        assert earning is not None
+        assert earning.gross_cents == 15000
+        assert earning.net_cents == 12000
     finally:
         _cleanup(
             db,
