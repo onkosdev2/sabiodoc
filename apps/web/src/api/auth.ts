@@ -27,6 +27,8 @@ export interface AuthResponse {
 export interface RegisterResponse {
   message: string
   verification_required: boolean
+  /** ``false`` si el backend no pudo enviar el correo de verificación. */
+  email_sent?: boolean | null
   access_token?: string | null
   token_type?: string
   user?: User | null

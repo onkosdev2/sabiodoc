@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Loader2, MoreVertical, Pencil, Eye, RefreshCcw, Save, Trash2, UserPlus, X } from 'lucide-react'
+import { Loader2, MailCheck, MoreVertical, Pencil, Eye, RefreshCcw, Save, Trash2, UserPlus, X } from 'lucide-react'
 
 import {
   AdminUser,
@@ -9,6 +9,7 @@ import {
   deleteAdminUser,
   getAdminUsers,
   updateAdminUser,
+  verifyAdminUserEmail,
 } from '../api/admin'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -129,6 +130,7 @@ export default function AdminUsers() {
   const [editRoles, setEditRoles] = useState<AdminUserRole[]>([])
   const [editPassword, setEditPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [verifyingEmailId, setVerifyingEmailId] = useState<number | null>(null)
   const [pendingDelete, setPendingDelete] = useState<AdminUser | null>(null)
   const [deleting, setDeleting] = useState(false)
   const { page, setPage, pageItems, totalPages, totalItems, pageSize } = usePagination(
@@ -232,6 +234,20 @@ export default function AdminUsers() {
       toast.error(getApiErrorMessage(err, 'No se pudo actualizar el usuario'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleVerifyEmail = async (item: AdminUser) => {
+    setVerifyingEmailId(item.id)
+    try {
+      const updated = await verifyAdminUserEmail(item.id)
+      setUsers((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)))
+      setSelected((current) => (current?.id === updated.id ? updated : current))
+      toast.success(`Correo confirmado manualmente: ${updated.email}`)
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'No se pudo confirmar el correo'))
+    } finally {
+      setVerifyingEmailId(null)
     }
   }
 
@@ -374,6 +390,11 @@ export default function AdminUsers() {
                           {DOCTOR_STATUS_LABELS[item.doctor_status] || 'Sin perfil'}
                         </Badge>
                       )}
+                      {!item.is_email_verified && (
+                        <Badge tone="warning" icon={<MailCheck className="h-3.5 w-3.5" />}>
+                          Correo pendiente
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
                       {item.email} · Registro: {new Date(item.created_at).toLocaleDateString('es-ES')}
@@ -413,6 +434,20 @@ export default function AdminUsers() {
                           <Pencil className="h-4 w-4 text-slate-500" />
                           Editar
                         </button>
+
+                        {!item.is_email_verified && (
+                          <button type="button"
+                            onClick={() => {
+                              setOpenMenuId(null)
+                              handleVerifyEmail(item)
+                            }}
+                            disabled={verifyingEmailId === item.id}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <MailCheck className="h-4 w-4" />
+                            {verifyingEmailId === item.id ? 'Confirmando...' : 'Confirmar correo'}
+                          </button>
+                        )}
 
                         <div className="my-1 border-t border-slate-100" />
 
@@ -473,6 +508,34 @@ export default function AdminUsers() {
                 onChange={(event) => setEditEmail(event.target.value)}
                 required
               />
+
+              <div
+                className={`rounded-2xl border p-4 ${
+                  selected.is_email_verified
+                    ? 'border-emerald-100 bg-emerald-50'
+                    : 'border-amber-200 bg-amber-50'
+                }`}
+              >
+                <p className="text-sm font-medium text-slate-900">Verificación de correo</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {selected.is_email_verified
+                    ? 'El correo ya está confirmado; la cuenta puede iniciar sesión.'
+                    : 'La cuenta no puede iniciar sesión hasta confirmar su correo.'}
+                </p>
+                {!selected.is_email_verified && (
+                  <Button
+                    type="button"
+                    variant="success"
+                    size="sm"
+                    className="mt-3"
+                    loading={verifyingEmailId === selected.id}
+                    leftIcon={<MailCheck className="h-4 w-4" />}
+                    onClick={() => handleVerifyEmail(selected)}
+                  >
+                    Confirmar correo manualmente
+                  </Button>
+                )}
+              </div>
 
               <RoleSelector
                 label="Roles"

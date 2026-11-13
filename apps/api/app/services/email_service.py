@@ -45,7 +45,18 @@ def _send(message: EmailMessage, *, to_email: str, kind: str, link: str | None =
                 server.starttls()
             if settings.SMTP_USER:
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD or "")
-            server.send_message(message)
+            refused = server.send_message(message)
+        # ``send_message`` devuelve los destinatarios rechazados en lugar de
+        # lanzar una excepción. Si el proveedor rechaza el buzón, no debemos
+        # registrar el correo como enviado.
+        if refused:
+            logger.error(
+                "El proveedor rechazó el correo '%s' para %s: %s",
+                kind,
+                to_email,
+                refused,
+            )
+            return False
         logger.info("Correo '%s' enviado a %s", kind, to_email)
         return True
     except Exception:

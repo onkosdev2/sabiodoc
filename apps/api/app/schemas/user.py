@@ -151,6 +151,7 @@ class AdminUserResponse(BaseModel):
     role: UserRole
     roles: list[UserRole] = []
     doctor_status: Optional[DoctorApprovalStatus] = None
+    is_email_verified: bool = True
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -176,6 +177,10 @@ class RegisterResponse(BaseModel):
 
     message: str
     verification_required: bool = False
+    # ``False`` si el correo no pudo enviarse (SMTP no configurado, error de
+    # autenticación, buzón rechazado...). Permite a la UI pedir un reenvío en
+    # vez de asegurar que el mensaje ya está en camino.
+    email_sent: Optional[bool] = None
     access_token: Optional[str] = None
     token_type: str = "bearer"
     user: Optional[UserResponse] = None

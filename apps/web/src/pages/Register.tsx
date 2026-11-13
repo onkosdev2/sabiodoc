@@ -33,6 +33,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
+  const [pendingEmailSent, setPendingEmailSent] = useState<boolean | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -63,6 +64,7 @@ export default function Register() {
       const response = await register(email.trim(), password, acceptedTerms, 'v1')
       if (response.verification_required) {
         setPendingEmail(email.trim())
+        setPendingEmailSent(response.email_sent ?? null)
         return
       }
       if (response.access_token && response.user) {
@@ -82,7 +84,7 @@ export default function Register() {
       <div className="mx-auto max-w-md">
         <BackButton useHistoryBack />
         <div className="card">
-          <CheckEmailNotice email={pendingEmail} />
+          <CheckEmailNotice email={pendingEmail} emailSent={pendingEmailSent} />
         </div>
       </div>
     )

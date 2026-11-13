@@ -194,6 +194,10 @@ Los roles son **múltiples** por usuario (tabla `user_roles`). `patient` es el r
   a finanzas, errores o moderación.
 - El filtro `GET /admin/users?role=patient` lista cuentas **solo paciente** (sin rol profesional);
   los demás roles filtran por pertenencia (incluye combinaciones).
+- `POST /admin/users/{id}/verify-email` permite al administrador **confirmar manualmente** el correo de
+  una cuenta (sin enviar el enlace), por ejemplo si el proveedor de correo falló. Invalida los tokens
+  de verificación pendientes y la respuesta incluye `is_email_verified`. La acción aparece en el menú de
+  cada usuario como **«Confirmar correo»** cuando está pendiente.
 
 ### Soporte de usuario (admin)
 - `GET /admin/users/{id}/support` devuelve una **vista 360°** para dar soporte: roles y estado de la

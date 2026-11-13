@@ -103,6 +103,7 @@ export interface AdminUser {
   role: AdminUserRole
   roles: AdminUserRole[]
   doctor_status: 'pending' | 'approved' | 'rejected' | 'suspended' | null
+  is_email_verified: boolean
   created_at: string
 }
 
@@ -273,6 +274,12 @@ export const updateAdminUser = async (
   payload: AdminUserUpdatePayload
 ): Promise<AdminUser> => {
   const response = await client.patch<AdminUser>(`/admin/users/${userId}`, payload)
+  return response.data
+}
+
+/** Confirma manualmente el correo de una cuenta (sin enviar el enlace). */
+export const verifyAdminUserEmail = async (userId: number): Promise<AdminUser> => {
+  const response = await client.post<AdminUser>(`/admin/users/${userId}/verify-email`)
   return response.data
 }
 

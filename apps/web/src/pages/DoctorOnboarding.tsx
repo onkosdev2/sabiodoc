@@ -132,6 +132,7 @@ export default function DoctorOnboarding() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null)
+  const [pendingVerificationEmailSent, setPendingVerificationEmailSent] = useState<boolean | null>(null)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   
   const [step, setStep] = useState(1)
@@ -453,6 +454,7 @@ export default function DoctorOnboarding() {
         const response = await registerDoctor({ ...payload, email, password })
         if (response.verification_required) {
           setPendingVerificationEmail(email)
+          setPendingVerificationEmailSent(response.email_sent ?? null)
           return
         }
         if (response.access_token && response.user) {
@@ -504,7 +506,7 @@ export default function DoctorOnboarding() {
       <div className="mx-auto max-w-2xl">
         <BackButton useHistoryBack />
         <div className="card shadow-sm border border-slate-100 rounded-2xl bg-white p-6 sm:p-8">
-          <CheckEmailNotice email={pendingVerificationEmail} />
+          <CheckEmailNotice email={pendingVerificationEmail} emailSent={pendingVerificationEmailSent} />
         </div>
       </div>
     )

@@ -9,13 +9,16 @@ import Button from './ui/Button'
 
 interface CheckEmailNoticeProps {
   email: string
+  /** ``false`` si el backend no pudo enviar el correo de verificación. */
+  emailSent?: boolean | null
 }
 
 /** Aviso "revisa tu correo" tras registrarse, con opción de reenviar el enlace. */
-export default function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
+export default function CheckEmailNotice({ email, emailSent }: CheckEmailNoticeProps) {
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const deliveryFailed = emailSent === false
 
   const handleResend = async () => {
     setSending(true)
@@ -34,13 +37,25 @@ export default function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
   return (
     <div className="text-center">
       <MailCheck className="mx-auto h-12 w-12 text-primary-600" aria-hidden="true" />
-      <h1 className="mt-4 text-2xl font-bold text-slate-800">Revisa tu correo</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Enviamos un enlace de verificación a{' '}
-        <span className="font-medium text-slate-900">{email}</span>. Ábrelo para activar tu cuenta antes
-        de iniciar sesión.
-      </p>
-      <p className="mt-2 text-xs text-slate-500">Si no lo ves, revisa la carpeta de spam.</p>
+      <h1 className="mt-4 text-2xl font-bold text-slate-800">
+        {deliveryFailed ? 'No pudimos enviar el correo' : 'Revisa tu correo'}
+      </h1>
+      {deliveryFailed ? (
+        <Alert tone="warning" className="mt-4 text-left">
+          Tu cuenta se creó correctamente, pero el enlace de verificación no pudo enviarse a{' '}
+          <span className="font-medium">{email}</span>. Usa «Reenviar correo» en unos minutos. Si el
+          problema continúa, contacta a soporte.
+        </Alert>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-slate-600">
+            Enviamos un enlace de verificación a{' '}
+            <span className="font-medium text-slate-900">{email}</span>. Ábrelo para activar tu cuenta antes
+            de iniciar sesión.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">Si no lo ves, revisa la carpeta de spam.</p>
+        </>
+      )}
 
       {message && (
         <Alert tone="success" className="mt-4 text-left">

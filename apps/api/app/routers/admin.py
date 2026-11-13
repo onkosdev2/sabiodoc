@@ -116,6 +116,7 @@ def _serialize_admin_user(user: User) -> AdminUserResponse:
         role=user.primary_role,
         roles=sorted_roles(user.roles),
         doctor_status=profile.status if profile else None,
+        is_email_verified=bool(user.is_email_verified),
         created_at=user.created_at,
     )
 
@@ -732,6 +733,42 @@ def update_user(
     )
     db.commit()
     db.refresh(user)
+    return _serialize_admin_user(user)
+
+
+@router.post("/users/{user_id}/verify-email", response_model=AdminUserResponse)
+def verify_user_email(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Confirma manualmente el correo de una cuenta (soporte administrativo).
+
+    Permite destrabar cuentas cuando el usuario no recibió el enlace o el
+    proveedor de correo falló. Invalida los tokens de verificación pendientes
+    para que no puedan reutilizarse después.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    if not user.is_email_verified:
+        user.is_email_verified = True
+        db.query(EmailVerificationToken).filter(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+        ).update({"used_at": datetime.now(UTC)}, synchronize_session=False)
+        audit_service.log(
+            db,
+            action="user.email_verified_by_admin",
+            entity_type="user",
+            entity_id=user.id,
+            actor_user_id=current_user.id,
+            metadata={"email": user.email},
+        )
+        db.commit()
+        db.refresh(user)
+
     return _serialize_admin_user(user)
 
 

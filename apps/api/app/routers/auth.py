@@ -79,15 +79,43 @@ def _create_email_verification_token(db: Session, user: User) -> str:
     return token
 
 
-def _send_email_verification(user: User, token: str) -> None:
+def _send_email_verification(user: User, token: str) -> bool:
     verify_url = f"{settings.primary_frontend_origin}/verify-email?token={token}"
-    send_email_verification_email(user.email, verify_url)
+    return send_email_verification_email(user.email, verify_url)
+
+
+def _send_verification_email(db: Session, user: User) -> bool:
+    """Crea el token, lo persiste y envía el correo de verificación."""
+    token = _create_email_verification_token(db, user)
+    db.commit()
+    sent = _send_email_verification(user, token)
+    if not sent:
+        logger.error(
+            "No se pudo enviar el correo de verificación a %s (user_id=%s)",
+            user.email,
+            user.id,
+        )
+    return sent
 
 
 VERIFICATION_EMAIL_MESSAGE = (
     "Te enviamos un correo para verificar tu cuenta. Revisa tu bandeja de entrada "
     "(y la carpeta de spam) y confirma tu correo antes de iniciar sesión."
 )
+
+VERIFICATION_EMAIL_FAILED_MESSAGE = (
+    "La cuenta se creó, pero no pudimos enviar el correo de verificación. "
+    "Usa el botón «Reenviar correo» en unos minutos; si el problema continúa, "
+    "contacta a soporte."
+)
+
+
+def _verification_response(email_sent: bool) -> RegisterResponse:
+    return RegisterResponse(
+        message=VERIFICATION_EMAIL_MESSAGE if email_sent else VERIFICATION_EMAIL_FAILED_MESSAGE,
+        verification_required=True,
+        email_sent=email_sent,
+    )
 
 
 def _build_register_response(user: User, message: str) -> RegisterResponse:
@@ -173,13 +201,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     logger.info("New user registered: id=%s", user.id)
 
     if email_verification_required:
-        token = _create_email_verification_token(db, user)
-        db.commit()
-        _send_email_verification(user, token)
-        return RegisterResponse(
-            message=VERIFICATION_EMAIL_MESSAGE,
-            verification_required=True,
-        )
+        sent = _send_verification_email(db, user)
+        return _verification_response(sent)
 
     return _build_register_response(user, "Cuenta creada correctamente.")
 
@@ -196,8 +219,17 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     existing_user = db.query(User).filter(User.email == doctor_data.email).first()
     
     if existing_user:
-        # Si ya es doctor, lo bloqueamos (ya tiene perfil médico)
+        # Si ya es doctor, solo reenviamos la verificación cuando la cuenta aún
+        # no confirmó su correo (por ejemplo, si el primer envío falló).
         if existing_user.is_doctor:
+            if settings.EMAIL_VERIFICATION_REQUIRED and not existing_user.is_email_verified:
+                if not verify_password(doctor_data.password, existing_user.password_hash):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="El correo ya está registrado. Contraseña incorrecta.",
+                    )
+                sent = _send_verification_email(db, existing_user)
+                return _verification_response(sent)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El correo ya está registrado como médico"
@@ -231,13 +263,8 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     if existing_profile:
         # Si la cuenta aún no verificó su correo, reenviamos el enlace en lugar de fallar.
         if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
-            token = _create_email_verification_token(db, user)
-            db.commit()
-            _send_email_verification(user, token)
-            return RegisterResponse(
-                message=VERIFICATION_EMAIL_MESSAGE,
-                verification_required=True,
-            )
+            sent = _send_verification_email(db, user)
+            return _verification_response(sent)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ya existe un perfil médico para esta cuenta",
@@ -288,13 +315,8 @@ def register_doctor(doctor_data: DoctorRegistrationCreate, db: Session = Depends
     logger.info(f"New doctor application registered/upgraded: {user.email}")
 
     if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
-        token = _create_email_verification_token(db, user)
-        db.commit()
-        _send_email_verification(user, token)
-        return RegisterResponse(
-            message=VERIFICATION_EMAIL_MESSAGE,
-            verification_required=True,
-        )
+        sent = _send_verification_email(db, user)
+        return _verification_response(sent)
 
     return _build_register_response(user, "Postulación enviada correctamente.")
 
@@ -386,9 +408,7 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     """Reenvía el enlace de verificación. Responde igual exista o no el correo."""
     user = db.query(User).filter(User.email == payload.email).first()
     if user and not user.is_email_verified:
-        token = _create_email_verification_token(db, user)
-        db.commit()
-        _send_email_verification(user, token)
+        _send_verification_email(db, user)
     return MessageResponse(
         message="Si tu correo está pendiente de verificación, te reenviamos el enlace."
     )
