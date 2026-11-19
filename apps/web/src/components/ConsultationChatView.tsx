@@ -1,6 +1,19 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Send, Bot, User, Loader2, FileText, AlertCircle, CheckCircle, X, ArrowLeft, Trash2 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  Send,
+  Bot,
+  User,
+  Loader2,
+  FileText,
+  AlertCircle,
+  CheckCircle,
+  X,
+  ArrowLeft,
+  Trash2,
+  Video,
+  History,
+} from 'lucide-react'
 
 import {
   getConsultation,
@@ -207,6 +220,10 @@ export default function ConsultationChatView({
   const isClosed = consultation?.status === 'closed'
   const hasUserMessages = messages.some((message) => message.role === 'user')
   const canCancel = !isClosed && !hasUserMessages
+  const specialtyLink = consultation?.specialty
+    ? `/specialties/${consultation.specialty.slug}/`
+    : '/specialties/'
+  const canBook = Boolean(consultation?.summary)
 
   // Configuración de los diálogos de confirmación de acciones destructivas/irreversibles.
   const confirmConfig = {
@@ -442,8 +459,30 @@ export default function ConsultationChatView({
 
       {/* Input */}
       {isClosed ? (
-        <div className="border-t border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
-          Esta consulta finalizó. Puedes iniciar una nueva desde la página de la especialidad.
+        <div className="border-t border-slate-200 bg-white p-4">
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-slate-800">Esta consulta finalizó</p>
+              <p className="text-sm text-slate-500">
+                {canBook
+                  ? 'Tu resumen está listo. Agendar la videoconsulta es el siguiente paso para hablar con el especialista.'
+                  : 'Puedes iniciar una nueva pre-consulta con IA desde la página de la especialidad.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Link
+                to={canBook ? `${specialtyLink}?consultation=${consultation.id}` : specialtyLink}
+                className="btn-primary inline-flex items-center gap-2"
+              >
+                {canBook ? <Video className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                {canBook ? 'Agendar videoconsulta' : 'Iniciar nueva consulta'}
+              </Link>
+              <Link to="/me/consultations" className="btn-secondary inline-flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Ver mi historial
+              </Link>
+            </div>
+          </div>
         </div>
       ) : (
         <footer className="border-t border-slate-200 bg-white p-4">
